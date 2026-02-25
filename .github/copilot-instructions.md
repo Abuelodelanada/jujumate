@@ -15,9 +15,12 @@ JujuMate is a TUI (Terminal User Interface) for [Juju](https://juju.is), Canonic
 ## Commands
 
 ```bash
-uv run jujumate          # Run the app
-uv run nox -s tests      # Run all tests
+uv run nox                # Run all checks (lint + typecheck + tests)
+uv run nox -s tests       # Run all tests
+uv run nox -s lint        # Ruff lint + format check
+uv run nox -s typecheck   # Pyright static analysis
 uv run nox -s tests -- tests/path/to/test_file.py::test_name  # Run a single test
+uv run ruff format src tests  # Auto-format code
 ```
 
 ## Project structure

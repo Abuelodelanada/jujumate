@@ -7,3 +7,16 @@ nox.options.default_venv_backend = "uv"
 def tests(session: nox.Session) -> None:
     session.install(".[dev]", "pytest", "pytest-asyncio")
     session.run("pytest", *session.posargs)
+
+
+@nox.session
+def lint(session: nox.Session) -> None:
+    session.install("ruff")
+    session.run("ruff", "check", "src", "tests")
+    session.run("ruff", "format", "--check", "src", "tests")
+
+
+@nox.session
+def typecheck(session: nox.Session) -> None:
+    session.install(".", "pyright")
+    session.run("pyright", "src")
