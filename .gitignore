@@ -11,6 +11,9 @@ build/
 .venv/
 .python-version
 
+# nox
+.nox/
+
 # pytest
 .pytest_cache/
 .coverage

@@ -16,8 +16,8 @@ JujuMate is a TUI (Terminal User Interface) for [Juju](https://juju.is), Canonic
 
 ```bash
 uv run jujumate          # Run the app
-uv run pytest            # Run all tests
-uv run pytest tests/path/to/test_file.py::test_name  # Run a single test
+uv run nox -s tests      # Run all tests
+uv run nox -s tests -- tests/path/to/test_file.py::test_name  # Run a single test
 ```
 
 ## Project structure
