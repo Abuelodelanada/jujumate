@@ -26,6 +26,7 @@ dev = [
     "pyright>=1.1.408",
     "pytest>=9.0.2",
     "pytest-asyncio>=1.3.0",
+    "pytest-cov>=7.0.0",
     "ruff>=0.15.2",
 ]
 
@@ -43,3 +44,9 @@ select = ["E", "F", "I", "UP", "B"]
 pythonVersion = "3.10"
 typeCheckingMode = "standard"
 include = ["src"]
+
+[tool.coverage.run]
+source = ["src/jujumate"]
+
+[tool.coverage.report]
+show_missing = true
