@@ -1,0 +1,51 @@
+from dataclasses import dataclass, field
+
+
+@dataclass
+class CloudInfo:
+    name: str
+    type: str
+    regions: list[str] = field(default_factory=list)
+    credentials: list[str] = field(default_factory=list)
+
+
+@dataclass
+class ControllerInfo:
+    name: str
+    cloud: str
+    region: str
+    juju_version: str
+    model_count: int = 0
+
+
+@dataclass
+class ModelInfo:
+    name: str
+    controller: str
+    cloud: str
+    region: str
+    status: str
+    machine_count: int = 0
+    app_count: int = 0
+
+
+@dataclass
+class AppInfo:
+    name: str
+    model: str
+    charm: str
+    channel: str
+    revision: int
+    unit_count: int = 0
+    status: str = ""
+    message: str = ""
+
+
+@dataclass
+class UnitInfo:
+    name: str
+    app: str
+    machine: str
+    workload_status: str
+    agent_status: str
+    address: str = ""
