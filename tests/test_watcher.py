@@ -24,11 +24,12 @@ def make_mock_client():
     client.__aexit__ = AsyncMock(return_value=None)
     client.get_clouds.return_value = [CloudInfo("aws", "ec2")]
     client.get_controllers.return_value = [ControllerInfo("prod", "aws", "", "3.4.0", 1)]
-    client.get_models.return_value = [ModelInfo("dev", "prod", "aws", "us-east-1", "available")]
-    client.get_applications.return_value = [
-        AppInfo("postgresql", "dev", "postgresql", "14/stable", 363)
-    ]
-    client.get_units.return_value = [UnitInfo("postgresql/0", "postgresql", "0", "active", "idle")]
+    client.list_model_names.return_value = ["dev"]
+    client.get_model_snapshot.return_value = (
+        ModelInfo("dev", "prod", "aws", "us-east-1", "available"),
+        [AppInfo("postgresql", "dev", "postgresql", "14/stable", 363)],
+        [UnitInfo("postgresql/0", "postgresql", "0", "active", "idle")],
+    )
     return client
 
 
@@ -109,9 +110,15 @@ async def test_poll_once_posts_connection_failed_when_all_controllers_fail(mock_
 async def test_poll_once_aggregates_multiple_controllers(mock_target):
     """Two controllers with distinct models → all models reported."""
     client_a = make_mock_client()
-    client_a.get_models.return_value = [ModelInfo("dev", "ctrl-a", "aws", "", "available")]
+    client_a.list_model_names.return_value = ["dev"]
+    client_a.get_model_snapshot.return_value = (
+        ModelInfo("dev", "ctrl-a", "aws", "", "available"), [], []
+    )
     client_b = make_mock_client()
-    client_b.get_models.return_value = [ModelInfo("prod", "ctrl-b", "aws", "", "available")]
+    client_b.list_model_names.return_value = ["prod"]
+    client_b.get_model_snapshot.return_value = (
+        ModelInfo("prod", "ctrl-b", "aws", "", "available"), [], []
+    )
 
     clients = iter([client_a, client_b])
     with patch("jujumate.client.watcher.JujuClient", side_effect=lambda **_: next(clients)):

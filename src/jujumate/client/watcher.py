@@ -93,12 +93,12 @@ class JujuPoller:
                         all_clouds[cloud.name] = cloud
                     for ctrl in await client.get_controllers():
                         all_controllers[ctrl.name] = ctrl
-                    models = await client.get_models()
-                    for model in models:
-                        all_models[(model.controller, model.name)] = model
-                        for app in await client.get_applications(model.name):
+                    for model_name in await client.list_model_names():
+                        model_info, apps, units = await client.get_model_snapshot(model_name)
+                        all_models[(model_info.controller, model_info.name)] = model_info
+                        for app in apps:
                             all_apps[(app.model, app.name)] = app
-                        for unit in await client.get_units(model.name):
+                        for unit in units:
                             all_units[(unit.app, unit.name)] = unit
             except Exception:
                 logger.exception("Failed to poll controller '%s'", name)

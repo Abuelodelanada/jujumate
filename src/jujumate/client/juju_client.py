@@ -38,6 +38,9 @@ class JujuClient:
     async def __aexit__(self, *args: object) -> None:
         await self.disconnect()
 
+    async def list_model_names(self) -> list[str]:
+        return await self._controller.list_models()
+
     async def get_controllers(self) -> list[ControllerInfo]:
         try:
             cloud_name = await self._controller.get_cloud()
@@ -70,49 +73,27 @@ class JujuClient:
         logger.debug("Fetched %d clouds", len(clouds))
         return clouds
 
-    async def get_models(self) -> list[ModelInfo]:
-        model_names = await self._controller.list_models()
+    async def get_model_snapshot(
+        self, model_name: str
+    ) -> tuple[ModelInfo, list[AppInfo], list[UnitInfo]]:
+        """Fetch ModelInfo, AppInfo list, and UnitInfo list in a single model connection."""
         controller_name = self._controller.controller_name or ""
-        logger.debug("Listing models for controller '%s': %s", controller_name, model_names)
-        models = []
-        for name in model_names:
+        try:
+            model = await self._controller.get_model(model_name)
             try:
-                model = await self._controller.get_model(name)
                 info = model.info
                 cloud_tag = (info.cloud_tag or "") if info else ""
                 cloud = cloud_tag.split("-", 1)[-1] if "-" in cloud_tag else cloud_tag
-                models.append(
-                    ModelInfo(
-                        name=name,
-                        controller=controller_name,
-                        cloud=cloud,
-                        region=(info.cloud_region or "") if info else "",
-                        status=info.status.status if info and info.status else "",
-                        machine_count=len(model.machines),
-                        app_count=len(model.applications),
-                    )
+                model_info = ModelInfo(
+                    name=model_name,
+                    controller=controller_name,
+                    cloud=cloud,
+                    region=(info.cloud_region or "") if info else "",
+                    status=info.status.status if info and info.status else "",
+                    machine_count=len(model.machines),
+                    app_count=len(model.applications),
                 )
-                await model.disconnect()
-            except Exception:
-                logger.exception("Failed to get full info for model '%s', using minimal info", name)
-                models.append(
-                    ModelInfo(
-                        name=name,
-                        controller=controller_name,
-                        cloud="",
-                        region="",
-                        status="unknown",
-                    )
-                )
-        logger.debug("Fetched %d models for controller '%s'", len(models), controller_name)
-        return models
-
-    async def get_applications(self, model_name: str) -> list[AppInfo]:
-        apps = []
-        try:
-            model = await self._controller.get_model(model_name)
-            for app in model.applications.values():
-                apps.append(
+                apps = [
                     AppInfo(
                         name=app.name,
                         model=model_name,
@@ -123,19 +104,9 @@ class JujuClient:
                         status=app.status,
                         message=app.status_message,
                     )
-                )
-            await model.disconnect()
-        except Exception:
-            logger.exception("Failed to get applications for model '%s'", model_name)
-        logger.debug("Fetched %d applications for model '%s'", len(apps), model_name)
-        return apps
-
-    async def get_units(self, model_name: str) -> list[UnitInfo]:
-        units = []
-        try:
-            model = await self._controller.get_model(model_name)
-            for unit in model.units.values():
-                units.append(
+                    for app in model.applications.values()
+                ]
+                units = [
                     UnitInfo(
                         name=unit.name,
                         app=unit.application,
@@ -144,10 +115,44 @@ class JujuClient:
                         agent_status=unit.agent_status,
                         address=unit.public_address or "",
                     )
-                )
-            await model.disconnect()
+                    for unit in model.units.values()
+                ]
+            finally:
+                await model.disconnect()
         except Exception:
-            logger.exception("Failed to get units for model '%s'", model_name)
+            logger.exception("Failed to get snapshot for model '%s', using minimal info", model_name)
+            model_info = ModelInfo(
+                name=model_name,
+                controller=controller_name,
+                cloud="",
+                region="",
+                status="unknown",
+            )
+            apps = []
+            units = []
+        logger.debug(
+            "Snapshot for model '%s': %d apps, %d units", model_name, len(apps), len(units)
+        )
+        return model_info, apps, units
+
+    async def get_models(self) -> list[ModelInfo]:
+        model_names = await self._controller.list_models()
+        controller_name = self._controller.controller_name or ""
+        logger.debug("Listing models for controller '%s': %s", controller_name, model_names)
+        models = []
+        for name in model_names:
+            model_info, _, _ = await self.get_model_snapshot(name)
+            models.append(model_info)
+        logger.debug("Fetched %d models for controller '%s'", len(models), controller_name)
+        return models
+
+    async def get_applications(self, model_name: str) -> list[AppInfo]:
+        _, apps, _ = await self.get_model_snapshot(model_name)
+        logger.debug("Fetched %d applications for model '%s'", len(apps), model_name)
+        return apps
+
+    async def get_units(self, model_name: str) -> list[UnitInfo]:
+        _, _, units = await self.get_model_snapshot(model_name)
         logger.debug("Fetched %d units for model '%s'", len(units), model_name)
         return units
 
