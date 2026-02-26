@@ -336,3 +336,82 @@ async def test_status_view_update_offers():
         view.update_offers([])
         await pilot.pause()
         assert view.query_one("#status-offers-table").display is False
+
+
+def test_jujumate_header_breadcrumb():
+    from jujumate.widgets.jujumate_header import HeaderContext, JujuMateHeader
+
+    header = JujuMateHeader.__new__(JujuMateHeader)
+    ctx = HeaderContext(
+        active_tab="tab-status",
+        selected_controller="ck8s",
+        selected_model="cos",
+        app_count=6,
+        unit_count=6,
+        offer_count=3,
+        relation_count=4,
+        is_connected=True,
+        timestamp="14:22:03",
+    )
+    breadcrumb = header._build_breadcrumb(ctx)
+    assert "ck8s" in breadcrumb
+    assert "cos" in breadcrumb
+
+    stats = header._build_stats(ctx)
+    assert "apps: 6" in stats
+    assert "units: 6" in stats
+    assert "offers: 3" in stats
+    assert "relations: 4" in stats
+
+    status = header._build_status(ctx)
+    assert "Live" in status
+    assert "14:22:03" in status
+
+
+def test_jujumate_header_stats_by_tab():
+    from jujumate.widgets.jujumate_header import HeaderContext, JujuMateHeader
+
+    header = JujuMateHeader.__new__(JujuMateHeader)
+    for tab, count_field, expected in [
+        ("tab-clouds", {"cloud_count": 3}, "clouds: 3"),
+        ("tab-controllers", {"controller_count": 2}, "controllers: 2"),
+        ("tab-models", {"model_count": 5}, "models: 5"),
+        ("tab-apps", {"app_count": 4}, "apps: 4"),
+        ("tab-units", {"unit_count": 7}, "units: 7"),
+    ]:
+        ctx = HeaderContext(active_tab=tab, **count_field)
+        assert expected in header._build_stats(ctx), f"Tab {tab}"
+
+
+def test_jujumate_header_disconnected_status():
+    from jujumate.widgets.jujumate_header import HeaderContext, JujuMateHeader
+
+    header = JujuMateHeader.__new__(JujuMateHeader)
+    ctx = HeaderContext(is_connected=False)
+    assert "Disconnected" in header._build_status(ctx)
+
+
+def test_jujumate_header_empty_breadcrumb():
+    from jujumate.widgets.jujumate_header import HeaderContext, JujuMateHeader
+
+    header = JujuMateHeader.__new__(JujuMateHeader)
+    ctx = HeaderContext()
+    assert header._build_breadcrumb(ctx) == ""
+
+
+def test_jujumate_header_stats_unknown_tab():
+    from jujumate.widgets.jujumate_header import HeaderContext, JujuMateHeader
+
+    header = JujuMateHeader.__new__(JujuMateHeader)
+    ctx = HeaderContext(active_tab="tab-unknown")
+    assert header._build_stats(ctx) == ""
+
+
+def test_jujumate_header_connected_no_timestamp():
+    from jujumate.widgets.jujumate_header import HeaderContext, JujuMateHeader
+
+    header = JujuMateHeader.__new__(JujuMateHeader)
+    ctx = HeaderContext(is_connected=True, timestamp="")
+    status = header._build_status(ctx)
+    assert "Live" in status
+    assert "·" not in status

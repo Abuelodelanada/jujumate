@@ -6,7 +6,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.screen import Screen
 from textual.timer import Timer
-from textual.widgets import Footer, Header, TabbedContent, TabPane
+from textual.widgets import Footer, TabbedContent, TabPane
 
 from jujumate.client.juju_client import JujuClient
 from jujumate.client.watcher import (
@@ -22,11 +22,12 @@ from jujumate.client.watcher import (
     UnitsUpdated,
 )
 from jujumate.config import JujuConfigError, load_config
-from jujumate.models.entities import AppInfo, ControllerInfo, ModelInfo, OfferInfo, RelationInfo, UnitInfo
+from jujumate.models.entities import AppInfo, CloudInfo, ControllerInfo, ModelInfo, OfferInfo, RelationInfo, UnitInfo
 from jujumate.settings import AppSettings, load_settings
 from jujumate.widgets.apps_view import AppsView
 from jujumate.widgets.clouds_view import CloudsView
 from jujumate.widgets.controllers_view import ControllersView
+from jujumate.widgets.jujumate_header import HeaderContext, JujuMateHeader
 from jujumate.widgets.models_view import ModelsView
 from jujumate.widgets.status_view import StatusView
 from jujumate.widgets.units_view import UnitsView
@@ -53,12 +54,16 @@ class MainScreen(Screen):
         self._poller: JujuPoller | None = None
         self._poll_timer: Timer | None = None
         # Full data stores — refreshed on every poll
+        self._all_clouds: list[CloudInfo] = []
         self._all_controllers: list[ControllerInfo] = []
         self._all_models: list[ModelInfo] = []
         self._all_apps: list[AppInfo] = []
         self._all_units: list[UnitInfo] = []
         self._all_relations: list[RelationInfo] = []
         self._all_offers: list[OfferInfo] = []
+        # Connection state
+        self._is_connected: bool = False
+        self._last_refresh_ts: str = ""
         # Drill-down filter state
         self._selected_cloud: str | None = None
         self._selected_controller: str | None = None
@@ -66,7 +71,7 @@ class MainScreen(Screen):
         self._selected_app: str | None = None
 
     def compose(self) -> ComposeResult:
-        yield Header()
+        yield JujuMateHeader(id="main-header")
         with TabbedContent(initial="tab-clouds"):
             with TabPane("Clouds", id="tab-clouds"):
                 yield CloudsView(id="clouds-view")
@@ -104,6 +109,7 @@ class MainScreen(Screen):
 
     def action_switch_tab(self, tab_id: str) -> None:
         self.query_one(TabbedContent).active = tab_id
+        self._refresh_header()
 
     async def action_refresh_data(self) -> None:
         if self._poller:
@@ -121,6 +127,7 @@ class MainScreen(Screen):
         self._refresh_apps_view()
         self._refresh_units_view()
         self._refresh_status_view()
+        self._refresh_header()
         self.notify("Filter cleared — showing all resources")
 
     def action_quit(self) -> None:
@@ -183,28 +190,80 @@ class MainScreen(Screen):
         status_view.update_offers(offers)
         status_view.update_relations(relations)
 
+    def _refresh_header(self) -> None:
+        try:
+            header = self.query_one("#main-header", JujuMateHeader)
+            active_tab = self.query_one(TabbedContent).active
+        except Exception:
+            return  # Not fully mounted yet
+        # Filtered counts matching what each view displays
+        filtered_controllers = [
+            c for c in self._all_controllers
+            if self._selected_cloud is None or c.cloud == self._selected_cloud
+        ]
+        filtered_models = [
+            m for m in self._all_models
+            if self._selected_controller is None or m.controller == self._selected_controller
+        ]
+        filtered_apps = [
+            a for a in self._all_apps
+            if self._selected_model is None or a.model == self._selected_model
+        ]
+        filtered_units = [
+            u for u in self._all_units
+            if self._selected_app is None or u.app == self._selected_app
+        ]
+        status_offers = [o for o in self._all_offers if o.model == self._selected_model] if self._selected_model else []
+        status_relations = [r for r in self._all_relations if r.model == self._selected_model] if self._selected_model else []
+        status_apps = [a for a in self._all_apps if a.model == self._selected_model] if self._selected_model else []
+        status_app_names = {a.name for a in status_apps}
+        status_units = [u for u in self._all_units if u.app in status_app_names]
+        ctx = HeaderContext(
+            active_tab=active_tab,
+            selected_cloud=self._selected_cloud,
+            selected_controller=self._selected_controller,
+            selected_model=self._selected_model,
+            selected_app=self._selected_app,
+            cloud_count=len(self._all_clouds),
+            controller_count=len(filtered_controllers),
+            model_count=len(filtered_models),
+            app_count=len(status_apps) if active_tab == "tab-status" else len(filtered_apps),
+            unit_count=len(status_units) if active_tab == "tab-status" else len(filtered_units),
+            offer_count=len(status_offers),
+            relation_count=len(status_relations),
+            is_connected=self._is_connected,
+            timestamp=self._last_refresh_ts,
+        )
+        header.update_context(ctx)
+
     # ── Juju data message handlers ────────────────────────────────────────────
 
     def on_clouds_updated(self, message: CloudsUpdated) -> None:
+        self._all_clouds = message.clouds
         self.query_one("#clouds-view", CloudsView).update(message.clouds)
+        self._refresh_header()
 
     def on_controllers_updated(self, message: ControllersUpdated) -> None:
         self._all_controllers = message.controllers
         self._refresh_controllers_view()
+        self._refresh_header()
 
     def on_models_updated(self, message: ModelsUpdated) -> None:
         self._all_models = message.models
         self._refresh_models_view()
+        self._refresh_header()
 
     def on_apps_updated(self, message: AppsUpdated) -> None:
         self._all_apps = message.apps
         self._refresh_apps_view()
         self._refresh_status_view()
+        self._refresh_header()
 
     def on_units_updated(self, message: UnitsUpdated) -> None:
         self._all_units = message.units
         self._refresh_units_view()
         self._refresh_status_view()
+        self._refresh_header()
 
     def on_relations_updated(self, message: RelationsUpdated) -> None:
         # Replace relations for this model (keep other models' relations intact)
@@ -212,6 +271,7 @@ class MainScreen(Screen):
             r for r in self._all_relations if r.model != message.model
         ] + message.relations
         self._refresh_status_view()
+        self._refresh_header()
         logger.debug("Relations updated for model '%s': %d", message.model, len(message.relations))
 
     def on_offers_updated(self, message: OffersUpdated) -> None:
@@ -220,15 +280,18 @@ class MainScreen(Screen):
             o for o in self._all_offers if o.model != message.model
         ] + message.offers
         self._refresh_status_view()
+        self._refresh_header()
         logger.debug("Offers updated for model '%s': %d", message.model, len(message.offers))
 
     def on_data_refreshed(self, message: DataRefreshed) -> None:
-        ts = message.timestamp.strftime("%H:%M:%S")
-        self.app.sub_title = f"⣾ Live  ·  {ts}"
-        logger.debug("Data refreshed at %s", ts)
+        self._is_connected = True
+        self._last_refresh_ts = message.timestamp.strftime("%H:%M:%S")
+        self._refresh_header()
+        logger.debug("Data refreshed at %s", self._last_refresh_ts)
 
     def on_connection_failed(self, message: ConnectionFailed) -> None:
-        self.app.sub_title = "⚠ Disconnected"
+        self._is_connected = False
+        self._refresh_header()
         self.notify(f"Connection failed: {message.error}", severity="error")
         logger.error("Connection failed: %s", message.error)
 
@@ -264,6 +327,7 @@ class MainScreen(Screen):
             len(self._all_models),
             list({m.controller for m in self._all_models}),
         )
+        self._refresh_header()
         self.action_switch_tab("tab-models")
 
     def on_models_view_model_selected(self, message: ModelsView.ModelSelected) -> None:
@@ -275,6 +339,7 @@ class MainScreen(Screen):
         self._refresh_status_view()
         if self._selected_controller:
             self._fetch_relations(self._selected_controller, self._selected_model)
+        self._refresh_header()
         self.action_switch_tab("tab-status")
 
     @work(exclusive=True)
@@ -293,4 +358,5 @@ class MainScreen(Screen):
         # message.name is "model/appname" — extract just the app name
         self._selected_app = message.name.split("/", 1)[-1]
         self._refresh_units_view()
+        self._refresh_header()
         self.action_switch_tab("tab-units")

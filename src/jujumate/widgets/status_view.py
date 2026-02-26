@@ -82,13 +82,13 @@ class StatusView(Widget):
     def compose(self) -> ComposeResult:
         with VerticalScroll():
             yield Label("Applications", classes="section-label")
-            yield ResourceTable(columns=_APP_COLUMNS, id="status-apps-table")
+            yield ResourceTable(columns=_APP_COLUMNS, id="status-apps-table", cursor=False)
             yield Label("Units", classes="section-label")
-            yield ResourceTable(columns=_UNIT_COLUMNS_IAAS, id="status-units-table")
+            yield ResourceTable(columns=_UNIT_COLUMNS_IAAS, id="status-units-table", cursor=False)
             yield Label("Offers", classes="section-label", id="status-offers-label")
-            yield ResourceTable(columns=_OFFER_COLUMNS, id="status-offers-table")
+            yield ResourceTable(columns=_OFFER_COLUMNS, id="status-offers-table", cursor=False)
             yield Label("Relations", classes="section-label")
-            yield ResourceTable(columns=_REL_COLUMNS, id="status-rels-table")
+            yield ResourceTable(columns=_REL_COLUMNS, id="status-rels-table", cursor=False)
 
     def on_mount(self) -> None:
         self.query_one("#status-offers-label").display = False

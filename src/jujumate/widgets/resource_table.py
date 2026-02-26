@@ -29,13 +29,15 @@ class ResourceTable(Widget):
     }
     """
 
-    def __init__(self, columns: list[Column], *args: Any, **kwargs: Any) -> None:
+    def __init__(self, columns: list[Column], *args: Any, cursor: bool = True, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self._columns = columns
+        self._cursor = cursor
         self._is_loading = False
 
     def compose(self) -> ComposeResult:
-        table = DataTable(cursor_type="row", zebra_stripes=True)
+        cursor_type = "row" if self._cursor else "none"
+        table = DataTable(cursor_type=cursor_type, zebra_stripes=False)
         for col in self._columns:
             table.add_column(col.label, key=col.key, width=col.width)
         yield table

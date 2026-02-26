@@ -23,6 +23,36 @@ def _asyncio_exception_handler(loop: asyncio.AbstractEventLoop, context: dict) -
 class JujuMateApp(App):
     TITLE = "JujuMate"
     SUB_TITLE = "Juju infrastructure at a glance"
+    CSS = """
+    Screen,
+    TabbedContent,
+    TabPane,
+    ContentSwitcher,
+    VerticalScroll,
+    ScrollableContainer,
+    CloudsView,
+    ControllersView,
+    ModelsView,
+    AppsView,
+    UnitsView,
+    StatusView,
+    ResourceTable,
+    DataTable {
+        background: transparent;
+    }
+    DataTable > .datatable--header {
+        background: transparent;
+    }
+    DataTable > .datatable--even-row {
+        background: transparent;
+    }
+    DataTable > .datatable--odd-row {
+        background: transparent;
+    }
+    DataTable > .datatable--hover {
+        background: $primary 20%;
+    }
+    """
 
     def __init__(self, settings: AppSettings | None = None) -> None:
         super().__init__()

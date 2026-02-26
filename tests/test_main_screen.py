@@ -115,7 +115,8 @@ async def test_message_handlers_update_views():
         screen.on_data_refreshed(DataRefreshed(timestamp=datetime(2024, 1, 1, 12, 0, 0)))
 
         await pilot.pause()
-        assert app.sub_title == "⣾ Live  ·  12:00:00"
+        assert screen._is_connected is True
+        assert screen._last_refresh_ts == "12:00:00"
 
 
 @pytest.mark.asyncio
@@ -124,7 +125,7 @@ async def test_connection_failed_sets_subtitle():
     async with app.run_test() as pilot:
         await pilot.pause()
         app.screen.on_connection_failed(ConnectionFailed(error="timeout"))
-        assert app.sub_title == "⚠ Disconnected"
+        assert app.screen._is_connected is False
 
 
 @pytest.mark.asyncio
@@ -135,6 +136,18 @@ async def test_action_refresh_data_without_poller():
         # _poller is None at this point — should not crash
         await app.screen.action_refresh_data()
         assert app.screen.__class__.__name__ == "MainScreen"
+
+
+@pytest.mark.asyncio
+async def test_refresh_header_before_mount_does_not_crash():
+    """_refresh_header guard: calling before widgets are mounted must not raise."""
+    from jujumate.screens.main_screen import MainScreen
+    from jujumate.settings import AppSettings
+    from pathlib import Path
+
+    screen = MainScreen(settings=AppSettings(juju_data_dir=Path("/nonexistent")))
+    # Calling without a mounted app should silently return (guard path)
+    screen._refresh_header()  # must not raise
 
 
 @pytest.mark.asyncio
@@ -149,7 +162,7 @@ async def test_connect_and_poll_connection_failure():
         ):
             await screen._connect_and_poll()
         await pilot.pause()
-        assert app.sub_title == "⚠ Disconnected"
+        assert screen._is_connected is False
 
 
 @pytest.mark.asyncio
