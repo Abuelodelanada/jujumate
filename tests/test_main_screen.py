@@ -331,6 +331,14 @@ def test_asyncio_exception_handler_suppresses_closed_errors():
     _asyncio_exception_handler(loop, {"exception": OSError("Bad file descriptor")})
     loop.default_exception_handler.assert_not_called()
 
+    # Should suppress RuntimeError("cannot reuse already awaited coroutine")
+    _asyncio_exception_handler(loop, {"exception": RuntimeError("cannot reuse already awaited coroutine")})
+    loop.default_exception_handler.assert_not_called()
+
+    # Should suppress "task was destroyed but it is pending" message
+    _asyncio_exception_handler(loop, {"message": "Task was destroyed but it is pending!"})
+    loop.default_exception_handler.assert_not_called()
+
 
 def test_asyncio_exception_handler_forwards_other_errors():
     from unittest.mock import MagicMock

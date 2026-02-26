@@ -11,12 +11,15 @@ logger = logging.getLogger(__name__)
 
 
 def _asyncio_exception_handler(loop: asyncio.AbstractEventLoop, context: dict) -> None:
-    """Suppress benign SSL/WebSocket cleanup errors from python-libjuju on shutdown."""
+    """Suppress benign cleanup errors from python-libjuju on shutdown."""
     exc = context.get("exception")
+    msg = context.get("message", "")
     if isinstance(exc, (RuntimeError, OSError)):
-        msg = str(exc).lower()
-        if "closed" in msg or "bad file descriptor" in msg:
+        text = str(exc).lower()
+        if "closed" in text or "bad file descriptor" in text or "reuse already awaited" in text:
             return
+    if "task was destroyed but it is pending" in msg.lower():
+        return
     loop.default_exception_handler(context)
 
 
