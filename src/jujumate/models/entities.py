@@ -39,6 +39,9 @@ class AppInfo:
     unit_count: int = 0
     status: str = ""
     message: str = ""
+    version: str = ""
+    address: str = ""
+    exposed: bool = False
 
 
 @dataclass

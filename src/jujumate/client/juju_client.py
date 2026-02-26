@@ -76,7 +76,11 @@ class JujuClient:
     async def get_model_snapshot(
         self, model_name: str
     ) -> tuple[ModelInfo, list[AppInfo], list[UnitInfo]]:
-        """Fetch ModelInfo, AppInfo list, and UnitInfo list in a single model connection."""
+        """Fetch ModelInfo, AppInfo list, and UnitInfo list in a single model connection.
+
+        Uses model.get_status() (FullStatus) to get accurate channel, revision,
+        address, exposed, and version data that is not available from AllWatcher deltas.
+        """
         controller_name = self._controller.controller_name or ""
         try:
             model = await self._controller.get_model(model_name)
@@ -84,39 +88,47 @@ class JujuClient:
                 info = model.info
                 cloud_tag = (info.cloud_tag or "") if info else ""
                 cloud = cloud_tag.split("-", 1)[-1] if "-" in cloud_tag else cloud_tag
+                full_status = await model.get_status()
+                app_statuses = full_status.applications or {}
                 model_info = ModelInfo(
                     name=model_name,
                     controller=controller_name,
                     cloud=cloud,
                     region=(info.cloud_region or "") if info else "",
                     status=info.status.status if info and info.status else "",
-                    machine_count=len(model.machines),
-                    app_count=len(model.applications),
+                    machine_count=len(full_status.machines or {}),
+                    app_count=len(app_statuses),
                 )
-                apps = [
-                    AppInfo(
-                        name=app.name,
-                        model=model_name,
-                        charm=app.charm_name,
-                        channel=app.data.get("charm-channel", ""),
-                        revision=int(app.data.get("charm-rev", 0)),
-                        unit_count=len(app.units),
-                        status=app.status,
-                        message=app.status_message,
+                apps = []
+                units = []
+                for app_name, app_st in app_statuses.items():
+                    charm_name = model.applications[app_name].charm_name if app_name in model.applications else (app_st.charm or "").split("/")[-1].rsplit("-", 1)[0]
+                    apps.append(
+                        AppInfo(
+                            name=app_name,
+                            model=model_name,
+                            charm=charm_name,
+                            channel=app_st.charm_channel or "",
+                            revision=app_st.charm_rev or 0,
+                            unit_count=len(app_st.units or {}),
+                            status=app_st.status.status if app_st.status else "",
+                            message=app_st.status.info if app_st.status else "",
+                            version=app_st.workload_version or "",
+                            address=app_st.public_address or "",
+                            exposed=bool(app_st.exposed),
+                        )
                     )
-                    for app in model.applications.values()
-                ]
-                units = [
-                    UnitInfo(
-                        name=unit.name,
-                        app=unit.application,
-                        machine=unit.machine_id or "",
-                        workload_status=unit.workload_status,
-                        agent_status=unit.agent_status,
-                        address=unit.public_address or "",
-                    )
-                    for unit in model.units.values()
-                ]
+                    for unit_name, unit_st in (app_st.units or {}).items():
+                        units.append(
+                            UnitInfo(
+                                name=unit_name,
+                                app=app_name,
+                                machine=unit_st.machine or "",
+                                workload_status=unit_st.workload_status.status if unit_st.workload_status else "",
+                                agent_status=unit_st.agent_status.status if unit_st.agent_status else "",
+                                address=unit_st.public_address or unit_st.address or "",
+                            )
+                        )
             finally:
                 await model.disconnect()
         except Exception:

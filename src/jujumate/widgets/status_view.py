@@ -13,11 +13,14 @@ logger = logging.getLogger(__name__)
 
 _APP_COLUMNS = [
     Column("Name", "s-app-name"),
+    Column("Version", "s-app-version", width=10),
     Column("Status", "s-app-status", width=12),
     Column("Scale", "s-app-scale", width=6),
     Column("Charm", "s-app-charm", width=18),
     Column("Channel", "s-app-channel", width=14),
     Column("Rev", "s-app-rev", width=5),
+    Column("Address", "s-app-addr", width=16),
+    Column("Exposed", "s-app-exposed", width=8),
     Column("Message", "s-app-message"),
 ]
 
@@ -67,11 +70,14 @@ class StatusView(Widget):
         rows = [
             (
                 a.name,
+                a.version,
                 a.status,
                 str(a.unit_count),
                 a.charm,
                 a.channel,
                 str(a.revision),
+                a.address,
+                "yes" if a.exposed else "no",
                 a.message,
             )
             for a in apps

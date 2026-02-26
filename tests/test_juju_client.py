@@ -64,15 +64,7 @@ async def test_get_clouds(mock_controller):
 @pytest.mark.asyncio
 async def test_get_models(mock_controller):
     mock_controller.list_models.return_value = ["dev", "prod"]
-    model = AsyncMock()
-    info = MagicMock()
-    info.cloud_tag = "cloud-aws"
-    info.cloud_region = "us-east-1"
-    info.status.status = "available"
-    model.info = info
-    model.machines = {}
-    model.applications = {"postgresql": MagicMock()}
-    model.units = {}
+    model, _, _ = _make_model_mock()
     mock_controller.get_model.return_value = model
 
     client = JujuClient()
@@ -92,31 +84,43 @@ async def test_list_model_names(mock_controller):
     assert result == ["dev", "prod"]
 
 
-@pytest.mark.asyncio
-async def test_get_model_snapshot(mock_controller):
-    app = MagicMock()
-    app.name = "postgresql"
-    app.charm_name = "postgresql"
-    app.data = {"charm-channel": "14/stable", "charm-rev": "363"}
-    app.units = [MagicMock()]
-    app.status = "active"
-    app.status_message = ""
-    unit = MagicMock()
-    unit.name = "postgresql/0"
-    unit.application = "postgresql"
-    unit.machine_id = "0"
-    unit.workload_status = "active"
-    unit.agent_status = "idle"
-    unit.public_address = "10.0.0.1"
+def _make_model_mock(app_name="postgresql", charm_name="postgresql", channel="14/stable",
+                     revision=363, unit_name="postgresql/0", unit_address="10.0.0.1"):
+    """Build a model mock that works with get_model_snapshot (uses get_status)."""
+    app_st = MagicMock()
+    app_st.charm_channel = channel
+    app_st.charm_rev = revision
+    app_st.workload_version = "1.0.0"
+    app_st.public_address = "10.0.0.5"
+    app_st.exposed = False
+    app_st.status.status = "active"
+    app_st.status.info = ""
+    unit_st = MagicMock()
+    unit_st.machine = "0"
+    unit_st.workload_status.status = "active"
+    unit_st.agent_status.status = "idle"
+    unit_st.public_address = unit_address
+    unit_st.address = ""
+    app_st.units = {unit_name: unit_st}
+    full_status = MagicMock()
+    full_status.applications = {app_name: app_st}
+    full_status.machines = {"0": MagicMock()}
     info = MagicMock()
     info.cloud_tag = "cloud-aws"
     info.cloud_region = "us-east-1"
     info.status.status = "active"
+    live_app = MagicMock()
+    live_app.charm_name = charm_name
     model = AsyncMock()
     model.info = info
-    model.machines = {}
-    model.applications = {"postgresql": app}
-    model.units = {"postgresql/0": unit}
+    model.applications = {app_name: live_app}
+    model.get_status = AsyncMock(return_value=full_status)
+    return model, app_st, unit_st
+
+
+@pytest.mark.asyncio
+async def test_get_model_snapshot(mock_controller):
+    model, app_st, unit_st = _make_model_mock()
     mock_controller.get_model.return_value = model
 
     client = JujuClient()
@@ -125,10 +129,16 @@ async def test_get_model_snapshot(mock_controller):
     assert model_info.name == "dev"
     assert model_info.cloud == "aws"
     assert model_info.status == "active"
+    assert model_info.machine_count == 1
     assert len(apps) == 1
     assert apps[0].name == "postgresql"
+    assert apps[0].channel == "14/stable"
+    assert apps[0].revision == 363
+    assert apps[0].address == "10.0.0.5"
+    assert apps[0].exposed is False
     assert len(units) == 1
     assert units[0].name == "postgresql/0"
+    assert units[0].address == "10.0.0.1"
     # Only ONE get_model call for all data
     mock_controller.get_model.assert_awaited_once_with("dev")
 
@@ -145,21 +155,7 @@ async def test_get_model_snapshot_fallback_on_failure(mock_controller):
 
 @pytest.mark.asyncio
 async def test_get_applications(mock_controller):
-    app = MagicMock()
-    app.name = "postgresql"
-    app.charm_name = "postgresql"
-    app.data = {"charm-channel": "14/stable", "charm-rev": "363"}
-    app.units = [MagicMock()]
-    app.status = "active"
-    app.status_message = ""
-    model = AsyncMock()
-    model.info = MagicMock()
-    model.info.cloud_tag = "cloud-lxd"
-    model.info.cloud_region = ""
-    model.info.status.status = "active"
-    model.machines = {}
-    model.applications = {"postgresql": app}
-    model.units = {}
+    model, _, _ = _make_model_mock()
     mock_controller.get_model.return_value = model
 
     client = JujuClient()
@@ -174,21 +170,7 @@ async def test_get_applications(mock_controller):
 
 @pytest.mark.asyncio
 async def test_get_units(mock_controller):
-    unit = MagicMock()
-    unit.name = "postgresql/0"
-    unit.application = "postgresql"
-    unit.machine_id = "0"
-    unit.workload_status = "active"
-    unit.agent_status = "idle"
-    unit.public_address = "10.0.0.1"
-    model = AsyncMock()
-    model.info = MagicMock()
-    model.info.cloud_tag = "cloud-lxd"
-    model.info.cloud_region = ""
-    model.info.status.status = "active"
-    model.machines = {}
-    model.applications = {}
-    model.units = {"postgresql/0": unit}
+    model, _, _ = _make_model_mock(unit_address="10.0.0.1")
     mock_controller.get_model.return_value = model
 
     client = JujuClient()
@@ -202,15 +184,7 @@ async def test_get_units(mock_controller):
 @pytest.mark.asyncio
 async def test_get_models_falls_back_on_failed_model(mock_controller):
     mock_controller.list_models.return_value = ["broken", "ok"]
-    ok_model = AsyncMock()
-    ok_info = MagicMock()
-    ok_info.cloud_tag = "cloud-aws"
-    ok_info.cloud_region = "us-east-1"
-    ok_info.status.status = "available"
-    ok_model.info = ok_info
-    ok_model.machines = {}
-    ok_model.applications = {}
-    ok_model.units = {}
+    ok_model, _, _ = _make_model_mock()
     mock_controller.get_model.side_effect = [Exception("boom"), ok_model]
 
     client = JujuClient()
