@@ -1,7 +1,23 @@
+from datetime import datetime
+from unittest.mock import AsyncMock, patch
+
 import pytest
 from textual.widgets import TabbedContent
 
 from jujumate.app import JujuMateApp
+from jujumate.client.watcher import (
+    AppsUpdated,
+    CloudsUpdated,
+    ConnectionFailed,
+    ControllersUpdated,
+    DataRefreshed,
+    JujuPoller,
+    ModelsUpdated,
+    UnitsUpdated,
+)
+from jujumate.config import JujuConfig, JujuConfigError
+from jujumate.models.entities import AppInfo, CloudInfo, ControllerInfo, ModelInfo, UnitInfo
+from jujumate.settings import AppSettings
 
 
 @pytest.mark.asyncio
@@ -68,8 +84,6 @@ async def test_keybinding_r_triggers_refresh():
 
 @pytest.mark.asyncio
 async def test_app_falls_back_when_theme_not_found():
-    from jujumate.settings import AppSettings
-
     settings = AppSettings(theme="nonexistent-theme")
     app = JujuMateApp(settings=settings)
     async with app.run_test() as pilot:
@@ -80,18 +94,6 @@ async def test_app_falls_back_when_theme_not_found():
 
 @pytest.mark.asyncio
 async def test_message_handlers_update_views():
-    from datetime import datetime
-
-    from jujumate.client.watcher import (
-        AppsUpdated,
-        CloudsUpdated,
-        ControllersUpdated,
-        DataRefreshed,
-        ModelsUpdated,
-        UnitsUpdated,
-    )
-    from jujumate.models.entities import AppInfo, CloudInfo, ControllerInfo, ModelInfo, UnitInfo
-
     app = JujuMateApp()
     async with app.run_test() as pilot:
         await pilot.pause()
@@ -116,8 +118,6 @@ async def test_message_handlers_update_views():
 
 @pytest.mark.asyncio
 async def test_connection_failed_sets_subtitle():
-    from jujumate.client.watcher import ConnectionFailed
-
     app = JujuMateApp()
     async with app.run_test() as pilot:
         await pilot.pause()
@@ -137,49 +137,41 @@ async def test_action_refresh_data_without_poller():
 
 @pytest.mark.asyncio
 async def test_connect_and_poll_connection_failure():
-    from unittest.mock import AsyncMock, patch
-
-    from jujumate.client.juju_client import JujuClientError
-
     app = JujuMateApp()
     async with app.run_test() as pilot:
         await pilot.pause()
         screen = app.screen
-        with patch("jujumate.screens.main_screen.JujuClient") as MockClient:
-            mock = AsyncMock()
-            mock.connect.side_effect = JujuClientError("refused")
-            MockClient.return_value = mock
+        with patch(
+            "jujumate.screens.main_screen.load_config",
+            side_effect=JujuConfigError("no config"),
+        ):
             await screen._connect_and_poll()
+        await pilot.pause()
         assert app.sub_title == "⚠ Disconnected"
 
 
 @pytest.mark.asyncio
 async def test_connect_and_poll_success():
-    from unittest.mock import AsyncMock, patch
-
     app = JujuMateApp()
     async with app.run_test() as pilot:
         await pilot.pause()
         screen = app.screen
         with (
-            patch("jujumate.screens.main_screen.JujuClient") as MockClient,
+            patch(
+                "jujumate.screens.main_screen.load_config",
+                return_value=JujuConfig(current_controller="prod", controllers=["prod"]),
+            ),
             patch("jujumate.screens.main_screen.JujuPoller") as MockPoller,
         ):
-            mock_client = AsyncMock()
-            MockClient.return_value = mock_client
             mock_poller = AsyncMock()
             MockPoller.return_value = mock_poller
             await screen._connect_and_poll()
-            mock_client.connect.assert_awaited_once()
+            MockPoller.assert_called_once_with(controller_names=["prod"], target=screen)
             mock_poller.poll_once.assert_awaited_once()
 
 
 @pytest.mark.asyncio
 async def test_action_refresh_data_with_poller():
-    from unittest.mock import AsyncMock
-
-    from jujumate.client.watcher import JujuPoller
-
     app = JujuMateApp()
     async with app.run_test() as pilot:
         await pilot.pause()

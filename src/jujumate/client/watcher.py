@@ -59,35 +59,54 @@ class ConnectionFailed(JujuDataMessage):
 
 
 class JujuPoller:
-    """Fetches Juju data periodically and posts Textual messages to a widget."""
+    """Fetches data from all known controllers and posts Textual messages."""
 
-    def __init__(self, client: JujuClient, target: Widget) -> None:
-        self._client = client
+    def __init__(self, controller_names: list[str], target: Widget) -> None:
+        self._controller_names = controller_names
         self._target = target
 
     async def poll_once(self) -> None:
-        """Fetch all data and post update messages."""
-        logger.info("Polling Juju data")
-        try:
-            clouds = await self._client.get_clouds()
-            self._target.post_message(CloudsUpdated(clouds=clouds))
+        """Fetch data from every controller and post aggregated update messages."""
+        logger.info("Polling %d controller(s)", len(self._controller_names))
 
-            controllers = await self._client.get_controllers()
-            self._target.post_message(ControllersUpdated(controllers=controllers))
+        if not self._controller_names:
+            self._target.post_message(ConnectionFailed(error="No controllers configured"))
+            return
 
-            models = await self._client.get_models()
-            self._target.post_message(ModelsUpdated(models=models))
+        all_clouds: dict[str, CloudInfo] = {}  # dedup by cloud name
+        all_controllers: list[ControllerInfo] = []
+        all_models: list[ModelInfo] = []
+        all_apps: list[AppInfo] = []
+        all_units: list[UnitInfo] = []
+        failed = 0
 
-            all_apps: list[AppInfo] = []
-            all_units: list[UnitInfo] = []
-            for model in models:
-                all_apps.extend(await self._client.get_applications(model.name))
-                all_units.extend(await self._client.get_units(model.name))
+        for name in self._controller_names:
+            try:
+                async with JujuClient(controller_name=name) as client:
+                    for cloud in await client.get_clouds():
+                        all_clouds[cloud.name] = cloud
+                    all_controllers.extend(await client.get_controllers())
+                    models = await client.get_models()
+                    all_models.extend(models)
+                    for model in models:
+                        all_apps.extend(await client.get_applications(model.name))
+                        all_units.extend(await client.get_units(model.name))
+            except Exception:
+                logger.exception("Failed to poll controller '%s'", name)
+                failed += 1
 
-            self._target.post_message(AppsUpdated(apps=all_apps))
-            self._target.post_message(UnitsUpdated(units=all_units))
-            self._target.post_message(DataRefreshed())
-            logger.info("Poll complete")
-        except Exception as e:
-            logger.exception("Poll failed")
-            self._target.post_message(ConnectionFailed(error=str(e)))
+        if failed == len(self._controller_names):
+            self._target.post_message(ConnectionFailed(error="All controllers failed to connect"))
+            return
+
+        self._target.post_message(CloudsUpdated(clouds=list(all_clouds.values())))
+        self._target.post_message(ControllersUpdated(controllers=all_controllers))
+        self._target.post_message(ModelsUpdated(models=all_models))
+        self._target.post_message(AppsUpdated(apps=all_apps))
+        self._target.post_message(UnitsUpdated(units=all_units))
+        self._target.post_message(DataRefreshed())
+        logger.info(
+            "Poll complete: %d controller(s) OK, %d failed",
+            len(self._controller_names) - failed,
+            failed,
+        )

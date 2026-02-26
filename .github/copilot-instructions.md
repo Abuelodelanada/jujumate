@@ -102,6 +102,12 @@ python-libjuju automatically reads `~/.local/share/juju/` — the same config us
 
 Use `●` colored dots for status: green = active, yellow = waiting/maintenance, red = error/blocked.
 
+## Code conventions
+
+- **No in-function imports**: All imports must be at the top of the file. Never place `import` or `from ... import` statements inside functions, methods, or test bodies.
+- **Line length**: 100 characters max (configured in ruff).
+- **Type hints**: Required on all public functions and methods.
+
 ## Distribution target
 
 - **PyPI** (MVP): `pipx install jujumate` / `uv tool install jujumate`

@@ -1,4 +1,5 @@
 import pytest
+from textual.widgets import DataTable, Label
 
 from jujumate.app import JujuMateApp
 from jujumate.widgets.resource_table import Column, ResourceTable
@@ -17,8 +18,6 @@ async def test_resource_table_renders_columns(columns):
         table = ResourceTable(columns=columns, id="test-table")
         await app.screen.mount(table)
         await pilot.pause()
-        from textual.widgets import DataTable
-
         dt = table.query_one(DataTable)
         assert len(dt.columns) == 2
 
@@ -32,8 +31,6 @@ async def test_update_rows_populates_table(columns):
         await app.screen.mount(table)
         await pilot.pause()
         table.update_rows([("aws", "active"), ("lxd", "active")])
-        from textual.widgets import DataTable
-
         assert table.query_one(DataTable).row_count == 2
 
 
@@ -46,8 +43,6 @@ async def test_update_rows_shows_empty_label_when_no_data(columns):
         await app.screen.mount(table)
         await pilot.pause()
         table.update_rows([])
-        from textual.widgets import Label
-
         label = table.query_one("#empty-label", Label)
         assert label.display is True
 
@@ -61,8 +56,6 @@ async def test_update_rows_hides_empty_label_when_has_data(columns):
         await app.screen.mount(table)
         await pilot.pause()
         table.update_rows([("aws", "active")])
-        from textual.widgets import Label
-
         label = table.query_one("#empty-label", Label)
         assert label.display is False
 

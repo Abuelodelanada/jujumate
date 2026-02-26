@@ -1,3 +1,5 @@
+import logging
+
 import pytest
 import yaml
 
@@ -55,22 +57,16 @@ def test_empty_file_returns_defaults(tmp_path):
 
 def test_default_log_level_is_warning(tmp_path):
     settings = load_settings(tmp_path / "config.yaml")
-    import logging
-
     assert settings.log_level == logging.WARNING
 
 
 def test_custom_log_level(tmp_path):
-    import logging
-
     config_file = _write_config(tmp_path, {"log_level": "DEBUG"})
     settings = load_settings(config_file)
     assert settings.log_level == logging.DEBUG
 
 
 def test_log_level_case_insensitive(tmp_path):
-    import logging
-
     config_file = _write_config(tmp_path, {"log_level": "info"})
     settings = load_settings(config_file)
     assert settings.log_level == logging.INFO

@@ -1,11 +1,11 @@
 import logging
+from pathlib import Path
 
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.screen import Screen
 from textual.widgets import Footer, Header, TabbedContent, TabPane
 
-from jujumate.client.juju_client import JujuClient, JujuClientError
 from jujumate.client.watcher import (
     AppsUpdated,
     CloudsUpdated,
@@ -16,6 +16,7 @@ from jujumate.client.watcher import (
     ModelsUpdated,
     UnitsUpdated,
 )
+from jujumate.config import JujuConfigError, load_config
 from jujumate.settings import AppSettings, load_settings
 from jujumate.widgets.apps_view import AppsView
 from jujumate.widgets.clouds_view import CloudsView
@@ -40,7 +41,6 @@ class MainScreen(Screen):
     def __init__(self, settings: AppSettings | None = None, **kwargs) -> None:
         super().__init__(**kwargs)
         self._settings = settings or load_settings()
-        self._client: JujuClient | None = None
         self._poller: JujuPoller | None = None
 
     def compose(self) -> ComposeResult:
@@ -62,21 +62,18 @@ class MainScreen(Screen):
         self.run_worker(self._connect_and_poll(), exclusive=True)
 
     async def _connect_and_poll(self) -> None:
-        controller_name = self._settings.default_controller
-        self._client = JujuClient(controller_name=controller_name)
         try:
-            await self._client.connect()
-        except JujuClientError as e:
+            juju_config = load_config(Path(self._settings.juju_data_dir))
+        except JujuConfigError as e:
             self.post_message(ConnectionFailed(error=str(e)))
             return
 
-        self._poller = JujuPoller(client=self._client, target=self)
+        self._poller = JujuPoller(controller_names=juju_config.controllers, target=self)
         await self._poller.poll_once()
         self.set_interval(self._settings.refresh_interval, self._poller.poll_once)
 
     async def on_unmount(self) -> None:
-        if self._client:
-            await self._client.disconnect()
+        pass  # connections are managed per-poll by JujuPoller
 
     def action_switch_tab(self, tab_id: str) -> None:
         self.query_one(TabbedContent).active = tab_id
