@@ -2,7 +2,9 @@ import logging
 from typing import Any
 
 from textual.app import ComposeResult
+from textual.message import Message
 from textual.widget import Widget
+from textual.widgets import DataTable
 
 from jujumate.models.entities import ModelInfo
 from jujumate.widgets.resource_table import Column, ResourceTable
@@ -22,6 +24,11 @@ _COLUMNS = [
 class ModelsView(Widget):
     DEFAULT_CSS = "ModelsView { height: 1fr; }"
 
+    class ModelSelected(Message):
+        def __init__(self, name: str) -> None:
+            super().__init__()
+            self.name = name
+
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
 
@@ -40,5 +47,11 @@ class ModelsView(Widget):
             )
             for m in models
         ]
-        self.query_one(ResourceTable).update_rows(rows)
+        keys = [f"{m.controller}/{m.name}" for m in models]
+        self.query_one(ResourceTable).update_rows(rows, keys=keys)
         logger.debug("ModelsView updated with %d models", len(models))
+
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        event.stop()
+        if event.row_key.value:
+            self.post_message(self.ModelSelected(name=str(event.row_key.value)))

@@ -17,3 +17,5 @@ def setup_logging(settings: AppSettings) -> None:
     root = logging.getLogger()
     root.setLevel(settings.log_level)
     root.addHandler(handler)
+
+    logging.getLogger("juju").setLevel(logging.ERROR)

@@ -74,10 +74,10 @@ class JujuPoller:
             return
 
         all_clouds: dict[str, CloudInfo] = {}  # dedup by cloud name
-        all_controllers: list[ControllerInfo] = []
-        all_models: list[ModelInfo] = []
-        all_apps: list[AppInfo] = []
-        all_units: list[UnitInfo] = []
+        all_controllers: dict[str, ControllerInfo] = {}  # dedup by controller name
+        all_models: dict[tuple[str, str], ModelInfo] = {}  # dedup by (controller, model)
+        all_apps: dict[tuple[str, str], AppInfo] = {}  # dedup by (model, app)
+        all_units: dict[tuple[str, str], UnitInfo] = {}  # dedup by (app, unit)
         failed = 0
 
         for name in self._controller_names:
@@ -85,12 +85,15 @@ class JujuPoller:
                 async with JujuClient(controller_name=name) as client:
                     for cloud in await client.get_clouds():
                         all_clouds[cloud.name] = cloud
-                    all_controllers.extend(await client.get_controllers())
+                    for ctrl in await client.get_controllers():
+                        all_controllers[ctrl.name] = ctrl
                     models = await client.get_models()
-                    all_models.extend(models)
                     for model in models:
-                        all_apps.extend(await client.get_applications(model.name))
-                        all_units.extend(await client.get_units(model.name))
+                        all_models[(model.controller, model.name)] = model
+                        for app in await client.get_applications(model.name):
+                            all_apps[(app.model, app.name)] = app
+                        for unit in await client.get_units(model.name):
+                            all_units[(unit.app, unit.name)] = unit
             except Exception:
                 logger.exception("Failed to poll controller '%s'", name)
                 failed += 1
@@ -100,10 +103,10 @@ class JujuPoller:
             return
 
         self._target.post_message(CloudsUpdated(clouds=list(all_clouds.values())))
-        self._target.post_message(ControllersUpdated(controllers=all_controllers))
-        self._target.post_message(ModelsUpdated(models=all_models))
-        self._target.post_message(AppsUpdated(apps=all_apps))
-        self._target.post_message(UnitsUpdated(units=all_units))
+        self._target.post_message(ControllersUpdated(controllers=list(all_controllers.values())))
+        self._target.post_message(ModelsUpdated(models=list(all_models.values())))
+        self._target.post_message(AppsUpdated(apps=list(all_apps.values())))
+        self._target.post_message(UnitsUpdated(units=list(all_units.values())))
         self._target.post_message(DataRefreshed())
         logger.info(
             "Poll complete: %d controller(s) OK, %d failed",

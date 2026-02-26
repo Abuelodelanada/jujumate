@@ -64,13 +64,15 @@ async def test_get_clouds(mock_controller):
 @pytest.mark.asyncio
 async def test_get_models(mock_controller):
     mock_controller.list_models.return_value = ["dev", "prod"]
+    model = AsyncMock()
     info = MagicMock()
     info.cloud_tag = "cloud-aws"
     info.cloud_region = "us-east-1"
-    info.status.current = "available"
-    info.machines = []
-    info.applications = {"postgresql": MagicMock()}
-    mock_controller.get_model_info.return_value = info
+    info.status.status = "available"
+    model.info = info
+    model.machines = {}
+    model.applications = {"postgresql": MagicMock()}
+    mock_controller.get_model.return_value = model
 
     client = JujuClient()
     result = await client.get_models()
@@ -126,21 +128,28 @@ async def test_get_units(mock_controller):
 
 
 @pytest.mark.asyncio
-async def test_get_models_skips_failed_model(mock_controller):
+async def test_get_models_falls_back_on_failed_model(mock_controller):
     mock_controller.list_models.return_value = ["broken", "ok"]
+    ok_model = AsyncMock()
     ok_info = MagicMock()
     ok_info.cloud_tag = "cloud-aws"
     ok_info.cloud_region = "us-east-1"
-    ok_info.status.current = "available"
-    ok_info.machines = []
-    ok_info.applications = {}
-    mock_controller.get_model_info.side_effect = [Exception("boom"), ok_info]
+    ok_info.status.status = "available"
+    ok_model.info = ok_info
+    ok_model.machines = {}
+    ok_model.applications = {}
+    mock_controller.get_model.side_effect = [Exception("boom"), ok_model]
 
     client = JujuClient()
     result = await client.get_models()
 
-    assert len(result) == 1
-    assert result[0].name == "ok"
+    # Both models are returned: one with full info, one minimal (fallback)
+    assert len(result) == 2
+    broken = next(m for m in result if m.name == "broken")
+    assert broken.status == "unknown"
+    assert broken.cloud == ""
+    ok = next(m for m in result if m.name == "ok")
+    assert ok.cloud == "aws"
 
 
 @pytest.mark.asyncio

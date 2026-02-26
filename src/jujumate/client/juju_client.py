@@ -72,26 +72,39 @@ class JujuClient:
 
     async def get_models(self) -> list[ModelInfo]:
         model_names = await self._controller.list_models()
+        controller_name = self._controller.controller_name or ""
+        logger.debug("Listing models for controller '%s': %s", controller_name, model_names)
         models = []
         for name in model_names:
             try:
-                info = await self._controller.get_model_info(model_name=name)
-                cloud_tag = info.cloud_tag or ""
+                model = await self._controller.get_model(name)
+                info = model.info
+                cloud_tag = (info.cloud_tag or "") if info else ""
                 cloud = cloud_tag.split("-", 1)[-1] if "-" in cloud_tag else cloud_tag
                 models.append(
                     ModelInfo(
                         name=name,
-                        controller=self._controller.controller_name or "",
+                        controller=controller_name,
                         cloud=cloud,
-                        region=info.cloud_region or "",
-                        status=info.status.current if info.status else "",
-                        machine_count=len(info.machines) if info.machines else 0,
-                        app_count=len(info.applications) if info.applications else 0,
+                        region=(info.cloud_region or "") if info else "",
+                        status=info.status.status if info and info.status else "",
+                        machine_count=len(model.machines),
+                        app_count=len(model.applications),
                     )
                 )
+                await model.disconnect()
             except Exception:
-                logger.exception("Failed to get info for model '%s'", name)
-        logger.debug("Fetched %d models", len(models))
+                logger.exception("Failed to get full info for model '%s', using minimal info", name)
+                models.append(
+                    ModelInfo(
+                        name=name,
+                        controller=controller_name,
+                        cloud="",
+                        region="",
+                        status="unknown",
+                    )
+                )
+        logger.debug("Fetched %d models for controller '%s'", len(models), controller_name)
         return models
 
     async def get_applications(self, model_name: str) -> list[AppInfo]:

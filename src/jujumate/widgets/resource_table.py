@@ -44,13 +44,14 @@ class ResourceTable(Widget):
     def on_mount(self) -> None:
         self.query_one("#empty-label").display = False
 
-    def update_rows(self, rows: list[tuple]) -> None:
+    def update_rows(self, rows: list[tuple], keys: list[str] | None = None) -> None:
         """Replace all table rows. Each tuple must match the column order."""
         table = self.query_one(DataTable)
         table.clear()
         if rows:
-            for row in rows:
-                table.add_row(*row)
+            for i, row in enumerate(rows):
+                key = keys[i] if keys else None
+                table.add_row(*row, key=key)
             self.query_one("#empty-label").display = False
             logger.debug("ResourceTable updated with %d rows", len(rows))
         else:

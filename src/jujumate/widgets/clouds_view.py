@@ -2,7 +2,9 @@ import logging
 from typing import Any
 
 from textual.app import ComposeResult
+from textual.message import Message
 from textual.widget import Widget
+from textual.widgets import DataTable
 
 from jujumate.models.entities import CloudInfo
 from jujumate.widgets.resource_table import Column, ResourceTable
@@ -20,6 +22,11 @@ _COLUMNS = [
 class CloudsView(Widget):
     DEFAULT_CSS = "CloudsView { height: 1fr; }"
 
+    class CloudSelected(Message):
+        def __init__(self, name: str) -> None:
+            super().__init__()
+            self.name = name
+
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
 
@@ -36,5 +43,11 @@ class CloudsView(Widget):
             )
             for c in clouds
         ]
-        self.query_one(ResourceTable).update_rows(rows)
+        keys = [c.name for c in clouds]
+        self.query_one(ResourceTable).update_rows(rows, keys=keys)
         logger.debug("CloudsView updated with %d clouds", len(clouds))
+
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        event.stop()
+        if event.row_key.value:
+            self.post_message(self.CloudSelected(name=str(event.row_key.value)))

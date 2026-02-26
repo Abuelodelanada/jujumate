@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from textual.app import App
@@ -9,6 +10,16 @@ from jujumate.theme_loader import load_all_themes
 logger = logging.getLogger(__name__)
 
 
+def _asyncio_exception_handler(loop: asyncio.AbstractEventLoop, context: dict) -> None:
+    """Suppress benign SSL/WebSocket cleanup errors from python-libjuju on shutdown."""
+    exc = context.get("exception")
+    if isinstance(exc, (RuntimeError, OSError)):
+        msg = str(exc).lower()
+        if "closed" in msg or "bad file descriptor" in msg:
+            return
+    loop.default_exception_handler(context)
+
+
 class JujuMateApp(App):
     TITLE = "JujuMate"
     SUB_TITLE = "Juju infrastructure at a glance"
@@ -18,6 +29,7 @@ class JujuMateApp(App):
         self._settings = settings or load_settings()
 
     def on_mount(self) -> None:
+        asyncio.get_event_loop().set_exception_handler(_asyncio_exception_handler)
         self._apply_theme()
         logger.info("JujuMate started")
         self.push_screen(MainScreen())
