@@ -2,11 +2,13 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
+from textual.app import ComposeResult
+from textual.widget import Widget
 from textual.widgets import Static
 
 logger = logging.getLogger(__name__)
 
-_LOGO = "⬡ JujuMate"
+_APP_NAME = "⬡ JujuMate"
 _SUBTITLE = "Juju infrastructure TUI"
 
 
@@ -28,37 +30,53 @@ class HeaderContext:
     timestamp: str = ""
 
 
-class JujuMateHeader(Static):
-    """Two-line contextual header: identity + drill-down breadcrumb + live stats."""
+class JujuMateHeader(Widget):
+    """Header with logo+identity on the left and contextual info on the right."""
 
     DEFAULT_CSS = """
     JujuMateHeader {
-        height: 4;
+        height: 5;
         dock: top;
         background: transparent;
+        layout: horizontal;
+    }
+    JujuMateHeader #header-left {
+        width: auto;
         padding: 1 2;
         color: $primary;
+    }
+    JujuMateHeader #header-right {
+        width: 1fr;
+        padding: 1 2;
+        color: $primary;
+        text-align: right;
+        content-align: right bottom;
     }
     """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
-        super().__init__("", *args, **kwargs)
+        super().__init__(*args, **kwargs)
         self._header_ctx = HeaderContext()
+
+    def compose(self) -> ComposeResult:
+        yield Static("", id="header-left")
+        yield Static("", id="header-right")
 
     def update_context(self, ctx: HeaderContext) -> None:
         self._header_ctx = ctx
-        breadcrumb = self._build_breadcrumb(ctx)
         status = self._build_status(ctx)
+        breadcrumb = self._build_breadcrumb(ctx)
         stats = self._build_stats(ctx)
-        line1 = f"[bold]{_LOGO}[/bold]"
+
+        left = f"[bold]{_APP_NAME}[/bold]\n{status}"
+        self.query_one("#header-left", Static).update(left)
+
+        right_lines = [f"[dim]{_SUBTITLE}[/dim]"]
         if breadcrumb:
-            line1 += f"   {breadcrumb}"
-        if status:
-            line1 += f"   {status}"
-        line2 = f"[dim]{_SUBTITLE}[/dim]"
+            right_lines.append(breadcrumb)
         if stats:
-            line2 += f"   {stats}"
-        self.update(f"{line1}\n{line2}")
+            right_lines.append(stats)
+        self.query_one("#header-right", Static).update("\n".join(right_lines))
 
     def _build_breadcrumb(self, ctx: HeaderContext) -> str:
         parts = []
