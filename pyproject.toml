@@ -47,6 +47,7 @@ include = ["src"]
 
 [tool.coverage.run]
 source = ["src/jujumate"]
+omit = ["*/__init__.py", "*/jujumate/__main__.py"]
 
 [tool.coverage.report]
 show_missing = true
