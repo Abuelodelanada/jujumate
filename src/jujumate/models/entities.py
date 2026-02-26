@@ -42,6 +42,15 @@ class AppInfo:
 
 
 @dataclass
+class RelationInfo:
+    model: str
+    provider: str
+    requirer: str
+    interface: str
+    type: str
+
+
+@dataclass
 class UnitInfo:
     name: str
     app: str

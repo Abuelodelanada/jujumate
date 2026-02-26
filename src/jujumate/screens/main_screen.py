@@ -1,12 +1,14 @@
 import logging
 from pathlib import Path
 
+from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.screen import Screen
 from textual.timer import Timer
 from textual.widgets import Footer, Header, TabbedContent, TabPane
 
+from jujumate.client.juju_client import JujuClient
 from jujumate.client.watcher import (
     AppsUpdated,
     CloudsUpdated,
@@ -15,15 +17,17 @@ from jujumate.client.watcher import (
     DataRefreshed,
     JujuPoller,
     ModelsUpdated,
+    RelationsUpdated,
     UnitsUpdated,
 )
 from jujumate.config import JujuConfigError, load_config
-from jujumate.models.entities import AppInfo, ControllerInfo, ModelInfo, UnitInfo
+from jujumate.models.entities import AppInfo, ControllerInfo, ModelInfo, RelationInfo, UnitInfo
 from jujumate.settings import AppSettings, load_settings
 from jujumate.widgets.apps_view import AppsView
 from jujumate.widgets.clouds_view import CloudsView
 from jujumate.widgets.controllers_view import ControllersView
 from jujumate.widgets.models_view import ModelsView
+from jujumate.widgets.status_view import StatusView
 from jujumate.widgets.units_view import UnitsView
 
 logger = logging.getLogger(__name__)
@@ -34,6 +38,7 @@ class MainScreen(Screen):
         Binding("c", "switch_tab('tab-clouds')", "Clouds"),
         Binding("C", "switch_tab('tab-controllers')", "Controllers"),
         Binding("m", "switch_tab('tab-models')", "Models"),
+        Binding("s", "switch_tab('tab-status')", "Status"),
         Binding("a", "switch_tab('tab-apps')", "Apps"),
         Binding("u", "switch_tab('tab-units')", "Units"),
         Binding("r", "refresh_data", "Refresh"),
@@ -51,6 +56,7 @@ class MainScreen(Screen):
         self._all_models: list[ModelInfo] = []
         self._all_apps: list[AppInfo] = []
         self._all_units: list[UnitInfo] = []
+        self._all_relations: list[RelationInfo] = []
         # Drill-down filter state
         self._selected_cloud: str | None = None
         self._selected_controller: str | None = None
@@ -66,6 +72,8 @@ class MainScreen(Screen):
                 yield ControllersView(id="controllers-view")
             with TabPane("Models", id="tab-models"):
                 yield ModelsView(id="models-view")
+            with TabPane("Status", id="tab-status"):
+                yield StatusView(id="status-view")
             with TabPane("Apps", id="tab-apps"):
                 yield AppsView(id="apps-view")
             with TabPane("Units", id="tab-units"):
@@ -110,6 +118,7 @@ class MainScreen(Screen):
         self._refresh_models_view()
         self._refresh_apps_view()
         self._refresh_units_view()
+        self._refresh_status_view()
         self.notify("Filter cleared — showing all resources")
 
     def action_quit(self) -> None:
@@ -147,6 +156,22 @@ class MainScreen(Screen):
         ]
         self.query_one("#units-view", UnitsView).update(filtered)
 
+    def _refresh_status_view(self) -> None:
+        if self._selected_model is None:
+            apps: list[AppInfo] = []
+            units: list[UnitInfo] = []
+        else:
+            apps = [a for a in self._all_apps if a.model == self._selected_model]
+            app_names = {a.name for a in apps}
+            units = [u for u in self._all_units if u.app in app_names]
+        relations = [
+            r for r in self._all_relations if r.model == self._selected_model
+        ] if self._selected_model else []
+        status_view = self.query_one("#status-view", StatusView)
+        status_view.update_apps(apps)
+        status_view.update_units(units)
+        status_view.update_relations(relations)
+
     # ── Juju data message handlers ────────────────────────────────────────────
 
     def on_clouds_updated(self, message: CloudsUpdated) -> None:
@@ -163,10 +188,20 @@ class MainScreen(Screen):
     def on_apps_updated(self, message: AppsUpdated) -> None:
         self._all_apps = message.apps
         self._refresh_apps_view()
+        self._refresh_status_view()
 
     def on_units_updated(self, message: UnitsUpdated) -> None:
         self._all_units = message.units
         self._refresh_units_view()
+        self._refresh_status_view()
+
+    def on_relations_updated(self, message: RelationsUpdated) -> None:
+        # Replace relations for this model (keep other models' relations intact)
+        self._all_relations = [
+            r for r in self._all_relations if r.model != message.model
+        ] + message.relations
+        self._refresh_status_view()
+        logger.debug("Relations updated for model '%s': %d", message.model, len(message.relations))
 
     def on_data_refreshed(self, message: DataRefreshed) -> None:
         ts = message.timestamp.strftime("%H:%M:%S")
@@ -218,7 +253,20 @@ class MainScreen(Screen):
         self._selected_app = None
         self._refresh_apps_view()
         self._refresh_units_view()
-        self.action_switch_tab("tab-apps")
+        self._refresh_status_view()
+        if self._selected_controller:
+            self._fetch_relations(self._selected_controller, self._selected_model)
+        self.action_switch_tab("tab-status")
+
+    @work(exclusive=True)
+    async def _fetch_relations(self, controller_name: str, model_name: str) -> None:
+        try:
+            async with JujuClient(controller_name=controller_name) as client:
+                relations = await client.get_relations(model_name)
+            self.post_message(RelationsUpdated(model=model_name, relations=relations))
+        except Exception:
+            logger.exception("Failed to fetch relations for model '%s'", model_name)
+            self.post_message(RelationsUpdated(model=model_name, relations=[]))
 
     def on_apps_view_app_selected(self, message: AppsView.AppSelected) -> None:
         # message.name is "model/appname" — extract just the app name

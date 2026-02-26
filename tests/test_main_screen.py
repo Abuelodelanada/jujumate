@@ -13,10 +13,11 @@ from jujumate.client.watcher import (
     DataRefreshed,
     JujuPoller,
     ModelsUpdated,
+    RelationsUpdated,
     UnitsUpdated,
 )
 from jujumate.config import JujuConfig, JujuConfigError
-from jujumate.models.entities import AppInfo, CloudInfo, ControllerInfo, ModelInfo, UnitInfo
+from jujumate.models.entities import AppInfo, CloudInfo, ControllerInfo, ModelInfo, RelationInfo, UnitInfo
 from jujumate.settings import AppSettings
 
 
@@ -228,9 +229,10 @@ async def test_controller_selected_switches_to_models_and_filters():
 
 
 @pytest.mark.asyncio
-async def test_model_selected_switches_to_apps_and_filters():
+async def test_model_selected_switches_to_status_and_filters():
     from jujumate.widgets.apps_view import AppsView
     from jujumate.widgets.models_view import ModelsView
+    from jujumate.widgets.status_view import StatusView
 
     app = JujuMateApp()
     async with app.run_test() as pilot:
@@ -240,11 +242,22 @@ async def test_model_selected_switches_to_apps_and_filters():
             AppInfo("pg", "dev", "pg", "14/stable", 1),
             AppInfo("mysql", "prod", "mysql", "8/stable", 1),
         ]
-        screen.on_models_view_model_selected(ModelsView.ModelSelected(name="dev"))
-        await pilot.pause()
-        assert app.screen.query_one(TabbedContent).active == "tab-apps"
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+        mock_client.get_relations = AsyncMock(return_value=[])
+        with patch("jujumate.screens.main_screen.JujuClient", return_value=mock_client):
+            screen._selected_controller = "ctrl"
+            screen.on_models_view_model_selected(ModelsView.ModelSelected(name="ctrl/dev"))
+            await pilot.pause()
+            await pilot.pause()
+        assert app.screen.query_one(TabbedContent).active == "tab-status"
+        # Apps tab still filtered by model
         apps_view = screen.query_one("#apps-view", AppsView)
         assert apps_view.query_one("DataTable").row_count == 1
+        # Status view shows apps for selected model
+        status_view = screen.query_one("#status-view", StatusView)
+        assert status_view.query_one("#status-apps-table DataTable").row_count == 1
 
 
 @pytest.mark.asyncio
@@ -325,3 +338,88 @@ def test_asyncio_exception_handler_forwards_non_exception_context():
     ctx = {"message": "some asyncio message"}
     _asyncio_exception_handler(loop, ctx)
     loop.default_exception_handler.assert_called_once_with(ctx)
+
+
+@pytest.mark.asyncio
+async def test_relations_updated_populates_status_view():
+    from jujumate.widgets.status_view import StatusView
+
+    app = JujuMateApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        screen = app.screen
+        screen._selected_model = "dev"
+        screen.on_relations_updated(
+            RelationsUpdated(
+                model="dev",
+                relations=[
+                    RelationInfo("dev", "postgresql:db", "wordpress:db", "pgsql", "regular"),
+                ],
+            )
+        )
+        await pilot.pause()
+        status_view = screen.query_one("#status-view", StatusView)
+        assert status_view.query_one("#status-rels-table DataTable").row_count == 1
+
+
+@pytest.mark.asyncio
+async def test_relations_updated_replaces_existing_for_same_model():
+    app = JujuMateApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        screen = app.screen
+        screen._all_relations = [
+            RelationInfo("dev", "a:x", "b:x", "iface", "regular"),
+            RelationInfo("prod", "c:x", "d:x", "iface2", "regular"),
+        ]
+        screen._selected_model = "dev"
+        screen.on_relations_updated(
+            RelationsUpdated(
+                model="dev",
+                relations=[RelationInfo("dev", "new:x", "new2:x", "iface3", "regular")],
+            )
+        )
+        await pilot.pause()
+        dev_rels = [r for r in screen._all_relations if r.model == "dev"]
+        prod_rels = [r for r in screen._all_relations if r.model == "prod"]
+        assert len(dev_rels) == 1
+        assert dev_rels[0].provider == "new:x"
+        assert len(prod_rels) == 1  # prod untouched
+
+
+@pytest.mark.asyncio
+async def test_fetch_relations_worker_posts_message():
+    from jujumate.models.entities import RelationInfo
+
+    app = JujuMateApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        screen = app.screen
+        rel = RelationInfo("dev", "pg:db", "wp:db", "pgsql", "regular")
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+        mock_client.get_relations = AsyncMock(return_value=[rel])
+        with patch("jujumate.screens.main_screen.JujuClient", return_value=mock_client):
+            screen._fetch_relations("ctrl", "dev")
+            await pilot.pause()
+            await pilot.pause()
+        assert any(r.model == "dev" for r in screen._all_relations)
+
+
+@pytest.mark.asyncio
+async def test_fetch_relations_worker_handles_exception():
+    app = JujuMateApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        screen = app.screen
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(side_effect=Exception("boom"))
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+        with patch("jujumate.screens.main_screen.JujuClient", return_value=mock_client):
+            screen._fetch_relations("ctrl", "dev")
+            await pilot.pause()
+            await pilot.pause()
+        # Empty RelationsUpdated was posted — no relations for "dev"
+        dev_rels = [r for r in screen._all_relations if r.model == "dev"]
+        assert dev_rels == []

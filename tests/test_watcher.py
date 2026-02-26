@@ -11,9 +11,10 @@ from jujumate.client.watcher import (
     DataRefreshed,
     JujuPoller,
     ModelsUpdated,
+    RelationsUpdated,
     UnitsUpdated,
 )
-from jujumate.models.entities import AppInfo, CloudInfo, ControllerInfo, ModelInfo, UnitInfo
+from jujumate.models.entities import AppInfo, CloudInfo, ControllerInfo, ModelInfo, RelationInfo, UnitInfo
 
 
 def make_mock_client():
@@ -152,3 +153,11 @@ def test_data_refreshed_has_timestamp():
 def test_connection_failed_stores_error():
     msg = ConnectionFailed(error="timeout")
     assert msg.error == "timeout"
+
+
+def test_relations_updated_stores_model_and_relations():
+    rel = RelationInfo("dev", "postgresql:db", "wordpress:db", "pgsql", "regular")
+    msg = RelationsUpdated(model="dev", relations=[rel])
+    assert msg.model == "dev"
+    assert len(msg.relations) == 1
+    assert msg.relations[0].provider == "postgresql:db"

@@ -2,7 +2,7 @@ import logging
 
 from juju.controller import Controller
 
-from jujumate.models.entities import AppInfo, CloudInfo, ControllerInfo, ModelInfo, UnitInfo
+from jujumate.models.entities import AppInfo, CloudInfo, ControllerInfo, ModelInfo, RelationInfo, UnitInfo
 
 logger = logging.getLogger(__name__)
 
@@ -150,3 +150,41 @@ class JujuClient:
             logger.exception("Failed to get units for model '%s'", model_name)
         logger.debug("Fetched %d units for model '%s'", len(units), model_name)
         return units
+
+    async def get_relations(self, model_name: str) -> list[RelationInfo]:
+        relations: list[RelationInfo] = []
+        try:
+            model = await self._controller.get_model(model_name)
+            try:
+                status = await model.get_status()
+                for rel in status.relations or []:
+                    endpoints = rel.endpoints or []
+                    provider = next((e for e in endpoints if e.role == "provider"), None)
+                    requirer = next((e for e in endpoints if e.role == "requirer"), None)
+                    peer = next((e for e in endpoints if e.role == "peer"), None)
+                    if peer:
+                        relations.append(
+                            RelationInfo(
+                                model=model_name,
+                                provider=f"{peer.application}:{peer.name}",
+                                requirer=f"{peer.application}:{peer.name}",
+                                interface=rel.interface or "",
+                                type="peer",
+                            )
+                        )
+                    elif provider and requirer:
+                        relations.append(
+                            RelationInfo(
+                                model=model_name,
+                                provider=f"{provider.application}:{provider.name}",
+                                requirer=f"{requirer.application}:{requirer.name}",
+                                interface=rel.interface or "",
+                                type="regular",
+                            )
+                        )
+            finally:
+                await model.disconnect()
+        except Exception:
+            logger.exception("Failed to get relations for model '%s'", model_name)
+        logger.debug("Fetched %d relations for model '%s'", len(relations), model_name)
+        return relations

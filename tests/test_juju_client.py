@@ -198,3 +198,70 @@ async def test_get_controllers_returns_empty_on_failure(mock_controller):
     result = await client.get_controllers()
 
     assert result == []
+
+
+@pytest.mark.asyncio
+async def test_get_relations(mock_controller):
+    from jujumate.models.entities import RelationInfo
+
+    model = AsyncMock()
+    status = MagicMock()
+    rel = MagicMock()
+    rel.interface = "pgsql"
+    rel.scope = "global"
+    provider_ep = MagicMock()
+    provider_ep.application = "postgresql"
+    provider_ep.name = "db"
+    provider_ep.role = "provider"
+    requirer_ep = MagicMock()
+    requirer_ep.application = "wordpress"
+    requirer_ep.name = "db"
+    requirer_ep.role = "requirer"
+    rel.endpoints = [provider_ep, requirer_ep]
+    status.relations = [rel]
+    model.get_status = AsyncMock(return_value=status)
+    mock_controller.get_model.return_value = model
+
+    client = JujuClient()
+    result = await client.get_relations("dev")
+
+    assert len(result) == 1
+    assert result[0].provider == "postgresql:db"
+    assert result[0].requirer == "wordpress:db"
+    assert result[0].interface == "pgsql"
+    assert result[0].type == "regular"
+    assert result[0].model == "dev"
+
+
+@pytest.mark.asyncio
+async def test_get_relations_peer(mock_controller):
+    model = AsyncMock()
+    status = MagicMock()
+    rel = MagicMock()
+    rel.interface = "etcd"
+    peer_ep = MagicMock()
+    peer_ep.application = "etcd"
+    peer_ep.name = "cluster"
+    peer_ep.role = "peer"
+    rel.endpoints = [peer_ep]
+    status.relations = [rel]
+    model.get_status = AsyncMock(return_value=status)
+    mock_controller.get_model.return_value = model
+
+    client = JujuClient()
+    result = await client.get_relations("dev")
+
+    assert len(result) == 1
+    assert result[0].provider == "etcd:cluster"
+    assert result[0].requirer == "etcd:cluster"
+    assert result[0].type == "peer"
+
+
+@pytest.mark.asyncio
+async def test_get_relations_returns_empty_on_failure(mock_controller):
+    mock_controller.get_model.side_effect = Exception("boom")
+
+    client = JujuClient()
+    result = await client.get_relations("broken-model")
+
+    assert result == []

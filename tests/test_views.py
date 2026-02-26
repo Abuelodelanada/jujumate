@@ -247,3 +247,49 @@ async def test_apps_view_row_selection_posts_app_selected():
         assert len(posted) == 1
         assert isinstance(posted[0], AppsView.AppSelected)
         assert posted[0].name == "pg"
+
+
+@pytest.mark.asyncio
+async def test_status_view_update_apps():
+    from jujumate.widgets.status_view import StatusView
+
+    app = JujuMateApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        view = StatusView(id="test-status")
+        await _mount_view(app, pilot, view)
+        view.update_apps([AppInfo("pg", "dev", "pg", "14/stable", 1, status="active")])
+        await pilot.pause()
+        assert view.query_one("#status-apps-table", ResourceTable).query_one("DataTable").row_count == 1
+
+
+@pytest.mark.asyncio
+async def test_status_view_update_units():
+    from jujumate.widgets.status_view import StatusView
+
+    app = JujuMateApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        view = StatusView(id="test-status-units")
+        await _mount_view(app, pilot, view)
+
+        from jujumate.models.entities import UnitInfo
+
+        view.update_units([UnitInfo("pg/0", "pg", "0", "active", "idle", "10.0.0.1")])
+        await pilot.pause()
+        assert view.query_one("#status-units-table", ResourceTable).query_one("DataTable").row_count == 1
+
+
+@pytest.mark.asyncio
+async def test_status_view_update_relations():
+    from jujumate.models.entities import RelationInfo
+    from jujumate.widgets.status_view import StatusView
+
+    app = JujuMateApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        view = StatusView(id="test-status-rels")
+        await _mount_view(app, pilot, view)
+        view.update_relations([RelationInfo("dev", "postgresql:db", "wordpress:db", "pgsql", "regular")])
+        await pilot.pause()
+        assert view.query_one("#status-rels-table", ResourceTable).query_one("DataTable").row_count == 1
