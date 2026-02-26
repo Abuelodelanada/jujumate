@@ -13,11 +13,12 @@ from jujumate.client.watcher import (
     DataRefreshed,
     JujuPoller,
     ModelsUpdated,
+    OffersUpdated,
     RelationsUpdated,
     UnitsUpdated,
 )
 from jujumate.config import JujuConfig, JujuConfigError
-from jujumate.models.entities import AppInfo, CloudInfo, ControllerInfo, ModelInfo, RelationInfo, UnitInfo
+from jujumate.models.entities import AppInfo, CloudInfo, ControllerInfo, ModelInfo, OfferInfo, RelationInfo, UnitInfo
 from jujumate.settings import AppSettings
 
 
@@ -245,7 +246,7 @@ async def test_model_selected_switches_to_status_and_filters():
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
-        mock_client.get_relations = AsyncMock(return_value=[])
+        mock_client.get_status_details = AsyncMock(return_value=([], []))
         with patch("jujumate.screens.main_screen.JujuClient", return_value=mock_client):
             screen._selected_controller = "ctrl"
             screen.on_models_view_model_selected(ModelsView.ModelSelected(name="ctrl/dev"))
@@ -388,6 +389,28 @@ async def test_relations_updated_replaces_existing_for_same_model():
 
 
 @pytest.mark.asyncio
+async def test_offers_updated_populates_status_view():
+    from jujumate.widgets.status_view import StatusView
+
+    app = JujuMateApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        screen = app.screen
+        screen._selected_model = "cos"
+        screen.on_offers_updated(
+            OffersUpdated(
+                model="cos",
+                offers=[
+                    OfferInfo("cos", "alertmanager-karma-dashboard", "alertmanager", "alertmanager-k8s", 180, "0/0", "karma-dashboard", "karma_dashboard", "provider"),
+                ],
+            )
+        )
+        await pilot.pause()
+        status_view = screen.query_one("#status-view", StatusView)
+        assert status_view.query_one("#status-offers-table DataTable").row_count == 1
+
+
+@pytest.mark.asyncio
 async def test_fetch_relations_worker_posts_message():
     from jujumate.models.entities import RelationInfo
 
@@ -399,7 +422,7 @@ async def test_fetch_relations_worker_posts_message():
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
-        mock_client.get_relations = AsyncMock(return_value=[rel])
+        mock_client.get_status_details = AsyncMock(return_value=([rel], []))
         with patch("jujumate.screens.main_screen.JujuClient", return_value=mock_client):
             screen._fetch_relations("ctrl", "dev")
             await pilot.pause()

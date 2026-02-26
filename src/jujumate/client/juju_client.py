@@ -2,7 +2,7 @@ import logging
 
 from juju.controller import Controller
 
-from jujumate.models.entities import AppInfo, CloudInfo, ControllerInfo, ModelInfo, RelationInfo, UnitInfo
+from jujumate.models.entities import AppInfo, CloudInfo, ControllerInfo, ModelInfo, OfferInfo, RelationInfo, UnitInfo
 
 logger = logging.getLogger(__name__)
 
@@ -175,12 +175,17 @@ class JujuClient:
         logger.debug("Fetched %d units for model '%s'", len(units), model_name)
         return units
 
-    async def get_relations(self, model_name: str) -> list[RelationInfo]:
+    async def get_status_details(
+        self, model_name: str
+    ) -> tuple[list[RelationInfo], list[OfferInfo]]:
+        """Fetch relations and offers for a model in a single connection."""
         relations: list[RelationInfo] = []
+        offers: list[OfferInfo] = []
         try:
             model = await self._controller.get_model(model_name)
             try:
                 status = await model.get_status()
+                app_statuses = status.applications or {}
                 for rel in status.relations or []:
                     endpoints = rel.endpoints or []
                     provider = next((e for e in endpoints if e.role == "provider"), None)
@@ -206,9 +211,42 @@ class JujuClient:
                                 type="regular",
                             )
                         )
+                for offer_name, offer_st in (status.offers or {}).items():
+                    app_name = offer_st.application_name or ""
+                    app_st = app_statuses.get(app_name)
+                    rev = app_st.charm_rev if app_st else 0
+                    charm_name = (
+                        model.applications[app_name].charm_name
+                        if app_name in model.applications
+                        else app_name
+                    )
+                    active = offer_st.active_connected_count or 0
+                    total = offer_st.total_connected_count or 0
+                    connected = f"{active}/{total}"
+                    for ep_name, ep in (offer_st.endpoints or {}).items():
+                        offers.append(
+                            OfferInfo(
+                                model=model_name,
+                                name=offer_name,
+                                application=app_name,
+                                charm=charm_name,
+                                rev=rev or 0,
+                                connected=connected,
+                                endpoint=ep_name,
+                                interface=ep.interface or "",
+                                role=ep.role or "",
+                            )
+                        )
             finally:
                 await model.disconnect()
         except Exception:
-            logger.exception("Failed to get relations for model '%s'", model_name)
-        logger.debug("Fetched %d relations for model '%s'", len(relations), model_name)
+            logger.exception("Failed to get status details for model '%s'", model_name)
+        logger.debug(
+            "Status details for model '%s': %d relations, %d offers",
+            model_name, len(relations), len(offers),
+        )
+        return relations, offers
+
+    async def get_relations(self, model_name: str) -> list[RelationInfo]:
+        relations, _ = await self.get_status_details(model_name)
         return relations

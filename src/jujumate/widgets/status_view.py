@@ -6,7 +6,7 @@ from textual.containers import VerticalScroll
 from textual.widget import Widget
 from textual.widgets import Label
 
-from jujumate.models.entities import AppInfo, RelationInfo, UnitInfo
+from jujumate.models.entities import AppInfo, OfferInfo, RelationInfo, UnitInfo
 from jujumate.widgets.resource_table import Column, ResourceTable
 
 logger = logging.getLogger(__name__)
@@ -43,6 +43,17 @@ _UNIT_COLUMNS_IAAS = [
     Column("Message", "s-unit-msg"),
 ]
 
+_OFFER_COLUMNS = [
+    Column("Offer", "s-offer-name"),
+    Column("Application", "s-offer-app", width=16),
+    Column("Charm", "s-offer-charm", width=18),
+    Column("Rev", "s-offer-rev", width=5),
+    Column("Connected", "s-offer-conn", width=10),
+    Column("Endpoint", "s-offer-ep", width=20),
+    Column("Interface", "s-offer-iface", width=22),
+    Column("Role", "s-offer-role", width=10),
+]
+
 _REL_COLUMNS = [
     Column("Provider", "s-rel-provider"),
     Column("Requirer", "s-rel-requirer"),
@@ -74,8 +85,14 @@ class StatusView(Widget):
             yield ResourceTable(columns=_APP_COLUMNS, id="status-apps-table")
             yield Label("Units", classes="section-label")
             yield ResourceTable(columns=_UNIT_COLUMNS_IAAS, id="status-units-table")
+            yield Label("Offers", classes="section-label", id="status-offers-label")
+            yield ResourceTable(columns=_OFFER_COLUMNS, id="status-offers-table")
             yield Label("Relations", classes="section-label")
             yield ResourceTable(columns=_REL_COLUMNS, id="status-rels-table")
+
+    def on_mount(self) -> None:
+        self.query_one("#status-offers-label").display = False
+        self.query_one("#status-offers-table").display = False
 
     def update_apps(self, apps: list[AppInfo]) -> None:
         rows = [
@@ -112,6 +129,17 @@ class StatusView(Widget):
             ]
         table.update_rows(rows)
         logger.debug("StatusView units updated: %d rows (k8s=%s)", len(rows), is_kubernetes)
+
+    def update_offers(self, offers: list[OfferInfo]) -> None:
+        has_offers = bool(offers)
+        self.query_one("#status-offers-label").display = has_offers
+        self.query_one("#status-offers-table").display = has_offers
+        rows = [
+            (o.name, o.application, o.charm, str(o.rev), o.connected, o.endpoint, o.interface, o.role)
+            for o in offers
+        ]
+        self.query_one("#status-offers-table", ResourceTable).update_rows(rows)
+        logger.debug("StatusView offers updated: %d rows", len(rows))
 
     def update_relations(self, relations: list[RelationInfo]) -> None:
         rows = [(r.provider, r.requirer, r.interface, r.type) for r in relations]

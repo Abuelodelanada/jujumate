@@ -17,11 +17,12 @@ from jujumate.client.watcher import (
     DataRefreshed,
     JujuPoller,
     ModelsUpdated,
+    OffersUpdated,
     RelationsUpdated,
     UnitsUpdated,
 )
 from jujumate.config import JujuConfigError, load_config
-from jujumate.models.entities import AppInfo, ControllerInfo, ModelInfo, RelationInfo, UnitInfo
+from jujumate.models.entities import AppInfo, ControllerInfo, ModelInfo, OfferInfo, RelationInfo, UnitInfo
 from jujumate.settings import AppSettings, load_settings
 from jujumate.widgets.apps_view import AppsView
 from jujumate.widgets.clouds_view import CloudsView
@@ -57,6 +58,7 @@ class MainScreen(Screen):
         self._all_apps: list[AppInfo] = []
         self._all_units: list[UnitInfo] = []
         self._all_relations: list[RelationInfo] = []
+        self._all_offers: list[OfferInfo] = []
         # Drill-down filter state
         self._selected_cloud: str | None = None
         self._selected_controller: str | None = None
@@ -172,9 +174,13 @@ class MainScreen(Screen):
         relations = [
             r for r in self._all_relations if r.model == self._selected_model
         ] if self._selected_model else []
+        offers = [
+            o for o in self._all_offers if o.model == self._selected_model
+        ] if self._selected_model else []
         status_view = self.query_one("#status-view", StatusView)
         status_view.update_apps(apps)
         status_view.update_units(units, is_kubernetes=is_kubernetes)
+        status_view.update_offers(offers)
         status_view.update_relations(relations)
 
     # ── Juju data message handlers ────────────────────────────────────────────
@@ -207,6 +213,14 @@ class MainScreen(Screen):
         ] + message.relations
         self._refresh_status_view()
         logger.debug("Relations updated for model '%s': %d", message.model, len(message.relations))
+
+    def on_offers_updated(self, message: OffersUpdated) -> None:
+        # Replace offers for this model (keep other models' offers intact)
+        self._all_offers = [
+            o for o in self._all_offers if o.model != message.model
+        ] + message.offers
+        self._refresh_status_view()
+        logger.debug("Offers updated for model '%s': %d", message.model, len(message.offers))
 
     def on_data_refreshed(self, message: DataRefreshed) -> None:
         ts = message.timestamp.strftime("%H:%M:%S")
@@ -267,11 +281,13 @@ class MainScreen(Screen):
     async def _fetch_relations(self, controller_name: str, model_name: str) -> None:
         try:
             async with JujuClient(controller_name=controller_name) as client:
-                relations = await client.get_relations(model_name)
+                relations, offers = await client.get_status_details(model_name)
             self.post_message(RelationsUpdated(model=model_name, relations=relations))
+            self.post_message(OffersUpdated(model=model_name, offers=offers))
         except Exception:
-            logger.exception("Failed to fetch relations for model '%s'", model_name)
+            logger.exception("Failed to fetch status details for model '%s'", model_name)
             self.post_message(RelationsUpdated(model=model_name, relations=[]))
+            self.post_message(OffersUpdated(model=model_name, offers=[]))
 
     def on_apps_view_app_selected(self, message: AppsView.AppSelected) -> None:
         # message.name is "model/appname" — extract just the app name

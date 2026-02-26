@@ -6,7 +6,7 @@ from textual.message import Message
 from textual.widget import Widget
 
 from jujumate.client.juju_client import JujuClient
-from jujumate.models.entities import AppInfo, CloudInfo, ControllerInfo, ModelInfo, RelationInfo, UnitInfo
+from jujumate.models.entities import AppInfo, CloudInfo, ControllerInfo, ModelInfo, OfferInfo, RelationInfo, UnitInfo
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +47,12 @@ class UnitsUpdated(JujuDataMessage):
 class RelationsUpdated(JujuDataMessage):
     model: str = ""
     relations: list[RelationInfo] = field(default_factory=list)
+
+
+@dataclass
+class OffersUpdated(JujuDataMessage):
+    model: str = ""
+    offers: list[OfferInfo] = field(default_factory=list)
 
 
 @dataclass

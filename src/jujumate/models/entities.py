@@ -46,6 +46,19 @@ class AppInfo:
 
 
 @dataclass
+class OfferInfo:
+    model: str
+    name: str
+    application: str
+    charm: str
+    rev: int
+    connected: str
+    endpoint: str
+    interface: str
+    role: str
+
+
+@dataclass
 class RelationInfo:
     model: str
     provider: str

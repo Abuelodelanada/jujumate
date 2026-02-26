@@ -312,3 +312,27 @@ async def test_status_view_update_relations():
         view.update_relations([RelationInfo("dev", "postgresql:db", "wordpress:db", "pgsql", "regular")])
         await pilot.pause()
         assert view.query_one("#status-rels-table", ResourceTable).query_one("DataTable").row_count == 1
+
+
+@pytest.mark.asyncio
+async def test_status_view_update_offers():
+    from jujumate.models.entities import OfferInfo
+    from jujumate.widgets.status_view import StatusView
+
+    app = JujuMateApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        view = StatusView(id="test-status-offers")
+        await _mount_view(app, pilot, view)
+        # Initially offers panel is hidden
+        assert view.query_one("#status-offers-table").display is False
+        view.update_offers([
+            OfferInfo("cos", "alertmanager-karma-dashboard", "alertmanager", "alertmanager-k8s", 180, "0/0", "karma-dashboard", "karma_dashboard", "provider"),
+        ])
+        await pilot.pause()
+        assert view.query_one("#status-offers-table").display is True
+        assert view.query_one("#status-offers-table", ResourceTable).query_one("DataTable").row_count == 1
+        # Clearing offers hides the panel again
+        view.update_offers([])
+        await pilot.pause()
+        assert view.query_one("#status-offers-table").display is False

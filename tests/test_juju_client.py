@@ -293,7 +293,10 @@ async def test_get_relations(mock_controller):
     requirer_ep.role = "requirer"
     rel.endpoints = [provider_ep, requirer_ep]
     status.relations = [rel]
+    status.offers = {}
+    status.applications = {}
     model.get_status = AsyncMock(return_value=status)
+    model.applications = {}
     mock_controller.get_model.return_value = model
 
     client = JujuClient()
@@ -319,7 +322,10 @@ async def test_get_relations_peer(mock_controller):
     peer_ep.role = "peer"
     rel.endpoints = [peer_ep]
     status.relations = [rel]
+    status.offers = {}
+    status.applications = {}
     model.get_status = AsyncMock(return_value=status)
+    model.applications = {}
     mock_controller.get_model.return_value = model
 
     client = JujuClient()
@@ -339,3 +345,44 @@ async def test_get_relations_returns_empty_on_failure(mock_controller):
     result = await client.get_relations("broken-model")
 
     assert result == []
+
+
+@pytest.mark.asyncio
+async def test_get_status_details_returns_offers(mock_controller):
+    from jujumate.models.entities import OfferInfo
+
+    model = AsyncMock()
+    status = MagicMock()
+    status.relations = []
+    app_st = MagicMock()
+    app_st.charm_rev = 180
+    status.applications = {"alertmanager": app_st}
+    offer_st = MagicMock()
+    offer_st.application_name = "alertmanager"
+    offer_st.active_connected_count = 0
+    offer_st.total_connected_count = 0
+    ep = MagicMock()
+    ep.interface = "karma_dashboard"
+    ep.role = "provider"
+    offer_st.endpoints = {"karma-dashboard": ep}
+    status.offers = {"alertmanager-karma-dashboard": offer_st}
+    live_app = MagicMock()
+    live_app.charm_name = "alertmanager-k8s"
+    model.get_status = AsyncMock(return_value=status)
+    model.applications = {"alertmanager": live_app}
+    mock_controller.get_model.return_value = model
+
+    client = JujuClient()
+    relations, offers = await client.get_status_details("cos")
+
+    assert relations == []
+    assert len(offers) == 1
+    o = offers[0]
+    assert o.name == "alertmanager-karma-dashboard"
+    assert o.application == "alertmanager"
+    assert o.charm == "alertmanager-k8s"
+    assert o.rev == 180
+    assert o.connected == "0/0"
+    assert o.endpoint == "karma-dashboard"
+    assert o.interface == "karma_dashboard"
+    assert o.role == "provider"

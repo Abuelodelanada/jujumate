@@ -11,10 +11,11 @@ from jujumate.client.watcher import (
     DataRefreshed,
     JujuPoller,
     ModelsUpdated,
+    OffersUpdated,
     RelationsUpdated,
     UnitsUpdated,
 )
-from jujumate.models.entities import AppInfo, CloudInfo, ControllerInfo, ModelInfo, RelationInfo, UnitInfo
+from jujumate.models.entities import AppInfo, CloudInfo, ControllerInfo, ModelInfo, OfferInfo, RelationInfo, UnitInfo
 
 
 def make_mock_client():
@@ -168,3 +169,11 @@ def test_relations_updated_stores_model_and_relations():
     assert msg.model == "dev"
     assert len(msg.relations) == 1
     assert msg.relations[0].provider == "postgresql:db"
+
+
+def test_offers_updated_stores_model_and_offers():
+    offer = OfferInfo("cos", "alertmanager-karma-dashboard", "alertmanager", "alertmanager-k8s", 180, "0/0", "karma-dashboard", "karma_dashboard", "provider")
+    msg = OffersUpdated(model="cos", offers=[offer])
+    assert msg.model == "cos"
+    assert len(msg.offers) == 1
+    assert msg.offers[0].name == "alertmanager-karma-dashboard"
