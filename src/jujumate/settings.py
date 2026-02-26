@@ -17,6 +17,7 @@ class AppSettings:
     juju_data_dir: Path = Path.home() / ".local" / "share" / "juju"
     log_file: Path = Path.home() / ".local" / "state" / "jujumate" / "jujumate.log"
     log_level: int = logging.WARNING
+    theme: str = "ubuntu"
 
 
 class AppSettingsError(Exception):
@@ -57,4 +58,5 @@ def load_settings(config_file: Path = CONFIG_FILE) -> AppSettings:
         juju_data_dir=juju_data_dir,
         log_file=log_file,
         log_level=log_level,
+        theme=data.get("theme", AppSettings.theme),
     )

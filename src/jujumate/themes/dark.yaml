@@ -1,0 +1,12 @@
+# Default dark theme for JujuMate
+name: dark
+primary: "#004080"
+secondary: "#0066CC"
+accent: "#0099FF"
+background: "#1a1a1a"
+surface: "#2a2a2a"
+panel: "#333333"
+warning: "#EFB73E"
+error: "#DA3450"
+success: "#0E8420"
+dark: true

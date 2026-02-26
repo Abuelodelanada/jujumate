@@ -1,0 +1,13 @@
+# Ubuntu theme for JujuMate
+# Colors from the Ubuntu brand palette: https://design.ubuntu.com/brand/colour-palette
+name: ubuntu
+primary: "#E95420"      # Ubuntu Orange
+secondary: "#77216F"    # Aubergine light
+accent: "#E95420"       # Ubuntu Orange
+background: "#2C001E"   # Aubergine dark
+surface: "#5E2750"      # Aubergine mid
+panel: "#3D0F35"        # Between dark and mid
+warning: "#EFB73E"
+error: "#DA3450"
+success: "#0E8420"
+dark: true

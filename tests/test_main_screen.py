@@ -53,3 +53,26 @@ async def test_keybinding_q_exits():
     async with app.run_test() as pilot:
         await pilot.press("q")
     assert app.return_value is None
+
+
+@pytest.mark.asyncio
+async def test_keybinding_r_triggers_refresh():
+    app = JujuMateApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("r")
+        await pilot.pause()
+        # action_refresh_data calls notify() — verify app is still running
+        assert app.screen.__class__.__name__ == "MainScreen"
+
+
+@pytest.mark.asyncio
+async def test_app_falls_back_when_theme_not_found():
+    from jujumate.settings import AppSettings
+
+    settings = AppSettings(theme="nonexistent-theme")
+    app = JujuMateApp(settings=settings)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        # App should still mount correctly despite unknown theme
+        assert app.screen.__class__.__name__ == "MainScreen"
