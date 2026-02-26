@@ -415,3 +415,20 @@ def test_jujumate_header_connected_no_timestamp():
     status = header._build_status(ctx)
     assert "Live" in status
     assert "·" not in status
+
+
+def test_wrap_msg_short_text():
+    from jujumate.widgets.status_view import _wrap_msg
+
+    text, lines = _wrap_msg("")
+    assert text == ""
+    assert lines == 1
+
+
+def test_wrap_msg_long_text():
+    from jujumate.widgets.status_view import _MSG_WRAP_WIDTH, _wrap_msg
+
+    long_msg = "x" * (_MSG_WRAP_WIDTH + 10) + " something"
+    text, lines = _wrap_msg(long_msg)
+    assert lines > 1
+    assert "\n" in text

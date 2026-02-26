@@ -1,4 +1,5 @@
 import logging
+import textwrap
 from typing import Any
 
 from textual.app import ComposeResult
@@ -62,6 +63,17 @@ _REL_COLUMNS = [
 ]
 
 
+_MSG_WRAP_WIDTH = 45
+
+
+def _wrap_msg(text: str) -> tuple[str, int]:
+    """Wrap a message string. Returns (wrapped_text, line_count)."""
+    if not text:
+        return text, 1
+    lines = textwrap.wrap(text, width=_MSG_WRAP_WIDTH)
+    return "\n".join(lines) if lines else text, max(len(lines), 1)
+
+
 class StatusView(Widget):
     """Displays a juju-status–style overview for the selected model."""
 
@@ -105,8 +117,11 @@ class StatusView(Widget):
         self.query_one("#status-offers-table").display = False
 
     def update_apps(self, apps: list[AppInfo]) -> None:
-        rows = [
-            (
+        rows = []
+        heights = []
+        for a in apps:
+            msg, h = _wrap_msg(a.message)
+            rows.append((
                 a.name,
                 a.version,
                 a.status,
@@ -116,28 +131,29 @@ class StatusView(Widget):
                 str(a.revision),
                 a.address,
                 "yes" if a.exposed else "no",
-                a.message,
-            )
-            for a in apps
-        ]
-        self.query_one("#status-apps-table", ResourceTable).update_rows(rows)
+                msg,
+            ))
+            heights.append(h)
+        self.query_one("#status-apps-table", ResourceTable).update_rows(rows, heights=heights)
         logger.debug("StatusView apps updated: %d rows", len(rows))
 
     def update_units(self, units: list[UnitInfo], is_kubernetes: bool = False) -> None:
         table = self.query_one("#status-units-table", ResourceTable)
+        rows = []
+        heights = []
         if is_kubernetes:
             table.reset_columns(_UNIT_COLUMNS_K8S)
-            rows = [
-                (u.name, u.workload_status, u.agent_status, u.address, u.ports, u.message)
-                for u in units
-            ]
+            for u in units:
+                msg, h = _wrap_msg(u.message)
+                rows.append((u.name, u.workload_status, u.agent_status, u.address, u.ports, msg))
+                heights.append(h)
         else:
             table.reset_columns(_UNIT_COLUMNS_IAAS)
-            rows = [
-                (u.name, u.workload_status, u.agent_status, u.machine, u.public_address, u.ports, u.message)
-                for u in units
-            ]
-        table.update_rows(rows)
+            for u in units:
+                msg, h = _wrap_msg(u.message)
+                rows.append((u.name, u.workload_status, u.agent_status, u.machine, u.public_address, u.ports, msg))
+                heights.append(h)
+        table.update_rows(rows, heights=heights)
         logger.debug("StatusView units updated: %d rows (k8s=%s)", len(rows), is_kubernetes)
 
     def update_offers(self, offers: list[OfferInfo]) -> None:

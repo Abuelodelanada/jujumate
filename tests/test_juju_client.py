@@ -338,13 +338,12 @@ async def test_get_relations_peer(mock_controller):
 
 
 @pytest.mark.asyncio
-async def test_get_relations_returns_empty_on_failure(mock_controller):
+async def test_get_relations_raises_on_failure(mock_controller):
     mock_controller.get_model.side_effect = Exception("boom")
 
     client = JujuClient()
-    result = await client.get_relations("broken-model")
-
-    assert result == []
+    with pytest.raises(Exception, match="boom"):
+        await client.get_relations("broken-model")
 
 
 @pytest.mark.asyncio

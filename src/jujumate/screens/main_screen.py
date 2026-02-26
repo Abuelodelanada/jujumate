@@ -347,12 +347,14 @@ class MainScreen(Screen):
         try:
             async with JujuClient(controller_name=controller_name) as client:
                 relations, offers = await client.get_status_details(model_name)
+            logger.debug(
+                "Fetched %d relations, %d offers for model '%s'",
+                len(relations), len(offers), model_name,
+            )
             self.post_message(RelationsUpdated(model=model_name, relations=relations))
             self.post_message(OffersUpdated(model=model_name, offers=offers))
         except Exception:
             logger.exception("Failed to fetch status details for model '%s'", model_name)
-            self.post_message(RelationsUpdated(model=model_name, relations=[]))
-            self.post_message(OffersUpdated(model=model_name, offers=[]))
 
     def on_apps_view_app_selected(self, message: AppsView.AppSelected) -> None:
         # message.name is "model/appname" — extract just the app name
