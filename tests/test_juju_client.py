@@ -161,3 +161,31 @@ async def test_get_units_returns_empty_on_failure(mock_controller):
     result = await client.get_units("broken-model")
 
     assert result == []
+
+
+@pytest.mark.asyncio
+async def test_get_controllers(mock_controller):
+    conn = MagicMock()
+    conn.info = {"server-version": "3.4.0"}
+    mock_controller.connection = MagicMock(return_value=conn)
+    mock_controller.get_cloud = AsyncMock(return_value="aws")
+    mock_controller.list_models = AsyncMock(return_value=["dev", "prod"])
+
+    client = JujuClient()
+    result = await client.get_controllers()
+
+    assert len(result) == 1
+    assert result[0].name == "test-controller"
+    assert result[0].cloud == "aws"
+    assert result[0].juju_version == "3.4.0"
+    assert result[0].model_count == 2
+
+
+@pytest.mark.asyncio
+async def test_get_controllers_returns_empty_on_failure(mock_controller):
+    mock_controller.get_cloud.side_effect = Exception("boom")
+
+    client = JujuClient()
+    result = await client.get_controllers()
+
+    assert result == []

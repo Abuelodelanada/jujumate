@@ -72,6 +72,9 @@ class JujuPoller:
             clouds = await self._client.get_clouds()
             self._target.post_message(CloudsUpdated(clouds=clouds))
 
+            controllers = await self._client.get_controllers()
+            self._target.post_message(ControllersUpdated(controllers=controllers))
+
             models = await self._client.get_models()
             self._target.post_message(ModelsUpdated(models=models))
 

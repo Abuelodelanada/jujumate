@@ -2,7 +2,7 @@ import logging
 
 from juju.controller import Controller
 
-from jujumate.models.entities import AppInfo, CloudInfo, ModelInfo, UnitInfo
+from jujumate.models.entities import AppInfo, CloudInfo, ControllerInfo, ModelInfo, UnitInfo
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +37,28 @@ class JujuClient:
 
     async def __aexit__(self, *args: object) -> None:
         await self.disconnect()
+
+    async def get_controllers(self) -> list[ControllerInfo]:
+        try:
+            cloud_name = await self._controller.get_cloud()
+            conn = self._controller.connection()
+            info: dict = conn.info if isinstance(conn.info, dict) else {}
+            juju_version = str(info.get("server-version", ""))
+            model_names = await self._controller.list_models()
+            controllers = [
+                ControllerInfo(
+                    name=self._controller.controller_name or "",
+                    cloud=cloud_name,
+                    region="",
+                    juju_version=juju_version,
+                    model_count=len(model_names),
+                )
+            ]
+        except Exception:
+            logger.exception("Failed to get controller info")
+            controllers = []
+        logger.debug("Fetched %d controllers", len(controllers))
+        return controllers
 
     async def get_clouds(self) -> list[CloudInfo]:
         result = await self._controller.clouds()

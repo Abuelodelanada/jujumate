@@ -85,11 +85,12 @@ async def test_message_handlers_update_views():
     from jujumate.client.watcher import (
         AppsUpdated,
         CloudsUpdated,
+        ControllersUpdated,
         DataRefreshed,
         ModelsUpdated,
         UnitsUpdated,
     )
-    from jujumate.models.entities import AppInfo, CloudInfo, ModelInfo, UnitInfo
+    from jujumate.models.entities import AppInfo, CloudInfo, ControllerInfo, ModelInfo, UnitInfo
 
     app = JujuMateApp()
     async with app.run_test() as pilot:
@@ -97,6 +98,11 @@ async def test_message_handlers_update_views():
         screen = app.screen
 
         screen.on_clouds_updated(CloudsUpdated(clouds=[CloudInfo("aws", "ec2")]))
+        screen.on_controllers_updated(
+            ControllersUpdated(
+                controllers=[ControllerInfo("ctrl", "aws", "", "3.4.0", model_count=1)]
+            )
+        )
         screen.on_models_updated(
             ModelsUpdated(models=[ModelInfo("dev", "ctrl", "aws", "", "active")])
         )

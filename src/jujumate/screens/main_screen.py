@@ -10,6 +10,7 @@ from jujumate.client.watcher import (
     AppsUpdated,
     CloudsUpdated,
     ConnectionFailed,
+    ControllersUpdated,
     DataRefreshed,
     JujuPoller,
     ModelsUpdated,
@@ -93,6 +94,9 @@ class MainScreen(Screen):
 
     def on_clouds_updated(self, message: CloudsUpdated) -> None:
         self.query_one("#clouds-view", CloudsView).update(message.clouds)
+
+    def on_controllers_updated(self, message: ControllersUpdated) -> None:
+        self.query_one("#controllers-view", ControllersView).update(message.controllers)
 
     def on_models_updated(self, message: ModelsUpdated) -> None:
         self.query_one("#models-view", ModelsView).update(message.models)
