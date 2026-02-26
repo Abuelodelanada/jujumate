@@ -90,6 +90,7 @@ class JujuClient:
                 cloud = cloud_tag.split("-", 1)[-1] if "-" in cloud_tag else cloud_tag
                 full_status = await model.get_status()
                 app_statuses = full_status.applications or {}
+                is_kubernetes = getattr(info, "type_", "") == "caas" if info else False
                 model_info = ModelInfo(
                     name=model_name,
                     controller=controller_name,
@@ -98,6 +99,7 @@ class JujuClient:
                     status=info.status.status if info and info.status else "",
                     machine_count=len(full_status.machines or {}),
                     app_count=len(app_statuses),
+                    is_kubernetes=is_kubernetes,
                 )
                 apps = []
                 units = []
@@ -119,6 +121,8 @@ class JujuClient:
                         )
                     )
                     for unit_name, unit_st in (app_st.units or {}).items():
+                        opened_ports = unit_st.opened_ports or []
+                        ports_str = ", ".join(opened_ports) if opened_ports else ""
                         units.append(
                             UnitInfo(
                                 name=unit_name,
@@ -126,7 +130,10 @@ class JujuClient:
                                 machine=unit_st.machine or "",
                                 workload_status=unit_st.workload_status.status if unit_st.workload_status else "",
                                 agent_status=unit_st.agent_status.status if unit_st.agent_status else "",
-                                address=unit_st.public_address or unit_st.address or "",
+                                address=unit_st.address or "",
+                                public_address=unit_st.public_address or "",
+                                ports=ports_str,
+                                message=unit_st.workload_status.info if unit_st.workload_status else "",
                             )
                         )
             finally:

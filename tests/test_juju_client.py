@@ -85,7 +85,8 @@ async def test_list_model_names(mock_controller):
 
 
 def _make_model_mock(app_name="postgresql", charm_name="postgresql", channel="14/stable",
-                     revision=363, unit_name="postgresql/0", unit_address="10.0.0.1"):
+                     revision=363, unit_name="postgresql/0", unit_address="10.0.0.1",
+                     is_kubernetes=False):
     """Build a model mock that works with get_model_snapshot (uses get_status)."""
     app_st = MagicMock()
     app_st.charm_channel = channel
@@ -96,19 +97,23 @@ def _make_model_mock(app_name="postgresql", charm_name="postgresql", channel="14
     app_st.status.status = "active"
     app_st.status.info = ""
     unit_st = MagicMock()
-    unit_st.machine = "0"
+    unit_st.machine = "" if is_kubernetes else "0"
     unit_st.workload_status.status = "active"
+    unit_st.workload_status.info = "ready"
     unit_st.agent_status.status = "idle"
-    unit_st.public_address = unit_address
-    unit_st.address = ""
+    unit_st.public_address = "" if is_kubernetes else unit_address
+    unit_st.address = unit_address if is_kubernetes else ""
+    unit_st.opened_ports = ["5432/tcp"]
     app_st.units = {unit_name: unit_st}
     full_status = MagicMock()
     full_status.applications = {app_name: app_st}
-    full_status.machines = {"0": MagicMock()}
+    full_status.machines = {} if is_kubernetes else {"0": MagicMock()}
+    full_status.relations = []
     info = MagicMock()
     info.cloud_tag = "cloud-aws"
     info.cloud_region = "us-east-1"
     info.status.status = "active"
+    info.type_ = "caas" if is_kubernetes else "iaas"
     live_app = MagicMock()
     live_app.charm_name = charm_name
     model = AsyncMock()
@@ -130,6 +135,7 @@ async def test_get_model_snapshot(mock_controller):
     assert model_info.cloud == "aws"
     assert model_info.status == "active"
     assert model_info.machine_count == 1
+    assert model_info.is_kubernetes is False
     assert len(apps) == 1
     assert apps[0].name == "postgresql"
     assert apps[0].channel == "14/stable"
@@ -138,9 +144,28 @@ async def test_get_model_snapshot(mock_controller):
     assert apps[0].exposed is False
     assert len(units) == 1
     assert units[0].name == "postgresql/0"
-    assert units[0].address == "10.0.0.1"
+    assert units[0].machine == "0"
+    assert units[0].public_address == "10.0.0.1"
+    assert units[0].address == ""
+    assert units[0].ports == "5432/tcp"
+    assert units[0].message == "ready"
     # Only ONE get_model call for all data
     mock_controller.get_model.assert_awaited_once_with("dev")
+
+
+@pytest.mark.asyncio
+async def test_get_model_snapshot_kubernetes(mock_controller):
+    model, _, _ = _make_model_mock(is_kubernetes=True, unit_address="10.1.2.3")
+    mock_controller.get_model.return_value = model
+
+    client = JujuClient()
+    model_info, apps, units = await client.get_model_snapshot("cos")
+
+    assert model_info.is_kubernetes is True
+    assert model_info.machine_count == 0
+    assert units[0].machine == ""
+    assert units[0].address == "10.1.2.3"
+    assert units[0].public_address == ""
 
 
 @pytest.mark.asyncio
@@ -178,7 +203,9 @@ async def test_get_units(mock_controller):
 
     assert len(result) == 1
     assert result[0].name == "postgresql/0"
-    assert result[0].address == "10.0.0.1"
+    assert result[0].public_address == "10.0.0.1"
+    assert result[0].ports == "5432/tcp"
+    assert result[0].message == "ready"
 
 
 @pytest.mark.asyncio

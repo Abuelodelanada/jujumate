@@ -160,16 +160,21 @@ class MainScreen(Screen):
         if self._selected_model is None:
             apps: list[AppInfo] = []
             units: list[UnitInfo] = []
+            is_kubernetes = False
         else:
             apps = [a for a in self._all_apps if a.model == self._selected_model]
             app_names = {a.name for a in apps}
             units = [u for u in self._all_units if u.app in app_names]
+            model_info = next(
+                (m for m in self._all_models if m.name == self._selected_model), None
+            )
+            is_kubernetes = model_info.is_kubernetes if model_info else False
         relations = [
             r for r in self._all_relations if r.model == self._selected_model
         ] if self._selected_model else []
         status_view = self.query_one("#status-view", StatusView)
         status_view.update_apps(apps)
-        status_view.update_units(units)
+        status_view.update_units(units, is_kubernetes=is_kubernetes)
         status_view.update_relations(relations)
 
     # ── Juju data message handlers ────────────────────────────────────────────

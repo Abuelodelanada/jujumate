@@ -27,6 +27,7 @@ class ModelInfo:
     status: str
     machine_count: int = 0
     app_count: int = 0
+    is_kubernetes: bool = False
 
 
 @dataclass
@@ -61,3 +62,6 @@ class UnitInfo:
     workload_status: str
     agent_status: str
     address: str = ""
+    public_address: str = ""
+    ports: str = ""
+    message: str = ""

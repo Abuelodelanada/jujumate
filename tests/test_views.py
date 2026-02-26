@@ -275,9 +275,28 @@ async def test_status_view_update_units():
 
         from jujumate.models.entities import UnitInfo
 
-        view.update_units([UnitInfo("pg/0", "pg", "0", "active", "idle", "10.0.0.1")])
+        view.update_units([UnitInfo("pg/0", "pg", "0", "active", "idle", "10.0.0.1")], is_kubernetes=False)
         await pilot.pause()
         assert view.query_one("#status-units-table", ResourceTable).query_one("DataTable").row_count == 1
+
+
+@pytest.mark.asyncio
+async def test_status_view_update_units_kubernetes():
+    from jujumate.widgets.status_view import StatusView
+
+    app = JujuMateApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        view = StatusView(id="test-status-units-k8s")
+        await _mount_view(app, pilot, view)
+
+        view.update_units([UnitInfo("pg/0", "pg", "", "active", "idle", address="10.1.2.3")], is_kubernetes=True)
+        await pilot.pause()
+        table = view.query_one("#status-units-table", ResourceTable).query_one("DataTable")
+        assert table.row_count == 1
+        col_labels = [str(col.label) for col in table.ordered_columns]
+        assert "Machine" not in col_labels
+        assert "Address" in col_labels
 
 
 @pytest.mark.asyncio

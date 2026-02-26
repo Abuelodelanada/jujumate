@@ -24,12 +24,23 @@ _APP_COLUMNS = [
     Column("Message", "s-app-message"),
 ]
 
-_UNIT_COLUMNS = [
+_UNIT_COLUMNS_K8S = [
+    Column("Unit", "s-unit-name"),
+    Column("Workload", "s-unit-wl", width=12),
+    Column("Agent", "s-unit-agent", width=12),
+    Column("Address", "s-unit-addr", width=16),
+    Column("Ports", "s-unit-ports", width=16),
+    Column("Message", "s-unit-msg"),
+]
+
+_UNIT_COLUMNS_IAAS = [
     Column("Unit", "s-unit-name"),
     Column("Workload", "s-unit-wl", width=12),
     Column("Agent", "s-unit-agent", width=12),
     Column("Machine", "s-unit-machine", width=10),
-    Column("Address", "s-unit-addr", width=16),
+    Column("Public Address", "s-unit-pubaddr", width=18),
+    Column("Ports", "s-unit-ports", width=16),
+    Column("Message", "s-unit-msg"),
 ]
 
 _REL_COLUMNS = [
@@ -62,7 +73,7 @@ class StatusView(Widget):
             yield Label("Applications", classes="section-label")
             yield ResourceTable(columns=_APP_COLUMNS, id="status-apps-table")
             yield Label("Units", classes="section-label")
-            yield ResourceTable(columns=_UNIT_COLUMNS, id="status-units-table")
+            yield ResourceTable(columns=_UNIT_COLUMNS_IAAS, id="status-units-table")
             yield Label("Relations", classes="section-label")
             yield ResourceTable(columns=_REL_COLUMNS, id="status-rels-table")
 
@@ -85,13 +96,22 @@ class StatusView(Widget):
         self.query_one("#status-apps-table", ResourceTable).update_rows(rows)
         logger.debug("StatusView apps updated: %d rows", len(rows))
 
-    def update_units(self, units: list[UnitInfo]) -> None:
-        rows = [
-            (u.name, u.workload_status, u.agent_status, u.machine, u.address)
-            for u in units
-        ]
-        self.query_one("#status-units-table", ResourceTable).update_rows(rows)
-        logger.debug("StatusView units updated: %d rows", len(rows))
+    def update_units(self, units: list[UnitInfo], is_kubernetes: bool = False) -> None:
+        table = self.query_one("#status-units-table", ResourceTable)
+        if is_kubernetes:
+            table.reset_columns(_UNIT_COLUMNS_K8S)
+            rows = [
+                (u.name, u.workload_status, u.agent_status, u.address, u.ports, u.message)
+                for u in units
+            ]
+        else:
+            table.reset_columns(_UNIT_COLUMNS_IAAS)
+            rows = [
+                (u.name, u.workload_status, u.agent_status, u.machine, u.public_address, u.ports, u.message)
+                for u in units
+            ]
+        table.update_rows(rows)
+        logger.debug("StatusView units updated: %d rows (k8s=%s)", len(rows), is_kubernetes)
 
     def update_relations(self, relations: list[RelationInfo]) -> None:
         rows = [(r.provider, r.requirer, r.interface, r.type) for r in relations]

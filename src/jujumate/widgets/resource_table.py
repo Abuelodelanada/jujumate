@@ -44,6 +44,14 @@ class ResourceTable(Widget):
     def on_mount(self) -> None:
         self.query_one("#empty-label").display = False
 
+    def reset_columns(self, columns: list[Column]) -> None:
+        """Replace all columns (and clear rows) with a new column set."""
+        self._columns = columns
+        table = self.query_one(DataTable)
+        table.clear(columns=True)
+        for col in self._columns:
+            table.add_column(col.label, key=col.key, width=col.width)
+
     def update_rows(self, rows: list[tuple], keys: list[str] | None = None) -> None:
         """Replace all table rows. Each tuple must match the column order."""
         table = self.query_one(DataTable)
