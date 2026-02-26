@@ -74,6 +74,16 @@ class StatusView(Widget):
         text-style: bold;
         color: $accent;
     }
+    StatusView ResourceTable {
+        height: auto;
+        border: none;
+    }
+    StatusView DataTable {
+        height: auto;
+        border: none;
+        scrollbar-size: 0 0;
+        overflow-x: hidden;
+    }
     """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
