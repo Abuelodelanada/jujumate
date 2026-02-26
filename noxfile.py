@@ -6,6 +6,7 @@ nox.options.default_venv_backend = "uv"
 @nox.session
 def tests(session: nox.Session) -> None:
     session.install(".[dev]", "pytest", "pytest-asyncio", "pytest-cov")
+    session.run("coverage", "erase")
     session.run("pytest", "--cov=jujumate", "--cov-report=term-missing", *session.posargs)
 
 
