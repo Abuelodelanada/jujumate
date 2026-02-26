@@ -51,3 +51,38 @@ def test_empty_file_returns_defaults(tmp_path):
     config_file.write_text("")
     settings = load_settings(config_file)
     assert settings.refresh_interval == 5
+
+
+def test_default_log_level_is_warning(tmp_path):
+    settings = load_settings(tmp_path / "config.yaml")
+    import logging
+
+    assert settings.log_level == logging.WARNING
+
+
+def test_custom_log_level(tmp_path):
+    import logging
+
+    config_file = _write_config(tmp_path, {"log_level": "DEBUG"})
+    settings = load_settings(config_file)
+    assert settings.log_level == logging.DEBUG
+
+
+def test_log_level_case_insensitive(tmp_path):
+    import logging
+
+    config_file = _write_config(tmp_path, {"log_level": "info"})
+    settings = load_settings(config_file)
+    assert settings.log_level == logging.INFO
+
+
+def test_invalid_log_level_raises(tmp_path):
+    config_file = _write_config(tmp_path, {"log_level": "VERBOSE"})
+    with pytest.raises(AppSettingsError, match="log_level"):
+        load_settings(config_file)
+
+
+def test_custom_log_file(tmp_path):
+    config_file = _write_config(tmp_path, {"log_file": str(tmp_path / "app.log")})
+    settings = load_settings(config_file)
+    assert settings.log_file == tmp_path / "app.log"

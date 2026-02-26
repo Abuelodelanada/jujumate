@@ -1,3 +1,4 @@
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -6,12 +7,16 @@ import yaml
 CONFIG_DIR = Path.home() / ".config" / "jujumate"
 CONFIG_FILE = CONFIG_DIR / "config.yaml"
 
+LOG_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+
 
 @dataclass
 class AppSettings:
     refresh_interval: int = 5
     default_controller: str | None = None
     juju_data_dir: Path = Path.home() / ".local" / "share" / "juju"
+    log_file: Path = Path.home() / ".local" / "state" / "jujumate" / "jujumate.log"
+    log_level: int = logging.WARNING
 
 
 class AppSettingsError(Exception):
@@ -35,8 +40,21 @@ def load_settings(config_file: Path = CONFIG_FILE) -> AppSettings:
         else AppSettings.juju_data_dir
     )
 
+    log_file = Path(data["log_file"]).expanduser() if "log_file" in data else AppSettings.log_file
+
+    log_level = AppSettings.log_level
+    if "log_level" in data:
+        level_str = str(data["log_level"]).upper()
+        if level_str not in LOG_LEVELS:
+            raise AppSettingsError(
+                f"'log_level' must be one of {sorted(LOG_LEVELS)}, got '{level_str}'."
+            )
+        log_level = getattr(logging, level_str)
+
     return AppSettings(
         refresh_interval=refresh_interval,
         default_controller=data.get("default_controller"),
         juju_data_dir=juju_data_dir,
+        log_file=log_file,
+        log_level=log_level,
     )
