@@ -3,7 +3,13 @@ import logging
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.screen import Screen
-from textual.widgets import Footer, Header, Label, TabbedContent, TabPane
+from textual.widgets import Footer, Header, TabbedContent, TabPane
+
+from jujumate.widgets.apps_view import AppsView
+from jujumate.widgets.clouds_view import CloudsView
+from jujumate.widgets.controllers_view import ControllersView
+from jujumate.widgets.models_view import ModelsView
+from jujumate.widgets.units_view import UnitsView
 
 logger = logging.getLogger(__name__)
 
@@ -23,15 +29,15 @@ class MainScreen(Screen):
         yield Header()
         with TabbedContent(initial="tab-clouds"):
             with TabPane("Clouds", id="tab-clouds"):
-                yield Label("Clouds — coming soon")
+                yield CloudsView(id="clouds-view")
             with TabPane("Controllers", id="tab-controllers"):
-                yield Label("Controllers — coming soon")
+                yield ControllersView(id="controllers-view")
             with TabPane("Models", id="tab-models"):
-                yield Label("Models — coming soon")
+                yield ModelsView(id="models-view")
             with TabPane("Apps", id="tab-apps"):
-                yield Label("Applications — coming soon")
+                yield AppsView(id="apps-view")
             with TabPane("Units", id="tab-units"):
-                yield Label("Units — coming soon")
+                yield UnitsView(id="units-view")
         yield Footer()
 
     def action_switch_tab(self, tab_id: str) -> None:
