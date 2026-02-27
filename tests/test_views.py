@@ -1,5 +1,5 @@
 import pytest
-from textual.widgets import DataTable, TabbedContent
+from textual.widgets import DataTable, Label, TabbedContent
 
 from jujumate.app import JujuMateApp
 from jujumate.models.entities import AppInfo, CloudInfo, ControllerInfo, MachineInfo, ModelInfo, UnitInfo
@@ -417,21 +417,20 @@ def test_jujumate_header_connected_no_timestamp():
     assert "·" not in status
 
 
-def test_wrap_msg_short_text():
-    from jujumate.widgets.status_view import _wrap_msg
+def test_trunc_msg_short_text():
+    from jujumate.widgets.status_view import _trunc_msg
 
-    text, lines = _wrap_msg("")
-    assert text == ""
-    assert lines == 1
+    assert _trunc_msg("") == ""
+    assert _trunc_msg("short") == "short"
 
 
-def test_wrap_msg_long_text():
-    from jujumate.widgets.status_view import _MSG_WRAP_WIDTH, _wrap_msg
+def test_trunc_msg_long_text():
+    from jujumate.widgets.status_view import _MSG_TRUNC_WIDTH, _trunc_msg
 
-    long_msg = "x" * (_MSG_WRAP_WIDTH + 10) + " something"
-    text, lines = _wrap_msg(long_msg)
-    assert lines > 1
-    assert "\n" in text
+    long_msg = "x" * (_MSG_TRUNC_WIDTH + 5)
+    result = _trunc_msg(long_msg)
+    assert len(result) == _MSG_TRUNC_WIDTH
+    assert result.endswith("…")
 
 
 @pytest.mark.asyncio
@@ -566,3 +565,148 @@ def test_colored_relation_no_colon():
     result = _colored_relation("myapp")
     assert isinstance(result, Text)
     assert str(result) == "myapp"
+
+
+@pytest.mark.asyncio
+async def test_status_view_msg_bar_updates_on_row_highlight():
+    from jujumate.widgets.status_view import StatusView
+
+    app = JujuMateApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        view = app.screen.query_one("#status-view", StatusView)
+        long_msg = "unit is waiting for something to happen"
+        view.update_apps([AppInfo("myapp", "", "myapp", "stable", 1, message=long_msg)])
+        await pilot.pause()
+        dt = view.query_one("#status-apps-table DataTable", DataTable)
+        view._last_active_table = "status-apps-table"
+        view.on_data_table_row_highlighted(
+            DataTable.RowHighlighted(data_table=dt, cursor_row=0, row_key=None)  # type: ignore
+        )
+        bar = view.query_one("#msg-bar", Label)
+        assert long_msg in str(bar.render())
+
+
+@pytest.mark.asyncio
+async def test_status_view_msg_bar_handles_out_of_range():
+    """Cover defensive path when cursor_row is out of range."""
+    from jujumate.widgets.status_view import StatusView
+
+    app = JujuMateApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        view = app.screen.query_one("#status-view", StatusView)
+        # _row_messages is empty — simulate a stale highlight event
+        view._row_messages.clear()
+        dt = view.query_one("#status-apps-table DataTable", DataTable)
+        view.on_data_table_row_highlighted(
+            DataTable.RowHighlighted(data_table=dt, cursor_row=99, row_key=None)  # type: ignore
+        )
+
+
+@pytest.mark.asyncio
+async def test_status_view_msg_bar_handles_bad_parent():
+    """Cover except branch when data_table.parent has no id."""
+    from unittest.mock import MagicMock
+
+    from textual.widgets._data_table import RowKey
+
+    from jujumate.widgets.status_view import StatusView
+
+    app = JujuMateApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        view = app.screen.query_one("#status-view", StatusView)
+        bad_dt = MagicMock()
+        bad_dt.parent = None  # triggers AttributeError on .id
+        event = DataTable.RowHighlighted(
+            data_table=bad_dt, cursor_row=0, row_key=RowKey("k")  # type: ignore
+        )
+        view.on_data_table_row_highlighted(event)
+
+
+@pytest.mark.asyncio
+async def test_status_view_msg_bar_handles_missing_label():
+    """Cover except branch when #msg-bar is not yet mounted."""
+    from jujumate.widgets.status_view import StatusView
+
+    view = StatusView(id="detached-msg-bar")
+    dt_mock = type("FakeDT", (), {"parent": type("FakeParent", (), {"id": "status-apps-table"})()})()
+    event = DataTable.RowHighlighted(data_table=dt_mock, cursor_row=0, row_key=None)  # type: ignore
+    view.on_data_table_row_highlighted(event)
+
+
+def test_restore_cursor_handles_unmounted():
+    """Cover except branch of _restore_cursor when widget is not mounted."""
+    from jujumate.widgets.status_view import StatusView
+
+    view = StatusView(id="detached-restore")
+    view._restore_cursor("status-apps-table", 5)
+
+
+@pytest.mark.asyncio
+async def test_restore_cursor_moves_datatable_cursor():
+    """Cover _restore_cursor moving cursor to last-known position."""
+    from jujumate.widgets.status_view import StatusView
+
+    app = JujuMateApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        view = app.screen.query_one("#status-view", StatusView)
+        msgs = ["msg0", "msg1", "msg2"]
+        apps = [AppInfo(f"app{i}", "", f"app{i}", "stable", 1, message=msgs[i]) for i in range(3)]
+        view.update_apps(apps)
+        await pilot.pause()
+        view._last_cursor["status-apps-table"] = 2
+        view._restore_cursor("status-apps-table", 3)
+        await pilot.pause()
+        dt = view.query_one("#status-apps-table DataTable", DataTable)
+        assert dt.cursor_row == 2
+
+
+@pytest.mark.asyncio
+async def test_row_highlighted_updates_msg_bar():
+    """Cover on_data_table_row_highlighted updating msg-bar on user navigation."""
+    from jujumate.widgets.status_view import StatusView
+
+    app = JujuMateApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        view = app.screen.query_one("#status-view", StatusView)
+        msg = "hook failed: unit not ready"
+        view.update_apps([AppInfo("myapp", "", "myapp", "stable", 1, message=msg)])
+        await pilot.pause()
+        # Simulate user having previously navigated to the apps table
+        dt = view.query_one("#status-apps-table DataTable", DataTable)
+        view._last_active_table = "status-apps-table"
+        view.on_data_table_row_highlighted(
+            DataTable.RowHighlighted(data_table=dt, cursor_row=0, row_key=None)  # type: ignore
+        )
+        bar = view.query_one("#msg-bar", Label)
+        assert msg in str(bar.render())
+
+
+@pytest.mark.asyncio
+async def test_inactive_table_event_ignored_by_handler():
+    """Events from non-active tables must not overwrite the msg-bar."""
+    from jujumate.widgets.status_view import StatusView
+
+    app = JujuMateApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        view = app.screen.query_one("#status-view", StatusView)
+        apps = [AppInfo("myapp", "", "myapp", "stable", 1, message="hook failed")]
+        machines = [MachineInfo("m", "0", "running", "", "", "", "", message="running")]
+        view.update_apps(apps)
+        view.update_machines(machines)
+        await pilot.pause()
+        bar = view.query_one("#msg-bar", Label)
+        bar.update("sentinel")
+        # Simulate refresh event from machines table while user is on apps table
+        view._last_active_table = "status-apps-table"
+        dt = view.query_one("#status-machines-table DataTable", DataTable)
+        view.on_data_table_row_highlighted(
+            DataTable.RowHighlighted(data_table=dt, cursor_row=0, row_key=None)  # type: ignore
+        )
+        # msg-bar must not be overwritten by the machines event
+        assert "sentinel" in str(bar.render())

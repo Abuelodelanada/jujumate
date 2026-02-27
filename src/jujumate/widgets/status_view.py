@@ -1,5 +1,4 @@
 import logging
-import textwrap
 from typing import Any
 
 from rich.text import Text
@@ -7,7 +6,7 @@ from textual.app import ComposeResult
 from textual.containers import VerticalScroll
 from textual.reactive import reactive
 from textual.widget import Widget
-from textual.widgets import Label
+from textual.widgets import DataTable, Label
 
 from jujumate.models.entities import AppInfo, MachineInfo, OfferInfo, RelationInfo, UnitInfo
 from jujumate.widgets.resource_table import Column, ResourceTable
@@ -112,15 +111,14 @@ _MACHINE_COLUMNS = [
 ]
 
 
-_MSG_WRAP_WIDTH = 45
+_MSG_TRUNC_WIDTH = 60
 
 
-def _wrap_msg(text: str) -> tuple[str, int]:
-    """Wrap a message string. Returns (wrapped_text, line_count)."""
-    if not text:
-        return text, 1
-    lines = textwrap.wrap(text, width=_MSG_WRAP_WIDTH)
-    return "\n".join(lines) if lines else text, max(len(lines), 1)
+def _trunc_msg(text: str) -> str:
+    """Truncate a message to _MSG_TRUNC_WIDTH chars, appending … if needed."""
+    if len(text) <= _MSG_TRUNC_WIDTH:
+        return text
+    return text[: _MSG_TRUNC_WIDTH - 1] + "…"
 
 
 def _group_units(units: list) -> list:
@@ -169,6 +167,18 @@ class StatusView(Widget):
     StatusView VerticalScroll {
         scrollbar-size: 0 0;
     }
+    StatusView DataTable > .datatable--cursor {
+        background: #3D3B39;
+        color: $text;
+    }
+    StatusView #msg-bar {
+        dock: bottom;
+        height: 1;
+        width: 100%;
+        padding: 0 2;
+        color: $text-muted;
+        text-style: italic;
+    }
     StatusView #scroll-indicator {
         dock: bottom;
         height: 1;
@@ -183,21 +193,23 @@ class StatusView(Widget):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
+        self._row_messages: dict[str, list[str]] = {}
+        self._last_cursor: dict[str, int] = {}
+        self._last_active_table: str = ""
 
     def compose(self) -> ComposeResult:
         with _TrackedScroll():
             yield Label("Applications", classes="section-label")
-            yield ResourceTable(columns=_APP_COLUMNS, id="status-apps-table", cursor=False)
+            yield ResourceTable(columns=_APP_COLUMNS, id="status-apps-table")
             yield Label("Units", classes="section-label")
-            yield ResourceTable(columns=_UNIT_COLUMNS_IAAS, id="status-units-table", cursor=False)
+            yield ResourceTable(columns=_UNIT_COLUMNS_IAAS, id="status-units-table")
             yield Label("Machines", classes="section-label", id="status-machines-label")
-            yield ResourceTable(
-                columns=_MACHINE_COLUMNS, id="status-machines-table", cursor=False
-            )
+            yield ResourceTable(columns=_MACHINE_COLUMNS, id="status-machines-table")
             yield Label("Offers", classes="section-label", id="status-offers-label")
             yield ResourceTable(columns=_OFFER_COLUMNS, id="status-offers-table", cursor=False)
             yield Label("Relations", classes="section-label")
             yield ResourceTable(columns=_REL_COLUMNS, id="status-rels-table", cursor=False)
+        yield Label("", id="msg-bar")
         yield Label("▼ more below", id="scroll-indicator")
 
     def on_mount(self) -> None:
@@ -226,9 +238,8 @@ class StatusView(Widget):
 
     def update_apps(self, apps: list[AppInfo]) -> None:
         rows = []
-        heights = []
+        full_msgs = []
         for a in apps:
-            msg, h = _wrap_msg(a.message)
             rows.append((
                 a.name,
                 a.version,
@@ -239,43 +250,45 @@ class StatusView(Widget):
                 str(a.revision),
                 _colored_ip(a.address),
                 "yes" if a.exposed else "no",
-                msg,
+                _trunc_msg(a.message),
             ))
-            heights.append(h)
-        self.query_one("#status-apps-table", ResourceTable).update_rows(rows, heights=heights)
+            full_msgs.append(a.message)
+        self._row_messages["status-apps-table"] = full_msgs
+        self.query_one("#status-apps-table", ResourceTable).update_rows(rows)
+        self._restore_cursor("status-apps-table", len(full_msgs))
         logger.debug("StatusView apps updated: %d rows", len(rows))
 
     def update_units(self, units: list[UnitInfo], is_kubernetes: bool = False) -> None:
         table = self.query_one("#status-units-table", ResourceTable)
         ordered = _group_units(units)
         rows = []
-        heights = []
+        full_msgs = []
         if is_kubernetes:
             table.reset_columns(_UNIT_COLUMNS_K8S)
             for u in ordered:
                 name = f"  {u.name}" if u.subordinate_of else u.name
-                msg, h = _wrap_msg(u.message)
                 rows.append((
                     name,
                     _colored_status(u.workload_status),
                     _colored_status(u.agent_status),
-                    _colored_ip(u.address), u.ports, msg,
+                    _colored_ip(u.address), u.ports, _trunc_msg(u.message),
                 ))
-                heights.append(h)
+                full_msgs.append(u.message)
         else:
             table.reset_columns(_UNIT_COLUMNS_IAAS)
             for u in ordered:
                 name = f"  {u.name}" if u.subordinate_of else u.name
                 machine = "" if u.subordinate_of else u.machine
-                msg, h = _wrap_msg(u.message)
                 rows.append((
                     name,
                     _colored_status(u.workload_status),
                     _colored_status(u.agent_status),
-                    machine, _colored_ip(u.public_address), u.ports, msg,
+                    machine, _colored_ip(u.public_address), u.ports, _trunc_msg(u.message),
                 ))
-                heights.append(h)
-        table.update_rows(rows, heights=heights)
+                full_msgs.append(u.message)
+        self._row_messages["status-units-table"] = full_msgs
+        table.update_rows(rows)
+        self._restore_cursor("status-units-table", len(full_msgs))
         logger.debug("StatusView units updated: %d rows (k8s=%s)", len(rows), is_kubernetes)
 
     def update_offers(self, offers: list[OfferInfo]) -> None:
@@ -299,17 +312,52 @@ class StatusView(Widget):
             self.query_one("#status-machines-table", ResourceTable).update_rows([])
             return
         rows = []
-        heights = []
+        full_msgs = []
         for m in machines:
-            msg, h = _wrap_msg(m.message)
             rows.append((
-                m.id, _colored_status(m.state), _colored_ip(m.address), m.instance_id, m.base, m.az, msg,
+                m.id, _colored_status(m.state), _colored_ip(m.address), m.instance_id, m.base, m.az,
+                _trunc_msg(m.message),
             ))
-            heights.append(h)
-        self.query_one("#status-machines-table", ResourceTable).update_rows(
-            rows, heights=heights
-        )
+            full_msgs.append(m.message)
+        self._row_messages["status-machines-table"] = full_msgs
+        self.query_one("#status-machines-table", ResourceTable).update_rows(rows)
+        self._restore_cursor("status-machines-table", len(full_msgs))
         logger.debug("StatusView machines updated: %d rows", len(rows))
+
+    def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
+        try:
+            table_id = event.data_table.parent.id or ""
+            self._last_cursor[table_id] = event.cursor_row
+            # Only set the active table when the user is actually navigating it (has focus).
+            # Programmatic events from refresh (clear + move_cursor) arrive without focus.
+            if event.data_table.has_focus:
+                self._last_active_table = table_id
+            # Update msg-bar only for the active table to avoid refresh events from other
+            # tables (e.g. machines "Running") overwriting the displayed message.
+            if table_id != self._last_active_table:
+                return
+            msgs = self._row_messages.get(table_id, [])
+            msg = msgs[event.cursor_row] if event.cursor_row < len(msgs) else ""
+        except Exception:
+            msg = ""
+        try:
+            self.query_one("#msg-bar", Label).update(msg)
+        except Exception:
+            pass
+
+    def _restore_cursor(self, table_id: str, row_count: int) -> None:
+        """Restore cursor to last-known position after a data update.
+        
+        Enqueues a RowHighlighted(last_row) after clear()'s RowHighlighted(0),
+        so Textual renders only the final (correct) state.
+        """
+        try:
+            dt = self.query_one(f"#{table_id} DataTable", DataTable)
+            last_row = self._last_cursor.get(table_id, 0)
+            row = min(last_row, max(row_count - 1, 0))
+            dt.move_cursor(row=row)
+        except Exception:
+            pass
 
     def update_relations(self, relations: list[RelationInfo]) -> None:
         rows = [
