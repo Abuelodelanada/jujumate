@@ -556,3 +556,13 @@ async def test_status_view_update_machines_hidden_when_empty():
         view.update_machines([])
         await pilot.pause()
         assert view.query_one("#status-machines-label").display is False
+
+
+def test_colored_relation_no_colon():
+    from rich.text import Text
+
+    from jujumate.widgets.status_view import _colored_relation
+
+    result = _colored_relation("myapp")
+    assert isinstance(result, Text)
+    assert str(result) == "myapp"

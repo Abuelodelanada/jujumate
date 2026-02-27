@@ -33,6 +33,24 @@ def _colored_status(status: str) -> Text:
         return Text(status, style=color)
     return Text(status)
 
+
+def _colored_ip(address: str) -> Text:
+    """Color an IP address in Ubuntu Cyan."""
+    if address:
+        return Text(address, style="#19B6EE")
+    return Text(address)
+
+
+def _colored_relation(endpoint: str) -> Text:
+    """Color the :rel_name part of an APP:REL endpoint in Ubuntu Orange."""
+    if ":" in endpoint:
+        app, rel = endpoint.split(":", 1)
+        text = Text(app)
+        text.append(":", style="#19B6EE")
+        text.append(rel, style="#19B6EE")
+        return text
+    return Text(endpoint)
+
 _APP_COLUMNS = [
     Column("Name", "s-app-name"),
     Column("Version", "s-app-version", width=10),
@@ -219,7 +237,7 @@ class StatusView(Widget):
                 a.charm,
                 a.channel,
                 str(a.revision),
-                a.address,
+                _colored_ip(a.address),
                 "yes" if a.exposed else "no",
                 msg,
             ))
@@ -241,7 +259,7 @@ class StatusView(Widget):
                     name,
                     _colored_status(u.workload_status),
                     _colored_status(u.agent_status),
-                    u.address, u.ports, msg,
+                    _colored_ip(u.address), u.ports, msg,
                 ))
                 heights.append(h)
         else:
@@ -254,7 +272,7 @@ class StatusView(Widget):
                     name,
                     _colored_status(u.workload_status),
                     _colored_status(u.agent_status),
-                    machine, u.public_address, u.ports, msg,
+                    machine, _colored_ip(u.public_address), u.ports, msg,
                 ))
                 heights.append(h)
         table.update_rows(rows, heights=heights)
@@ -285,7 +303,7 @@ class StatusView(Widget):
         for m in machines:
             msg, h = _wrap_msg(m.message)
             rows.append((
-                m.id, _colored_status(m.state), m.address, m.instance_id, m.base, m.az, msg,
+                m.id, _colored_status(m.state), _colored_ip(m.address), m.instance_id, m.base, m.az, msg,
             ))
             heights.append(h)
         self.query_one("#status-machines-table", ResourceTable).update_rows(
@@ -294,6 +312,9 @@ class StatusView(Widget):
         logger.debug("StatusView machines updated: %d rows", len(rows))
 
     def update_relations(self, relations: list[RelationInfo]) -> None:
-        rows = [(r.provider, r.requirer, r.interface, r.type) for r in relations]
+        rows = [
+            (_colored_relation(r.provider), _colored_relation(r.requirer), r.interface, r.type)
+            for r in relations
+        ]
         self.query_one("#status-rels-table", ResourceTable).update_rows(rows)
         logger.debug("StatusView relations updated: %d rows", len(rows))
