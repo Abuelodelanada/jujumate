@@ -55,8 +55,8 @@ _APP_COLUMNS = [
     Column("Version", "s-app-version", width=10),
     Column("Status", "s-app-status", width=12),
     Column("Scale", "s-app-scale", width=6),
-    Column("Charm", "s-app-charm", width=18),
-    Column("Channel", "s-app-channel", width=14),
+    Column("Charm", "s-app-charm"),
+    Column("Channel", "s-app-channel"),
     Column("Rev", "s-app-rev", width=5),
     Column("Address", "s-app-addr", width=16),
     Column("Exposed", "s-app-exposed", width=8),
@@ -84,8 +84,8 @@ _UNIT_COLUMNS_IAAS = [
 
 _OFFER_COLUMNS = [
     Column("Offer", "s-offer-name"),
-    Column("Application", "s-offer-app", width=16),
-    Column("Charm", "s-offer-charm", width=18),
+    Column("Application", "s-offer-app"),
+    Column("Charm", "s-offer-charm"),
     Column("Rev", "s-offer-rev", width=5),
     Column("Connected", "s-offer-conn", width=10),
     Column("Endpoint", "s-offer-ep", width=20),
