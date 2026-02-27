@@ -28,24 +28,34 @@ uv run ruff format src tests  # Auto-format code
 ```
 jujumate/
 ├── pyproject.toml
-├── jujumate/
-│   ├── __main__.py          # Entry point: python -m jujumate
-│   ├── app.py               # Main Textual App
-│   ├── config.py            # Reads ~/.local/share/juju/ (controllers, accounts)
+├── src/jujumate/
+│   ├── __main__.py            # Entry point: python -m jujumate
+│   ├── app.py                 # Main Textual App (CSS, theme, transparency)
+│   ├── config.py              # Reads ~/.local/share/juju/ (controllers, accounts)
+│   ├── settings.py            # User config from ~/.config/jujumate/config.yaml
+│   ├── log.py                 # Rotating file logging setup
+│   ├── theme_loader.py        # Loads YAML themes (builtin + user overrides)
 │   ├── client/
-│   │   ├── juju_client.py   # python-libjuju wrapper (connect, get_status, clouds)
-│   │   └── watcher.py       # Bridge: libjuju AllWatcher → Textual messages
+│   │   ├── juju_client.py     # python-libjuju wrapper (connect, get_status, clouds)
+│   │   └── watcher.py         # Poller: periodic data fetch → Textual messages
 │   ├── screens/
-│   │   └── main_screen.py   # Layout: header + TabbedContent + footer
+│   │   ├── main_screen.py     # Layout: header + TabbedContent (no footer)
+│   │   └── help_screen.py     # Modal overlay with keyboard shortcuts (? key)
 │   ├── widgets/
-│   │   ├── resource_table.py  # Generic reusable DataTable
+│   │   ├── resource_table.py  # Generic reusable DataTable base
+│   │   ├── jujumate_header.py # Custom header: context, counts, connection status
 │   │   ├── clouds_view.py
 │   │   ├── controllers_view.py
 │   │   ├── models_view.py
 │   │   ├── apps_view.py
-│   │   └── units_view.py
-│   └── models/
-│       └── entities.py      # Dataclasses: CloudInfo, ControllerInfo, ModelInfo, AppInfo, UnitInfo
+│   │   ├── units_view.py
+│   │   └── status_view.py     # Combined view: apps + units + offers + relations
+│   ├── models/
+│   │   └── entities.py        # Dataclasses: CloudInfo, ControllerInfo, ModelInfo,
+│   │                          #   AppInfo, UnitInfo, OfferInfo, RelationInfo
+│   └── themes/
+│       ├── dark.yaml          # Default dark theme
+│       └── ubuntu.yaml        # Ubuntu brand theme
 └── tests/
 ```
 
@@ -57,12 +67,12 @@ jujumate/
 Juju Controller
       │  WebSocket (RPC)
       ▼
-python-libjuju AllWatcher
-      │  asyncio callback
+python-libjuju (JujuClient)
+      │  asyncio (JujuPoller periodic poll)
       ▼
 Textual post_message()
       ▼
-Widget.refresh() → updated screen
+MainScreen handlers → Widget.update() → screen refreshed
 ```
 
 Textual and python-libjuju share the **same asyncio event loop** — no extra threads are needed or should be introduced.
@@ -70,6 +80,10 @@ Textual and python-libjuju share the **same asyncio event loop** — no extra th
 ### Authentication
 
 python-libjuju automatically reads `~/.local/share/juju/` — the same config used by the Juju CLI. No additional configuration is needed if the user already has `juju` set up.
+
+### Terminal transparency
+
+The app uses `background: ansi_default` CSS and excludes Textual's `ANSIToTruecolor` line filter (via `get_line_filters()` override) so backgrounds emit `\x1b[49m` (terminal default) instead of explicit RGB. This preserves terminal transparency settings.
 
 ## UI conventions
 
@@ -80,23 +94,32 @@ python-libjuju automatically reads `~/.local/share/juju/` — the same config us
 | `c` | Clouds tab |
 | `C` | Controllers tab |
 | `m` | Models tab |
-| `a` | Applications tab |
+| `s` | Status tab |
+| `a` | Apps tab |
 | `u` | Units tab |
 | `↑↓` | Navigate table rows |
 | `Enter` | Drill-down (e.g. Model → its Apps) |
-| `/` | Inline filter (K9s-style) |
+| `Esc` | Clear drill-down filter |
 | `r` | Force refresh |
+| `?` | Help overlay (shows all shortcuts) |
 | `q` | Quit |
+
+No persistent footer — shortcuts are shown on demand via `?` (K9s-style modal overlay).
 
 ### Table columns per view
 
 | View | Columns |
 |------|---------|
 | Clouds | Name, Type, Regions, Credentials |
-| Controllers | Name, Cloud, Region, Juju Version, Models count |
+| Controllers | Name, Cloud, Region, Juju Version, Models |
 | Models | Name, Controller, Cloud/Region, Status, Machines, Apps |
-| Applications | Name, Model, Charm, Channel, Rev, Units, Status, Message |
-| Units | Name, App, Machine/Pod, Workload Status, Agent Status, Address |
+| Apps | Name, Model, Charm, Channel, Rev, Units, Status, Message |
+| Units | Name, App, Machine/Pod, Workload, Agent, Address |
+| Status > Apps | Name, Version, Status, Scale, Charm, Channel, Rev, Address, Exposed, Message |
+| Status > Units (K8s) | Unit, Workload, Agent, Address, Ports, Message |
+| Status > Units (IaaS) | Unit, Workload, Agent, Machine, Public Address, Ports, Message |
+| Status > Offers | Offer, Application, Charm, Rev, Connected, Endpoint, Interface, Role |
+| Status > Relations | Provider, Requirer, Interface, Type |
 
 ### Status indicators
 

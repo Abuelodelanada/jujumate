@@ -1,5 +1,5 @@
 import pytest
-from textual.widgets import DataTable
+from textual.widgets import DataTable, TabbedContent
 
 from jujumate.app import JujuMateApp
 from jujumate.models.entities import AppInfo, CloudInfo, ControllerInfo, ModelInfo, UnitInfo
@@ -432,3 +432,75 @@ def test_wrap_msg_long_text():
     text, lines = _wrap_msg(long_msg)
     assert lines > 1
     assert "\n" in text
+
+
+@pytest.mark.asyncio
+async def test_status_view_scroll_indicator_hidden_when_content_fits():
+    from jujumate.widgets.status_view import StatusView
+
+    app = JujuMateApp()
+    async with app.run_test(size=(120, 60)) as pilot:
+        await pilot.pause()
+        view = app.screen.query_one("#status-view", StatusView)
+        view.update_apps([AppInfo("pg", "dev", "pg", "14/stable", 1, status="active")])
+        await pilot.pause()
+        view._update_scroll_indicator()
+        indicator = view.query_one("#scroll-indicator")
+        assert indicator.display is False
+
+
+@pytest.mark.asyncio
+async def test_status_view_scroll_indicator_shown_when_content_overflows():
+    from jujumate.widgets.status_view import StatusView
+
+    app = JujuMateApp()
+    async with app.run_test(size=(120, 10)) as pilot:
+        await pilot.pause()
+        app.screen.query_one(TabbedContent).active = "tab-status"
+        await pilot.pause()
+        view = app.screen.query_one("#status-view", StatusView)
+        many_apps = [
+            AppInfo(f"app-{i}", "dev", f"app-{i}", "stable", 1, status="active")
+            for i in range(20)
+        ]
+        view.update_apps(many_apps)
+        await pilot.pause()
+        await pilot.pause()
+        view._update_scroll_indicator()
+        indicator = view.query_one("#scroll-indicator")
+        assert indicator.display is True
+
+
+@pytest.mark.asyncio
+async def test_tracked_scroll_notifies_parent():
+    from jujumate.widgets.status_view import StatusView, _TrackedScroll
+
+    app = JujuMateApp()
+    async with app.run_test(size=(120, 10)) as pilot:
+        await pilot.pause()
+        app.screen.query_one(TabbedContent).active = "tab-status"
+        await pilot.pause()
+        view = app.screen.query_one("#status-view", StatusView)
+        many_apps = [
+            AppInfo(f"app-{i}", "dev", f"app-{i}", "stable", 1, status="active")
+            for i in range(20)
+        ]
+        view.update_apps(many_apps)
+        await pilot.pause()
+        await pilot.pause()
+        vs = view.query_one(_TrackedScroll)
+        vs.watch_scroll_y(0.0)
+        await pilot.pause()
+
+
+@pytest.mark.asyncio
+async def test_status_view_scroll_indicator_handles_missing_widgets():
+    """Cover defensive except branches when widgets aren't mounted."""
+    from jujumate.widgets.status_view import StatusView
+
+    view = StatusView(id="test-detached")
+    # _update_scroll_indicator with no _TrackedScroll mounted
+    view._update_scroll_indicator()
+    # _watch__show_more with no #scroll-indicator mounted
+    view._watch__show_more(True)
+    view._watch__show_more(False)

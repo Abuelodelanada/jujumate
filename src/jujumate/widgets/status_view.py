@@ -4,6 +4,7 @@ from typing import Any
 
 from textual.app import ComposeResult
 from textual.containers import VerticalScroll
+from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import Label
 
@@ -87,6 +88,14 @@ def _group_units(units: list) -> list:
     return result
 
 
+class _TrackedScroll(VerticalScroll):
+    """VerticalScroll that notifies its parent when scroll_y changes."""
+
+    def watch_scroll_y(self, value: float) -> None:
+        if isinstance(self.parent, StatusView):
+            self.parent._update_scroll_indicator()
+
+
 class StatusView(Widget):
     """Displays a juju-status–style overview for the selected model."""
 
@@ -109,13 +118,26 @@ class StatusView(Widget):
         scrollbar-size: 0 0;
         overflow-x: hidden;
     }
+    StatusView VerticalScroll {
+        scrollbar-size: 0 0;
+    }
+    StatusView #scroll-indicator {
+        dock: bottom;
+        height: 1;
+        width: 100%;
+        text-align: center;
+        text-style: dim;
+        color: $text-muted;
+    }
     """
+
+    _show_more: reactive[bool] = reactive(False)
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
 
     def compose(self) -> ComposeResult:
-        with VerticalScroll():
+        with _TrackedScroll():
             yield Label("Applications", classes="section-label")
             yield ResourceTable(columns=_APP_COLUMNS, id="status-apps-table", cursor=False)
             yield Label("Units", classes="section-label")
@@ -124,10 +146,29 @@ class StatusView(Widget):
             yield ResourceTable(columns=_OFFER_COLUMNS, id="status-offers-table", cursor=False)
             yield Label("Relations", classes="section-label")
             yield ResourceTable(columns=_REL_COLUMNS, id="status-rels-table", cursor=False)
+        yield Label("▼ more below", id="scroll-indicator")
 
     def on_mount(self) -> None:
         self.query_one("#status-offers-label").display = False
         self.query_one("#status-offers-table").display = False
+        self._update_scroll_indicator()
+
+    def _update_scroll_indicator(self) -> None:
+        try:
+            vs = self.query_one(_TrackedScroll)
+        except Exception:
+            return
+        at_bottom = vs.scroll_y >= vs.max_scroll_y
+        self._show_more = not at_bottom and vs.max_scroll_y > 0
+
+    def on_resize(self) -> None:
+        self._update_scroll_indicator()
+
+    def _watch__show_more(self, value: bool) -> None:
+        try:
+            self.query_one("#scroll-indicator").display = value
+        except Exception:
+            pass
 
     def update_apps(self, apps: list[AppInfo]) -> None:
         rows = []
