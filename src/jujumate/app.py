@@ -1,7 +1,9 @@
 import asyncio
 import logging
+from collections.abc import Sequence
 
 from textual.app import App
+from textual.filter import ANSIToTruecolor, LineFilter
 
 from jujumate.screens.main_screen import MainScreen
 from jujumate.settings import AppSettings, load_settings
@@ -27,30 +29,38 @@ class JujuMateApp(App):
     TITLE = "JujuMate"
     SUB_TITLE = "Juju infrastructure at a glance"
     CSS = """
-    Screen,
-    TabbedContent,
-    TabPane,
-    ContentSwitcher,
-    VerticalScroll,
-    ScrollableContainer,
-    CloudsView,
-    ControllersView,
-    ModelsView,
-    AppsView,
-    UnitsView,
-    StatusView,
-    ResourceTable,
+    * {
+        background: ansi_default;
+    }
+    Screen {
+        background: ansi_default;
+    }
+    Footer {
+        background: ansi_default;
+    }
+    FooterKey {
+        background: ansi_default;
+    }
+    .footer-key--key {
+        background: ansi_default;
+    }
+    .footer-key--description {
+        background: ansi_default;
+    }
+    Underline > .underline--bar {
+        background: ansi_default;
+    }
     DataTable {
-        background: transparent;
+        background: ansi_default;
     }
     DataTable > .datatable--header {
-        background: transparent;
+        background: ansi_default;
     }
     DataTable > .datatable--even-row {
-        background: transparent;
+        background: ansi_default;
     }
     DataTable > .datatable--odd-row {
-        background: transparent;
+        background: ansi_default;
     }
     DataTable > .datatable--hover {
         background: $primary 20%;
@@ -66,6 +76,11 @@ class JujuMateApp(App):
         self._apply_theme()
         logger.info("JujuMate started")
         self.push_screen(MainScreen())
+
+    def get_line_filters(self) -> Sequence[LineFilter]:
+        """Exclude ANSIToTruecolor so ansi_default backgrounds emit \\x1b[49m
+        (terminal default) preserving terminal transparency."""
+        return [f for f in self._filters if f.enabled and not isinstance(f, ANSIToTruecolor)]
 
     def _apply_theme(self) -> None:
         themes = load_all_themes()

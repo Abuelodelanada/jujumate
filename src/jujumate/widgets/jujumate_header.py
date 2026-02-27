@@ -37,7 +37,7 @@ class JujuMateHeader(Widget):
     JujuMateHeader {
         height: 5;
         dock: top;
-        background: transparent;
+        background: ansi_default;
         layout: horizontal;
     }
     JujuMateHeader #header-left {
