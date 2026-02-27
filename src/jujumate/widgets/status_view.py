@@ -2,6 +2,7 @@ import logging
 import textwrap
 from typing import Any
 
+from rich.text import Text
 from textual.app import ComposeResult
 from textual.containers import VerticalScroll
 from textual.reactive import reactive
@@ -12,6 +13,25 @@ from jujumate.models.entities import AppInfo, MachineInfo, OfferInfo, RelationIn
 from jujumate.widgets.resource_table import Column, ResourceTable
 
 logger = logging.getLogger(__name__)
+
+_STATUS_COLORS: dict[str, str] = {
+    "active": "#26A269",
+    "idle": "#26A269",
+    "started": "#26A269",
+    "blocked": "#FF5555",
+    "error": "#FF5555",
+    "maintenance": "#EFB73E",
+    "waiting": "#EFB73E",
+    "executing": "#EFB73E",
+}
+
+
+def _colored_status(status: str) -> Text:
+    """Return a Rich Text object with the status colored by severity."""
+    color = _STATUS_COLORS.get(status.lower(), "")
+    if color:
+        return Text(status, style=color)
+    return Text(status)
 
 _APP_COLUMNS = [
     Column("Name", "s-app-name"),
@@ -194,7 +214,7 @@ class StatusView(Widget):
             rows.append((
                 a.name,
                 a.version,
-                a.status,
+                _colored_status(a.status),
                 str(a.unit_count),
                 a.charm,
                 a.channel,
@@ -217,7 +237,12 @@ class StatusView(Widget):
             for u in ordered:
                 name = f"  {u.name}" if u.subordinate_of else u.name
                 msg, h = _wrap_msg(u.message)
-                rows.append((name, u.workload_status, u.agent_status, u.address, u.ports, msg))
+                rows.append((
+                    name,
+                    _colored_status(u.workload_status),
+                    _colored_status(u.agent_status),
+                    u.address, u.ports, msg,
+                ))
                 heights.append(h)
         else:
             table.reset_columns(_UNIT_COLUMNS_IAAS)
@@ -225,7 +250,12 @@ class StatusView(Widget):
                 name = f"  {u.name}" if u.subordinate_of else u.name
                 machine = "" if u.subordinate_of else u.machine
                 msg, h = _wrap_msg(u.message)
-                rows.append((name, u.workload_status, u.agent_status, machine, u.public_address, u.ports, msg))
+                rows.append((
+                    name,
+                    _colored_status(u.workload_status),
+                    _colored_status(u.agent_status),
+                    machine, u.public_address, u.ports, msg,
+                ))
                 heights.append(h)
         table.update_rows(rows, heights=heights)
         logger.debug("StatusView units updated: %d rows (k8s=%s)", len(rows), is_kubernetes)
@@ -255,7 +285,7 @@ class StatusView(Widget):
         for m in machines:
             msg, h = _wrap_msg(m.message)
             rows.append((
-                m.id, m.state, m.address, m.instance_id, m.base, m.az, msg,
+                m.id, _colored_status(m.state), m.address, m.instance_id, m.base, m.az, msg,
             ))
             heights.append(h)
         self.query_one("#status-machines-table", ResourceTable).update_rows(

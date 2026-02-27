@@ -4,6 +4,7 @@ name: ubuntu
 primary: "#E95420"      # Ubuntu Orange
 secondary: "#77216F"    # Aubergine light
 accent: "#E95420"       # Ubuntu Orange
+foreground: "#FFFFFF"   # Ubuntu white
 background: "#2C001E"   # Aubergine dark
 surface: "#5E2750"      # Aubergine mid
 panel: "#3D0F35"        # Between dark and mid
