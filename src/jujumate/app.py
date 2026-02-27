@@ -35,18 +35,6 @@ class JujuMateApp(App):
     Screen {
         background: ansi_default;
     }
-    Footer {
-        background: ansi_default;
-    }
-    FooterKey {
-        background: ansi_default;
-    }
-    .footer-key--key {
-        background: ansi_default;
-    }
-    .footer-key--description {
-        background: ansi_default;
-    }
     Underline > .underline--bar {
         background: ansi_default;
     }

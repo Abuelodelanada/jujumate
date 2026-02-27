@@ -522,3 +522,30 @@ async def test_auto_select_not_found_does_not_crash():
         await pilot.pause()
         assert screen._selected_model is None
         assert screen._auto_select_model is None
+
+
+@pytest.mark.asyncio
+async def test_help_screen_opens_and_closes_with_question_mark():
+    app = JujuMateApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "MainScreen"
+        await pilot.press("question_mark")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "HelpScreen"
+        await pilot.press("question_mark")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "MainScreen"
+
+
+@pytest.mark.asyncio
+async def test_help_screen_closes_with_escape():
+    app = JujuMateApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("question_mark")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "HelpScreen"
+        await pilot.press("escape")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "MainScreen"

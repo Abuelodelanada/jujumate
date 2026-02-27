@@ -6,7 +6,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.screen import Screen
 from textual.timer import Timer
-from textual.widgets import Footer, TabbedContent, TabPane
+from textual.widgets import TabbedContent, TabPane
 
 from jujumate.client.juju_client import JujuClient
 from jujumate.client.watcher import (
@@ -22,7 +22,16 @@ from jujumate.client.watcher import (
     UnitsUpdated,
 )
 from jujumate.config import JujuConfigError, load_config
-from jujumate.models.entities import AppInfo, CloudInfo, ControllerInfo, ModelInfo, OfferInfo, RelationInfo, UnitInfo
+from jujumate.models.entities import (
+    AppInfo,
+    CloudInfo,
+    ControllerInfo,
+    ModelInfo,
+    OfferInfo,
+    RelationInfo,
+    UnitInfo,
+)
+from jujumate.screens.help_screen import HelpScreen
 from jujumate.settings import AppSettings, load_settings
 from jujumate.widgets.apps_view import AppsView
 from jujumate.widgets.clouds_view import CloudsView
@@ -45,6 +54,7 @@ class MainScreen(Screen):
         Binding("u", "switch_tab('tab-units')", "Units"),
         Binding("r", "refresh_data", "Refresh"),
         Binding("escape", "clear_filter", "Clear filter", show=False),
+        Binding("question_mark", "show_help", "Help"),
         Binding("q", "quit", "Quit"),
     ]
 
@@ -87,7 +97,6 @@ class MainScreen(Screen):
                 yield AppsView(id="apps-view")
             with TabPane("Units", id="tab-units"):
                 yield UnitsView(id="units-view")
-        yield Footer()
 
     def on_mount(self) -> None:
         self.run_worker(self._connect_and_poll(), exclusive=True)
@@ -137,6 +146,9 @@ class MainScreen(Screen):
 
     def action_quit(self) -> None:
         self.app.exit()
+
+    def action_show_help(self) -> None:
+        self.app.push_screen(HelpScreen())
 
     # ── Filter helpers ────────────────────────────────────────────────────────
 
