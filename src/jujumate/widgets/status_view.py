@@ -167,10 +167,6 @@ class StatusView(Widget):
     StatusView VerticalScroll {
         scrollbar-size: 0 0;
     }
-    StatusView DataTable > .datatable--cursor {
-        background: #3D3B39;
-        color: $text;
-    }
     StatusView #msg-bar {
         dock: bottom;
         height: 1;
@@ -208,7 +204,7 @@ class StatusView(Widget):
             yield Label("Offers", classes="section-label", id="status-offers-label")
             yield ResourceTable(columns=_OFFER_COLUMNS, id="status-offers-table", cursor=False)
             yield Label("Relations", classes="section-label")
-            yield ResourceTable(columns=_REL_COLUMNS, id="status-rels-table", cursor=False)
+            yield ResourceTable(columns=_REL_COLUMNS, id="status-rels-table")
         yield Label("", id="msg-bar")
         yield Label("▼ more below", id="scroll-indicator")
 

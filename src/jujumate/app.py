@@ -53,6 +53,13 @@ class JujuMateApp(App):
     DataTable > .datatable--hover {
         background: $primary 20%;
     }
+    DataTable > .datatable--cursor {
+        background: ansi_default;
+    }
+    DataTable:focus > .datatable--cursor {
+        background: #4D4845;
+        text-style: bold;
+    }
     """
 
     def __init__(self, settings: AppSettings | None = None) -> None:

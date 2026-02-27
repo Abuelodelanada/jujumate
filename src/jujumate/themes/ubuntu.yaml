@@ -12,3 +12,10 @@ warning: "#EFB73E"
 error: "#DA3450"
 success: "#0E8420"
 dark: true
+variables:
+  block-cursor-background: "#4D4845"
+  block-cursor-blurred-background: "#4D4845"
+  block-cursor-foreground: "#FFFFFF"
+  block-cursor-blurred-foreground: "#FFFFFF"
+  block-cursor-text-style: "bold"
+  block-cursor-blurred-text-style: "none"

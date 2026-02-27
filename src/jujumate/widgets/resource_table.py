@@ -37,7 +37,7 @@ class ResourceTable(Widget):
 
     def compose(self) -> ComposeResult:
         cursor_type = "row" if self._cursor else "none"
-        table = DataTable(cursor_type=cursor_type, zebra_stripes=False)
+        table = DataTable(cursor_type=cursor_type, zebra_stripes=False, cursor_background_priority="css")
         for col in self._columns:
             table.add_column(col.label, key=col.key, width=col.width)
         yield table
