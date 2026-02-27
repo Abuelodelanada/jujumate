@@ -74,6 +74,19 @@ def _wrap_msg(text: str) -> tuple[str, int]:
     return "\n".join(lines) if lines else text, max(len(lines), 1)
 
 
+def _group_units(units: list) -> list:
+    """Return units with subordinates placed immediately after their principal."""
+    principals = [u for u in units if not u.subordinate_of]
+    result = []
+    for principal in principals:
+        result.append(principal)
+        result.extend(u for u in units if u.subordinate_of == principal.name)
+    # Append any orphan subordinates (principal not in this view) at the end
+    known_principals = {p.name for p in principals}
+    result.extend(u for u in units if u.subordinate_of and u.subordinate_of not in known_principals)
+    return result
+
+
 class StatusView(Widget):
     """Displays a juju-status–style overview for the selected model."""
 
@@ -139,19 +152,23 @@ class StatusView(Widget):
 
     def update_units(self, units: list[UnitInfo], is_kubernetes: bool = False) -> None:
         table = self.query_one("#status-units-table", ResourceTable)
+        ordered = _group_units(units)
         rows = []
         heights = []
         if is_kubernetes:
             table.reset_columns(_UNIT_COLUMNS_K8S)
-            for u in units:
+            for u in ordered:
+                name = f"  {u.name}" if u.subordinate_of else u.name
                 msg, h = _wrap_msg(u.message)
-                rows.append((u.name, u.workload_status, u.agent_status, u.address, u.ports, msg))
+                rows.append((name, u.workload_status, u.agent_status, u.address, u.ports, msg))
                 heights.append(h)
         else:
             table.reset_columns(_UNIT_COLUMNS_IAAS)
-            for u in units:
+            for u in ordered:
+                name = f"  {u.name}" if u.subordinate_of else u.name
+                machine = "" if u.subordinate_of else u.machine
                 msg, h = _wrap_msg(u.message)
-                rows.append((u.name, u.workload_status, u.agent_status, u.machine, u.public_address, u.ports, msg))
+                rows.append((name, u.workload_status, u.agent_status, machine, u.public_address, u.ports, msg))
                 heights.append(h)
         table.update_rows(rows, heights=heights)
         logger.debug("StatusView units updated: %d rows (k8s=%s)", len(rows), is_kubernetes)

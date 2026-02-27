@@ -136,6 +136,22 @@ class JujuClient:
                                 message=unit_st.workload_status.info if unit_st.workload_status else "",
                             )
                         )
+                        for sub_name, sub_st in (unit_st.subordinates or {}).items():
+                            sub_app = sub_name.split("/")[0]
+                            units.append(
+                                UnitInfo(
+                                    name=sub_name,
+                                    app=sub_app,
+                                    machine=unit_st.machine or "",
+                                    workload_status=sub_st.workload_status.status if sub_st.workload_status else "",
+                                    agent_status=sub_st.agent_status.status if sub_st.agent_status else "",
+                                    address=sub_st.address or unit_st.address or "",
+                                    public_address=sub_st.public_address or unit_st.public_address or "",
+                                    ports=", ".join(sub_st.opened_ports or []),
+                                    message=sub_st.workload_status.info if sub_st.workload_status else "",
+                                    subordinate_of=unit_name,
+                                )
+                            )
             finally:
                 await model.disconnect()
         except Exception:

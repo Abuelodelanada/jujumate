@@ -179,6 +179,30 @@ async def test_get_model_snapshot_fallback_on_failure(mock_controller):
 
 
 @pytest.mark.asyncio
+async def test_get_model_snapshot_includes_subordinate_units(mock_controller):
+    model, app_st, unit_st = _make_model_mock()
+    sub_st = MagicMock()
+    sub_st.workload_status.status = "active"
+    sub_st.workload_status.info = "Unit is ready"
+    sub_st.agent_status.status = "idle"
+    sub_st.address = ""
+    sub_st.public_address = "10.0.0.1"
+    sub_st.opened_ports = []
+    unit_st.subordinates = {"nrpe/0": sub_st}
+    mock_controller.get_model.return_value = model
+
+    client = JujuClient()
+    _, _, units = await client.get_model_snapshot("dev")
+
+    assert len(units) == 2
+    sub = next(u for u in units if u.name == "nrpe/0")
+    assert sub.app == "nrpe"
+    assert sub.subordinate_of == "postgresql/0"
+    assert sub.machine == "0"
+    assert sub.message == "Unit is ready"
+
+
+@pytest.mark.asyncio
 async def test_get_applications(mock_controller):
     model, _, _ = _make_model_mock()
     mock_controller.get_model.return_value = model

@@ -186,6 +186,27 @@ async def test_connect_and_poll_success():
 
 
 @pytest.mark.asyncio
+async def test_connect_and_poll_sets_auto_select_from_config():
+    app = JujuMateApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        screen = app.screen
+        with (
+            patch(
+                "jujumate.screens.main_screen.load_config",
+                return_value=JujuConfig(
+                    current_controller="prod", controllers=["prod"], current_model="mymodel"
+                ),
+            ),
+            patch("jujumate.screens.main_screen.JujuPoller") as MockPoller,
+        ):
+            mock_poller = AsyncMock()
+            MockPoller.return_value = mock_poller
+            await screen._connect_and_poll()
+            assert screen._auto_select_model == "mymodel"
+
+
+@pytest.mark.asyncio
 async def test_action_refresh_data_with_poller():
     app = JujuMateApp()
     async with app.run_test() as pilot:
@@ -467,3 +488,37 @@ async def test_fetch_relations_worker_handles_exception():
         # Empty RelationsUpdated was posted — no relations for "dev"
         dev_rels = [r for r in screen._all_relations if r.model == "dev"]
         assert dev_rels == []
+
+
+@pytest.mark.asyncio
+async def test_auto_select_navigates_to_status_on_first_refresh():
+    app = JujuMateApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        screen = app.screen
+        screen._auto_select_model = "dev"
+        screen.on_models_updated(
+            ModelsUpdated(models=[ModelInfo("dev", "ctrl", "aws", "", "active")])
+        )
+        screen.on_apps_updated(AppsUpdated(apps=[AppInfo("pg", "dev", "pg", "14/stable", 1)]))
+        screen.on_units_updated(UnitsUpdated(units=[UnitInfo("pg/0", "pg", "0", "active", "idle")]))
+        screen.on_data_refreshed(DataRefreshed(timestamp=datetime(2024, 1, 1, 12, 0, 0)))
+        await pilot.pause()
+        assert screen._selected_model == "dev"
+        assert screen._selected_controller == "ctrl"
+        assert screen.query_one(TabbedContent).active == "tab-status"
+        # auto_select cleared after first use
+        assert screen._auto_select_model is None
+
+
+@pytest.mark.asyncio
+async def test_auto_select_not_found_does_not_crash():
+    app = JujuMateApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        screen = app.screen
+        screen._auto_select_model = "nonexistent"
+        screen.on_data_refreshed(DataRefreshed(timestamp=datetime(2024, 1, 1, 12, 0, 0)))
+        await pilot.pause()
+        assert screen._selected_model is None
+        assert screen._auto_select_model is None

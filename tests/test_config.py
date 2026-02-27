@@ -67,3 +67,43 @@ def test_juju_config_dataclass():
     config = JujuConfig(current_controller="prod", controllers=["prod", "staging"])
     assert config.current_controller == "prod"
     assert len(config.controllers) == 2
+
+
+def _write_models(tmp_path, data):
+    models_file = tmp_path / "models.yaml"
+    models_file.write_text(yaml.dump(data))
+
+
+def test_load_config_reads_current_model(tmp_path):
+    _write_controllers(
+        tmp_path,
+        {"controllers": {"prod": {}}, "current-controller": "prod"},
+    )
+    _write_models(
+        tmp_path,
+        {"controllers": {"prod": {"current-model": "admin/mymodel"}}},
+    )
+    config = load_config(tmp_path)
+    assert config.current_model == "mymodel"
+
+
+def test_load_config_current_model_without_prefix(tmp_path):
+    _write_controllers(
+        tmp_path,
+        {"controllers": {"prod": {}}, "current-controller": "prod"},
+    )
+    _write_models(
+        tmp_path,
+        {"controllers": {"prod": {"current-model": "mymodel"}}},
+    )
+    config = load_config(tmp_path)
+    assert config.current_model == "mymodel"
+
+
+def test_load_config_no_models_file_gives_none(tmp_path):
+    _write_controllers(
+        tmp_path,
+        {"controllers": {"prod": {}}, "current-controller": "prod"},
+    )
+    config = load_config(tmp_path)
+    assert config.current_model is None

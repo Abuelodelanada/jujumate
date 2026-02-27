@@ -69,6 +69,8 @@ class MainScreen(Screen):
         self._selected_controller: str | None = None
         self._selected_model: str | None = None
         self._selected_app: str | None = None
+        # Auto-select: populated from Juju config on startup, cleared after first use
+        self._auto_select_model: str | None = None
 
     def compose(self) -> ComposeResult:
         yield JujuMateHeader(id="main-header")
@@ -98,6 +100,9 @@ class MainScreen(Screen):
             return
 
         self._poller = JujuPoller(controller_names=juju_config.controllers, target=self)
+        if juju_config.current_model:
+            self._auto_select_model = juju_config.current_model
+            logger.info("Will auto-select model '%s' after first poll", juju_config.current_model)
         await self._poller.poll_once()
         self._poll_timer = self.set_interval(
             self._settings.refresh_interval, self._poller.poll_once
@@ -287,7 +292,26 @@ class MainScreen(Screen):
         self._is_connected = True
         self._last_refresh_ts = message.timestamp.strftime("%H:%M:%S")
         self._refresh_header()
+        if self._auto_select_model and self._selected_model is None:
+            model_name = self._auto_select_model
+            self._auto_select_model = None  # only once
+            self._apply_auto_select(model_name)
         logger.debug("Data refreshed at %s", self._last_refresh_ts)
+
+    def _apply_auto_select(self, model_name: str) -> None:
+        model_info = next((m for m in self._all_models if m.name == model_name), None)
+        if model_info is None:
+            logger.warning("Auto-select: model '%s' not found in loaded data", model_name)
+            return
+        self._selected_controller = model_info.controller
+        self._selected_model = model_name
+        self._refresh_apps_view()
+        self._refresh_units_view()
+        self._refresh_status_view()
+        self._fetch_relations(self._selected_controller, self._selected_model)
+        self._refresh_header()
+        self.action_switch_tab("tab-status")
+        logger.info("Auto-selected model '%s' on controller '%s'", model_name, model_info.controller)
 
     def on_connection_failed(self, message: ConnectionFailed) -> None:
         self._is_connected = False

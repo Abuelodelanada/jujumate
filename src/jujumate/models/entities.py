@@ -78,3 +78,4 @@ class UnitInfo:
     public_address: str = ""
     ports: str = ""
     message: str = ""
+    subordinate_of: str = ""  # principal unit name, empty if this is a principal

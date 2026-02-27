@@ -10,6 +10,7 @@ JUJU_DATA_DIR = Path.home() / ".local" / "share" / "juju"
 class JujuConfig:
     current_controller: str
     controllers: list[str] = field(default_factory=list)
+    current_model: str | None = None
 
 
 class JujuConfigError(Exception):
@@ -36,4 +37,15 @@ def load_config(juju_data_dir: Path = JUJU_DATA_DIR) -> JujuConfig:
     if current not in controllers:
         raise JujuConfigError(f"Current controller '{current}' not found in controllers list.")
 
-    return JujuConfig(current_controller=current, controllers=controllers)
+    current_model: str | None = None
+    models_file = juju_data_dir / "models.yaml"
+    if models_file.exists():
+        with models_file.open() as f:
+            models_data = yaml.safe_load(f) or {}
+        ctrl_data = (models_data.get("controllers") or {}).get(current, {})
+        raw = ctrl_data.get("current-model", "")
+        if raw:
+            # Strip user prefix (e.g. "admin/mymodel" → "mymodel")
+            current_model = raw.split("/", 1)[-1] if "/" in raw else raw
+
+    return JujuConfig(current_controller=current, controllers=controllers, current_model=current_model)
