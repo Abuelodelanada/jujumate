@@ -79,3 +79,15 @@ class UnitInfo:
     ports: str = ""
     message: str = ""
     subordinate_of: str = ""  # principal unit name, empty if this is a principal
+
+
+@dataclass
+class MachineInfo:
+    model: str
+    id: str
+    state: str
+    address: str
+    instance_id: str
+    base: str
+    az: str
+    message: str = ""

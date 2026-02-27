@@ -10,12 +10,22 @@ from jujumate.client.watcher import (
     ControllersUpdated,
     DataRefreshed,
     JujuPoller,
+    MachinesUpdated,
     ModelsUpdated,
     OffersUpdated,
     RelationsUpdated,
     UnitsUpdated,
 )
-from jujumate.models.entities import AppInfo, CloudInfo, ControllerInfo, ModelInfo, OfferInfo, RelationInfo, UnitInfo
+from jujumate.models.entities import (
+    AppInfo,
+    CloudInfo,
+    ControllerInfo,
+    MachineInfo,
+    ModelInfo,
+    OfferInfo,
+    RelationInfo,
+    UnitInfo,
+)
 
 
 def make_mock_client():
@@ -30,6 +40,7 @@ def make_mock_client():
         ModelInfo("dev", "prod", "aws", "us-east-1", "available"),
         [AppInfo("postgresql", "dev", "postgresql", "14/stable", 363)],
         [UnitInfo("postgresql/0", "postgresql", "0", "active", "idle")],
+        [MachineInfo("dev", "0", "started", "10.0.0.1", "i-1234", "ubuntu@22.04", "us-east-1a")],
     )
     return client
 
@@ -113,12 +124,12 @@ async def test_poll_once_aggregates_multiple_controllers(mock_target):
     client_a = make_mock_client()
     client_a.list_model_names.return_value = ["dev"]
     client_a.get_model_snapshot.return_value = (
-        ModelInfo("dev", "ctrl-a", "aws", "", "available"), [], []
+        ModelInfo("dev", "ctrl-a", "aws", "", "available"), [], [], []
     )
     client_b = make_mock_client()
     client_b.list_model_names.return_value = ["prod"]
     client_b.get_model_snapshot.return_value = (
-        ModelInfo("prod", "ctrl-b", "aws", "", "available"), [], []
+        ModelInfo("prod", "ctrl-b", "aws", "", "available"), [], [], []
     )
 
     clients = iter([client_a, client_b])

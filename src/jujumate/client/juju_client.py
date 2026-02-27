@@ -2,7 +2,16 @@ import logging
 
 from juju.controller import Controller
 
-from jujumate.models.entities import AppInfo, CloudInfo, ControllerInfo, ModelInfo, OfferInfo, RelationInfo, UnitInfo
+from jujumate.models.entities import (
+    AppInfo,
+    CloudInfo,
+    ControllerInfo,
+    MachineInfo,
+    ModelInfo,
+    OfferInfo,
+    RelationInfo,
+    UnitInfo,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -75,8 +84,8 @@ class JujuClient:
 
     async def get_model_snapshot(
         self, model_name: str
-    ) -> tuple[ModelInfo, list[AppInfo], list[UnitInfo]]:
-        """Fetch ModelInfo, AppInfo list, and UnitInfo list in a single model connection.
+    ) -> tuple[ModelInfo, list[AppInfo], list[UnitInfo], list[MachineInfo]]:
+        """Fetch ModelInfo, AppInfo list, UnitInfo list, and MachineInfo list.
 
         Uses model.get_status() (FullStatus) to get accurate channel, revision,
         address, exposed, and version data that is not available from AllWatcher deltas.
@@ -152,6 +161,29 @@ class JujuClient:
                                     subordinate_of=unit_name,
                                 )
                             )
+                machines = []
+                for m_id, m_st in (full_status.machines or {}).items():
+                    base_str = ""
+                    if m_st.base:
+                        base_str = f"{m_st.base.name}@{m_st.base.channel}" if m_st.base.name else ""
+                    az = ""
+                    if m_st.hardware:
+                        for part in m_st.hardware.split():
+                            if part.startswith("availability-zone="):
+                                az = part.split("=", 1)[1]
+                                break
+                    machines.append(
+                        MachineInfo(
+                            model=model_name,
+                            id=m_id,
+                            state=m_st.agent_status.status if m_st.agent_status else "",
+                            address=m_st.dns_name or "",
+                            instance_id=m_st.instance_id or "",
+                            base=base_str,
+                            az=az,
+                            message=m_st.instance_status.info if m_st.instance_status else "",
+                        )
+                    )
             finally:
                 await model.disconnect()
         except Exception:
@@ -165,10 +197,12 @@ class JujuClient:
             )
             apps = []
             units = []
+            machines = []
         logger.debug(
-            "Snapshot for model '%s': %d apps, %d units", model_name, len(apps), len(units)
+            "Snapshot for model '%s': %d apps, %d units, %d machines",
+            model_name, len(apps), len(units), len(machines),
         )
-        return model_info, apps, units
+        return model_info, apps, units, machines
 
     async def get_models(self) -> list[ModelInfo]:
         model_names = await self._controller.list_models()
@@ -176,18 +210,18 @@ class JujuClient:
         logger.debug("Listing models for controller '%s': %s", controller_name, model_names)
         models = []
         for name in model_names:
-            model_info, _, _ = await self.get_model_snapshot(name)
+            model_info, _, _, _ = await self.get_model_snapshot(name)
             models.append(model_info)
         logger.debug("Fetched %d models for controller '%s'", len(models), controller_name)
         return models
 
     async def get_applications(self, model_name: str) -> list[AppInfo]:
-        _, apps, _ = await self.get_model_snapshot(model_name)
+        _, apps, _, _ = await self.get_model_snapshot(model_name)
         logger.debug("Fetched %d applications for model '%s'", len(apps), model_name)
         return apps
 
     async def get_units(self, model_name: str) -> list[UnitInfo]:
-        _, _, units = await self.get_model_snapshot(model_name)
+        _, _, units, _ = await self.get_model_snapshot(model_name)
         logger.debug("Fetched %d units for model '%s'", len(units), model_name)
         return units
 

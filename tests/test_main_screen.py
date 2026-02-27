@@ -12,13 +12,23 @@ from jujumate.client.watcher import (
     ControllersUpdated,
     DataRefreshed,
     JujuPoller,
+    MachinesUpdated,
     ModelsUpdated,
     OffersUpdated,
     RelationsUpdated,
     UnitsUpdated,
 )
 from jujumate.config import JujuConfig, JujuConfigError
-from jujumate.models.entities import AppInfo, CloudInfo, ControllerInfo, ModelInfo, OfferInfo, RelationInfo, UnitInfo
+from jujumate.models.entities import (
+    AppInfo,
+    CloudInfo,
+    ControllerInfo,
+    MachineInfo,
+    ModelInfo,
+    OfferInfo,
+    RelationInfo,
+    UnitInfo,
+)
 from jujumate.settings import AppSettings
 
 
@@ -450,6 +460,28 @@ async def test_offers_updated_populates_status_view():
         await pilot.pause()
         status_view = screen.query_one("#status-view", StatusView)
         assert status_view.query_one("#status-offers-table DataTable").row_count == 1
+
+
+@pytest.mark.asyncio
+async def test_machines_updated_populates_status_view():
+    from jujumate.widgets.status_view import StatusView
+
+    app = JujuMateApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        screen = app.screen
+        screen._selected_model = "dev"
+        screen._all_models = [ModelInfo("dev", "prod", "aws", "us-east-1", "available")]
+        screen.on_machines_updated(
+            MachinesUpdated(
+                machines=[
+                    MachineInfo("dev", "0", "started", "10.0.0.1", "i-1234", "ubuntu@22.04", "us-east-1a"),
+                ],
+            )
+        )
+        await pilot.pause()
+        status_view = screen.query_one("#status-view", StatusView)
+        assert status_view.query_one("#status-machines-table DataTable").row_count == 1
 
 
 @pytest.mark.asyncio

@@ -8,7 +8,7 @@ from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import Label
 
-from jujumate.models.entities import AppInfo, OfferInfo, RelationInfo, UnitInfo
+from jujumate.models.entities import AppInfo, MachineInfo, OfferInfo, RelationInfo, UnitInfo
 from jujumate.widgets.resource_table import Column, ResourceTable
 
 logger = logging.getLogger(__name__)
@@ -61,6 +61,16 @@ _REL_COLUMNS = [
     Column("Requirer", "s-rel-requirer"),
     Column("Interface", "s-rel-iface", width=16),
     Column("Type", "s-rel-type", width=10),
+]
+
+_MACHINE_COLUMNS = [
+    Column("Machine", "s-mach-id"),
+    Column("State", "s-mach-state", width=12),
+    Column("Address", "s-mach-addr", width=18),
+    Column("Inst id", "s-mach-inst", width=22),
+    Column("Base", "s-mach-base", width=16),
+    Column("AZ", "s-mach-az", width=14),
+    Column("Message", "s-mach-msg"),
 ]
 
 
@@ -142,6 +152,10 @@ class StatusView(Widget):
             yield ResourceTable(columns=_APP_COLUMNS, id="status-apps-table", cursor=False)
             yield Label("Units", classes="section-label")
             yield ResourceTable(columns=_UNIT_COLUMNS_IAAS, id="status-units-table", cursor=False)
+            yield Label("Machines", classes="section-label", id="status-machines-label")
+            yield ResourceTable(
+                columns=_MACHINE_COLUMNS, id="status-machines-table", cursor=False
+            )
             yield Label("Offers", classes="section-label", id="status-offers-label")
             yield ResourceTable(columns=_OFFER_COLUMNS, id="status-offers-table", cursor=False)
             yield Label("Relations", classes="section-label")
@@ -151,6 +165,8 @@ class StatusView(Widget):
     def on_mount(self) -> None:
         self.query_one("#status-offers-label").display = False
         self.query_one("#status-offers-table").display = False
+        self.query_one("#status-machines-label").display = False
+        self.query_one("#status-machines-table").display = False
         self._update_scroll_indicator()
 
     def _update_scroll_indicator(self) -> None:
@@ -224,6 +240,28 @@ class StatusView(Widget):
         ]
         self.query_one("#status-offers-table", ResourceTable).update_rows(rows)
         logger.debug("StatusView offers updated: %d rows", len(rows))
+
+    def update_machines(
+        self, machines: list[MachineInfo], is_kubernetes: bool = False
+    ) -> None:
+        show = bool(machines) and not is_kubernetes
+        self.query_one("#status-machines-label").display = show
+        self.query_one("#status-machines-table").display = show
+        if not show:
+            self.query_one("#status-machines-table", ResourceTable).update_rows([])
+            return
+        rows = []
+        heights = []
+        for m in machines:
+            msg, h = _wrap_msg(m.message)
+            rows.append((
+                m.id, m.state, m.address, m.instance_id, m.base, m.az, msg,
+            ))
+            heights.append(h)
+        self.query_one("#status-machines-table", ResourceTable).update_rows(
+            rows, heights=heights
+        )
+        logger.debug("StatusView machines updated: %d rows", len(rows))
 
     def update_relations(self, relations: list[RelationInfo]) -> None:
         rows = [(r.provider, r.requirer, r.interface, r.type) for r in relations]

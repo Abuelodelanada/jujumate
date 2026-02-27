@@ -16,6 +16,7 @@ from jujumate.client.watcher import (
     ControllersUpdated,
     DataRefreshed,
     JujuPoller,
+    MachinesUpdated,
     ModelsUpdated,
     OffersUpdated,
     RelationsUpdated,
@@ -26,6 +27,7 @@ from jujumate.models.entities import (
     AppInfo,
     CloudInfo,
     ControllerInfo,
+    MachineInfo,
     ModelInfo,
     OfferInfo,
     RelationInfo,
@@ -71,6 +73,7 @@ class MainScreen(Screen):
         self._all_units: list[UnitInfo] = []
         self._all_relations: list[RelationInfo] = []
         self._all_offers: list[OfferInfo] = []
+        self._all_machines: list[MachineInfo] = []
         # Connection state
         self._is_connected: bool = False
         self._last_refresh_ts: str = ""
@@ -186,11 +189,16 @@ class MainScreen(Screen):
         if self._selected_model is None:
             apps: list[AppInfo] = []
             units: list[UnitInfo] = []
+            machines: list[MachineInfo] = []
             is_kubernetes = False
         else:
             apps = [a for a in self._all_apps if a.model == self._selected_model]
             app_names = {a.name for a in apps}
             units = [u for u in self._all_units if u.app in app_names]
+            machines = [
+                m for m in self._all_machines
+                if m.model == self._selected_model
+            ]
             model_info = next(
                 (m for m in self._all_models if m.name == self._selected_model), None
             )
@@ -204,6 +212,7 @@ class MainScreen(Screen):
         status_view = self.query_one("#status-view", StatusView)
         status_view.update_apps(apps)
         status_view.update_units(units, is_kubernetes=is_kubernetes)
+        status_view.update_machines(machines, is_kubernetes=is_kubernetes)
         status_view.update_offers(offers)
         status_view.update_relations(relations)
 
@@ -281,6 +290,10 @@ class MainScreen(Screen):
         self._refresh_units_view()
         self._refresh_status_view()
         self._refresh_header()
+
+    def on_machines_updated(self, message: MachinesUpdated) -> None:
+        self._all_machines = message.machines
+        self._refresh_status_view()
 
     def on_relations_updated(self, message: RelationsUpdated) -> None:
         # Replace relations for this model (keep other models' relations intact)

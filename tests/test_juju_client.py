@@ -105,9 +105,17 @@ def _make_model_mock(app_name="postgresql", charm_name="postgresql", channel="14
     unit_st.address = unit_address if is_kubernetes else ""
     unit_st.opened_ports = ["5432/tcp"]
     app_st.units = {unit_name: unit_st}
+    machine_mock = MagicMock()
+    machine_mock.agent_status.status = "started"
+    machine_mock.dns_name = "10.0.0.1"
+    machine_mock.instance_id = "i-1234"
+    machine_mock.base.name = "ubuntu"
+    machine_mock.base.channel = "22.04"
+    machine_mock.hardware = "arch=amd64 cores=2 mem=8192M availability-zone=us-east-1a"
+    machine_mock.instance_status.info = "running"
     full_status = MagicMock()
     full_status.applications = {app_name: app_st}
-    full_status.machines = {} if is_kubernetes else {"0": MagicMock()}
+    full_status.machines = {} if is_kubernetes else {"0": machine_mock}
     full_status.relations = []
     info = MagicMock()
     info.cloud_tag = "cloud-aws"
@@ -129,7 +137,7 @@ async def test_get_model_snapshot(mock_controller):
     mock_controller.get_model.return_value = model
 
     client = JujuClient()
-    model_info, apps, units = await client.get_model_snapshot("dev")
+    model_info, apps, units, machines = await client.get_model_snapshot("dev")
 
     assert model_info.name == "dev"
     assert model_info.cloud == "aws"
@@ -149,6 +157,15 @@ async def test_get_model_snapshot(mock_controller):
     assert units[0].address == ""
     assert units[0].ports == "5432/tcp"
     assert units[0].message == "ready"
+    assert len(machines) == 1
+    assert machines[0].model == "dev"
+    assert machines[0].id == "0"
+    assert machines[0].state == "started"
+    assert machines[0].address == "10.0.0.1"
+    assert machines[0].instance_id == "i-1234"
+    assert machines[0].base == "ubuntu@22.04"
+    assert machines[0].az == "us-east-1a"
+    assert machines[0].message == "running"
     # Only ONE get_model call for all data
     mock_controller.get_model.assert_awaited_once_with("dev")
 
@@ -159,23 +176,25 @@ async def test_get_model_snapshot_kubernetes(mock_controller):
     mock_controller.get_model.return_value = model
 
     client = JujuClient()
-    model_info, apps, units = await client.get_model_snapshot("cos")
+    model_info, apps, units, machines = await client.get_model_snapshot("cos")
 
     assert model_info.is_kubernetes is True
     assert model_info.machine_count == 0
     assert units[0].machine == ""
     assert units[0].address == "10.1.2.3"
     assert units[0].public_address == ""
+    assert machines == []
 
 
 @pytest.mark.asyncio
 async def test_get_model_snapshot_fallback_on_failure(mock_controller):
     mock_controller.get_model.side_effect = Exception("timeout")
     client = JujuClient()
-    model_info, apps, units = await client.get_model_snapshot("broken")
+    model_info, apps, units, machines = await client.get_model_snapshot("broken")
     assert model_info.status == "unknown"
     assert apps == []
     assert units == []
+    assert machines == []
 
 
 @pytest.mark.asyncio
@@ -192,7 +211,7 @@ async def test_get_model_snapshot_includes_subordinate_units(mock_controller):
     mock_controller.get_model.return_value = model
 
     client = JujuClient()
-    _, _, units = await client.get_model_snapshot("dev")
+    _, _, units, _ = await client.get_model_snapshot("dev")
 
     assert len(units) == 2
     sub = next(u for u in units if u.name == "nrpe/0")

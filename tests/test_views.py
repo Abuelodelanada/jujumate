@@ -2,7 +2,7 @@ import pytest
 from textual.widgets import DataTable, TabbedContent
 
 from jujumate.app import JujuMateApp
-from jujumate.models.entities import AppInfo, CloudInfo, ControllerInfo, ModelInfo, UnitInfo
+from jujumate.models.entities import AppInfo, CloudInfo, ControllerInfo, MachineInfo, ModelInfo, UnitInfo
 from jujumate.widgets.apps_view import AppsView
 from jujumate.widgets.clouds_view import CloudsView
 from jujumate.widgets.controllers_view import ControllersView
@@ -504,3 +504,55 @@ async def test_status_view_scroll_indicator_handles_missing_widgets():
     # _watch__show_more with no #scroll-indicator mounted
     view._watch__show_more(True)
     view._watch__show_more(False)
+
+
+@pytest.mark.asyncio
+async def test_status_view_update_machines():
+    from jujumate.widgets.status_view import StatusView
+
+    app = JujuMateApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        view = StatusView(id="test-status-machines")
+        await _mount_view(app, pilot, view)
+        machines = [
+            MachineInfo("dev", "0", "started", "10.0.0.1", "i-1234", "ubuntu@22.04", "us-east-1a"),
+            MachineInfo("dev", "1", "started", "10.0.0.2", "i-5678", "ubuntu@22.04", "us-east-1b"),
+        ]
+        view.update_machines(machines)
+        await pilot.pause()
+        table = view.query_one("#status-machines-table", ResourceTable)
+        assert table.query_one("DataTable").row_count == 2
+        assert view.query_one("#status-machines-label").display is True
+
+
+@pytest.mark.asyncio
+async def test_status_view_update_machines_hidden_for_kubernetes():
+    from jujumate.widgets.status_view import StatusView
+
+    app = JujuMateApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        view = StatusView(id="test-status-machines-k8s")
+        await _mount_view(app, pilot, view)
+        machines = [
+            MachineInfo("cos", "0", "started", "10.0.0.1", "i-1234", "ubuntu@22.04", ""),
+        ]
+        view.update_machines(machines, is_kubernetes=True)
+        await pilot.pause()
+        assert view.query_one("#status-machines-label").display is False
+        assert view.query_one("#status-machines-table").display is False
+
+
+@pytest.mark.asyncio
+async def test_status_view_update_machines_hidden_when_empty():
+    from jujumate.widgets.status_view import StatusView
+
+    app = JujuMateApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        view = StatusView(id="test-status-machines-empty")
+        await _mount_view(app, pilot, view)
+        view.update_machines([])
+        await pilot.pause()
+        assert view.query_one("#status-machines-label").display is False

@@ -6,7 +6,16 @@ from textual.message import Message
 from textual.widget import Widget
 
 from jujumate.client.juju_client import JujuClient
-from jujumate.models.entities import AppInfo, CloudInfo, ControllerInfo, ModelInfo, OfferInfo, RelationInfo, UnitInfo
+from jujumate.models.entities import (
+    AppInfo,
+    CloudInfo,
+    ControllerInfo,
+    MachineInfo,
+    ModelInfo,
+    OfferInfo,
+    RelationInfo,
+    UnitInfo,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +50,11 @@ class AppsUpdated(JujuDataMessage):
 @dataclass
 class UnitsUpdated(JujuDataMessage):
     units: list[UnitInfo] = field(default_factory=list)
+
+
+@dataclass
+class MachinesUpdated(JujuDataMessage):
+    machines: list[MachineInfo] = field(default_factory=list)
 
 
 @dataclass
@@ -90,6 +104,7 @@ class JujuPoller:
         all_models: dict[tuple[str, str], ModelInfo] = {}  # dedup by (controller, model)
         all_apps: dict[tuple[str, str], AppInfo] = {}  # dedup by (model, app)
         all_units: dict[tuple[str, str], UnitInfo] = {}  # dedup by (app, unit)
+        all_machines: dict[tuple[str, str], MachineInfo] = {}  # dedup by (model, machine)
         failed = 0
 
         for name in self._controller_names:
@@ -100,12 +115,16 @@ class JujuPoller:
                     for ctrl in await client.get_controllers():
                         all_controllers[ctrl.name] = ctrl
                     for model_name in await client.list_model_names():
-                        model_info, apps, units = await client.get_model_snapshot(model_name)
+                        model_info, apps, units, machines = await client.get_model_snapshot(
+                            model_name
+                        )
                         all_models[(model_info.controller, model_info.name)] = model_info
                         for app in apps:
                             all_apps[(app.model, app.name)] = app
                         for unit in units:
                             all_units[(unit.app, unit.name)] = unit
+                        for machine in machines:
+                            all_machines[(model_name, machine.id)] = machine
             except Exception:
                 logger.exception("Failed to poll controller '%s'", name)
                 failed += 1
@@ -119,6 +138,7 @@ class JujuPoller:
         self._target.post_message(ModelsUpdated(models=list(all_models.values())))
         self._target.post_message(AppsUpdated(apps=list(all_apps.values())))
         self._target.post_message(UnitsUpdated(units=list(all_units.values())))
+        self._target.post_message(MachinesUpdated(machines=list(all_machines.values())))
         self._target.post_message(DataRefreshed())
         logger.info(
             "Poll complete: %d controller(s) OK, %d failed",
