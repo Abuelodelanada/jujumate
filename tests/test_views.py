@@ -710,3 +710,38 @@ async def test_inactive_table_event_ignored_by_handler():
         )
         # msg-bar must not be overwritten by the machines event
         assert "sentinel" in str(bar.render())
+
+
+@pytest.mark.asyncio
+async def test_table_focused_message_updates_active_table():
+    """on_resource_table_table_focused sets _last_active_table and updates msg-bar."""
+    from jujumate.widgets.status_view import StatusView
+    from jujumate.widgets.resource_table import ResourceTable
+
+    app = JujuMateApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        view = app.screen.query_one("#status-view", StatusView)
+        msg = "hook failed: timeout"
+        view.update_apps([AppInfo("myapp", "", "myapp", "stable", 1, message=msg)])
+        await pilot.pause()
+        rt = view.query_one("#status-apps-table", ResourceTable)
+        view.on_resource_table_table_focused(ResourceTable.TableFocused(rt))
+        assert view._last_active_table == "status-apps-table"
+        bar = view.query_one("#msg-bar", Label)
+        assert msg in str(bar.render())
+
+
+@pytest.mark.asyncio
+async def test_table_focused_message_no_id_is_safe():
+    """on_resource_table_table_focused with a table that has no id does not crash."""
+    from jujumate.widgets.status_view import StatusView
+    from jujumate.widgets.resource_table import ResourceTable, Column
+
+    app = JujuMateApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        view = app.screen.query_one("#status-view", StatusView)
+        # ResourceTable without an id — handler should silently skip
+        rt = ResourceTable(columns=[Column("X", "x")])
+        view.on_resource_table_table_focused(ResourceTable.TableFocused(rt))

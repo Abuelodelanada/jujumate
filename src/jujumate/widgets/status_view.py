@@ -10,7 +10,6 @@ from textual.widgets import DataTable, Label
 
 from jujumate.models.entities import AppInfo, MachineInfo, OfferInfo, RelationInfo, UnitInfo
 from jujumate.widgets.resource_table import Column, ResourceTable
-
 logger = logging.getLogger(__name__)
 
 _STATUS_COLORS: dict[str, str] = {
@@ -202,7 +201,7 @@ class StatusView(Widget):
             yield Label("Machines", classes="section-label", id="status-machines-label")
             yield ResourceTable(columns=_MACHINE_COLUMNS, id="status-machines-table")
             yield Label("Offers", classes="section-label", id="status-offers-label")
-            yield ResourceTable(columns=_OFFER_COLUMNS, id="status-offers-table", cursor=False)
+            yield ResourceTable(columns=_OFFER_COLUMNS, id="status-offers-table")
             yield Label("Relations", classes="section-label")
             yield ResourceTable(columns=_REL_COLUMNS, id="status-rels-table")
         yield Label("", id="msg-bar")
@@ -337,6 +336,21 @@ class StatusView(Widget):
         except Exception:
             msg = ""
         try:
+            self.query_one("#msg-bar", Label).update(msg)
+        except Exception:
+            pass
+
+    def on_resource_table_table_focused(self, event: ResourceTable.TableFocused) -> None:
+        """When a table gains focus via TAB, set it as active and refresh the msg-bar."""
+        try:
+            table_id = event.resource_table.id or ""
+            if not table_id:
+                return
+            self._last_active_table = table_id
+            dt = event.resource_table.query_one(DataTable)
+            row = dt.cursor_row
+            msgs = self._row_messages.get(table_id, [])
+            msg = msgs[row] if row < len(msgs) else ""
             self.query_one("#msg-bar", Label).update(msg)
         except Exception:
             pass

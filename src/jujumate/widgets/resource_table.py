@@ -2,7 +2,9 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
+from textual import events
 from textual.app import ComposeResult
+from textual.message import Message
 from textual.widget import Widget
 from textual.widgets import DataTable, Label
 
@@ -18,6 +20,13 @@ class Column:
 
 class ResourceTable(Widget):
     """Generic reusable DataTable for displaying Juju resources."""
+
+    class TableFocused(Message):
+        """Posted (bubbling) when the internal DataTable gains focus."""
+
+        def __init__(self, resource_table: "ResourceTable") -> None:
+            super().__init__()
+            self.resource_table = resource_table
 
     DEFAULT_CSS = """
     ResourceTable {
@@ -37,7 +46,14 @@ class ResourceTable(Widget):
 
     def compose(self) -> ComposeResult:
         cursor_type = "row" if self._cursor else "none"
-        table = DataTable(cursor_type=cursor_type, zebra_stripes=False, cursor_background_priority="css")
+        resource_table = self
+
+        class _FocusableTable(DataTable):
+            def _on_focus(self, event: events.Focus) -> None:
+                super()._on_focus(event)
+                resource_table.post_message(ResourceTable.TableFocused(resource_table))
+
+        table = _FocusableTable(cursor_type=cursor_type, zebra_stripes=False, cursor_background_priority="css")
         for col in self._columns:
             table.add_column(col.label, key=col.key, width=col.width)
         yield table
