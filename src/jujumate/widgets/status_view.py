@@ -18,17 +18,19 @@ _STATUS_COLORS: dict[str, str] = {
     "started": "#26A269",
     "blocked": "#FF5555",
     "error": "#FF5555",
+    "terminated": "#FF5555",
     "maintenance": "#EFB73E",
     "waiting": "#EFB73E",
     "executing": "#EFB73E",
+    "unknown": "#888888",
 }
 
 
 def _colored_status(status: str) -> Text:
     """Return a Rich Text object with the status colored by severity."""
-    color = _STATUS_COLORS.get(status.lower(), "")
+    color = _STATUS_COLORS.get(status.strip().lower(), "")
     if color:
-        return Text(status, style=color)
+        return Text.from_markup(f"[{color}]{status}[/]")
     return Text(status)
 
 

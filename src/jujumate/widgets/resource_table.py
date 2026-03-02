@@ -53,7 +53,12 @@ class ResourceTable(Widget):
                 super()._on_focus(event)
                 resource_table.post_message(ResourceTable.TableFocused(resource_table))
 
-        table = _FocusableTable(cursor_type=cursor_type, zebra_stripes=False, cursor_background_priority="css")
+        table = _FocusableTable(
+            cursor_type=cursor_type,
+            zebra_stripes=False,
+            cursor_background_priority="css",
+            cursor_foreground_priority="renderable",
+        )
         for col in self._columns:
             table.add_column(col.label, key=col.key, width=col.width)
         yield table
