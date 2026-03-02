@@ -164,8 +164,11 @@ class StatusView(Widget):
     }
     StatusView ResourceTable {
         height: auto;
-        border: none;
+        border: tall $accent;
+        border-title-color: $accent;
+        border-title-style: bold;
         margin-bottom: 1;
+        padding: 0 1;
     }
     StatusView DataTable {
         height: auto;
@@ -204,12 +207,24 @@ class StatusView(Widget):
 
     def compose(self) -> ComposeResult:
         with _TrackedScroll():
-            yield ResourceTable(columns=_SAAS_COLUMNS, id="status-saas-table")
-            yield ResourceTable(columns=_APP_COLUMNS, id="status-apps-table")
-            yield ResourceTable(columns=_UNIT_COLUMNS_IAAS, id="status-units-table")
-            yield ResourceTable(columns=_MACHINE_COLUMNS, id="status-machines-table")
-            yield ResourceTable(columns=_OFFER_COLUMNS, id="status-offers-table")
-            yield ResourceTable(columns=_REL_COLUMNS, id="status-rels-table")
+            t = ResourceTable(columns=_SAAS_COLUMNS, id="status-saas-table")
+            t.border_title = "SAAS"
+            yield t
+            t = ResourceTable(columns=_APP_COLUMNS, id="status-apps-table")
+            t.border_title = "Applications"
+            yield t
+            t = ResourceTable(columns=_UNIT_COLUMNS_IAAS, id="status-units-table")
+            t.border_title = "Units"
+            yield t
+            t = ResourceTable(columns=_MACHINE_COLUMNS, id="status-machines-table")
+            t.border_title = "Machines"
+            yield t
+            t = ResourceTable(columns=_OFFER_COLUMNS, id="status-offers-table")
+            t.border_title = "Offers"
+            yield t
+            t = ResourceTable(columns=_REL_COLUMNS, id="status-rels-table")
+            t.border_title = "Relations"
+            yield t
         yield Label("", id="msg-bar")
         yield Label("▼ more below", id="scroll-indicator")
 
