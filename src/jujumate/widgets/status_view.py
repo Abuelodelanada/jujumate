@@ -57,7 +57,7 @@ _SAAS_COLUMNS = [
 ]
 
 _APP_COLUMNS = [
-    Column("Name", "s-app-name"),
+    Column("App", "s-app-name"),
     Column("Version", "s-app-version", width=10),
     Column("Status", "s-app-status", width=12),
     Column("Scale", "s-app-scale", width=6),
@@ -100,7 +100,7 @@ _OFFER_COLUMNS = [
 ]
 
 _REL_COLUMNS = [
-    Column("Provider", "s-rel-provider"),
+    Column("Integration provider", "s-rel-provider"),
     Column("Requirer", "s-rel-requirer"),
     Column("Interface", "s-rel-iface", width=16),
     Column("Type", "s-rel-type", width=10),
@@ -163,6 +163,7 @@ class StatusView(Widget):
     StatusView ResourceTable {
         height: auto;
         border: none;
+        margin-bottom: 1;
     }
     StatusView DataTable {
         height: auto;
@@ -201,27 +202,18 @@ class StatusView(Widget):
 
     def compose(self) -> ComposeResult:
         with _TrackedScroll():
-            yield Label("SAAS", classes="section-label", id="status-saas-label")
             yield ResourceTable(columns=_SAAS_COLUMNS, id="status-saas-table")
-            yield Label("Applications", classes="section-label")
             yield ResourceTable(columns=_APP_COLUMNS, id="status-apps-table")
-            yield Label("Units", classes="section-label")
             yield ResourceTable(columns=_UNIT_COLUMNS_IAAS, id="status-units-table")
-            yield Label("Machines", classes="section-label", id="status-machines-label")
             yield ResourceTable(columns=_MACHINE_COLUMNS, id="status-machines-table")
-            yield Label("Offers", classes="section-label", id="status-offers-label")
             yield ResourceTable(columns=_OFFER_COLUMNS, id="status-offers-table")
-            yield Label("Relations", classes="section-label")
             yield ResourceTable(columns=_REL_COLUMNS, id="status-rels-table")
         yield Label("", id="msg-bar")
         yield Label("▼ more below", id="scroll-indicator")
 
     def on_mount(self) -> None:
-        self.query_one("#status-saas-label").display = False
         self.query_one("#status-saas-table").display = False
-        self.query_one("#status-offers-label").display = False
         self.query_one("#status-offers-table").display = False
-        self.query_one("#status-machines-label").display = False
         self.query_one("#status-machines-table").display = False
         self._update_scroll_indicator()
 
@@ -267,7 +259,6 @@ class StatusView(Widget):
     def update_saas(self, saas: list[SAASInfo]) -> None:
         rows = [(s.name, _colored_status(s.status), s.store, s.url) for s in saas]
         has_saas = bool(rows)
-        self.query_one("#status-saas-label").display = has_saas
         self.query_one("#status-saas-table").display = has_saas
         self.query_one("#status-saas-table", ResourceTable).update_rows(rows)
         logger.debug("StatusView SAAS updated: %d rows", len(rows))
@@ -307,7 +298,6 @@ class StatusView(Widget):
 
     def update_offers(self, offers: list[OfferInfo]) -> None:
         has_offers = bool(offers)
-        self.query_one("#status-offers-label").display = has_offers
         self.query_one("#status-offers-table").display = has_offers
         rows = [
             (o.name, o.application, o.charm, str(o.rev), o.connected, o.endpoint, o.interface, o.role)
@@ -320,7 +310,6 @@ class StatusView(Widget):
         self, machines: list[MachineInfo], is_kubernetes: bool = False
     ) -> None:
         show = bool(machines) and not is_kubernetes
-        self.query_one("#status-machines-label").display = show
         self.query_one("#status-machines-table").display = show
         if not show:
             self.query_one("#status-machines-table", ResourceTable).update_rows([])
