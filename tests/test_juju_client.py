@@ -408,6 +408,7 @@ async def test_get_status_details_returns_offers(mock_controller):
     ep.role = "provider"
     offer_st.endpoints = {"karma-dashboard": ep}
     status.offers = {"alertmanager-karma-dashboard": offer_st}
+    status.application_endpoints = {}
     live_app = MagicMock()
     live_app.charm_name = "alertmanager-k8s"
     model.get_status = AsyncMock(return_value=status)
@@ -415,7 +416,7 @@ async def test_get_status_details_returns_offers(mock_controller):
     mock_controller.get_model.return_value = model
 
     client = JujuClient()
-    relations, offers = await client.get_status_details("cos")
+    relations, offers, saas = await client.get_status_details("cos")
 
     assert relations == []
     assert len(offers) == 1

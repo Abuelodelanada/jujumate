@@ -14,6 +14,7 @@ from jujumate.models.entities import (
     ModelInfo,
     OfferInfo,
     RelationInfo,
+    SAASInfo,
     UnitInfo,
 )
 
@@ -67,6 +68,12 @@ class RelationsUpdated(JujuDataMessage):
 class OffersUpdated(JujuDataMessage):
     model: str = ""
     offers: list[OfferInfo] = field(default_factory=list)
+
+
+@dataclass
+class SaasUpdated(JujuDataMessage):
+    model: str = ""
+    saas: list[SAASInfo] = field(default_factory=list)
 
 
 @dataclass

@@ -46,6 +46,15 @@ class AppInfo:
 
 
 @dataclass
+class SAASInfo:
+    model: str
+    name: str
+    status: str
+    store: str
+    url: str
+
+
+@dataclass
 class OfferInfo:
     model: str
     name: str

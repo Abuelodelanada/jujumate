@@ -290,7 +290,7 @@ async def test_model_selected_switches_to_status_and_filters():
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
-        mock_client.get_status_details = AsyncMock(return_value=([], []))
+        mock_client.get_status_details = AsyncMock(return_value=([], [], []))
         with patch("jujumate.screens.main_screen.JujuClient", return_value=mock_client):
             screen._selected_controller = "ctrl"
             screen.on_models_view_model_selected(ModelsView.ModelSelected(name="ctrl/dev"))
@@ -496,7 +496,7 @@ async def test_fetch_relations_worker_posts_message():
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
-        mock_client.get_status_details = AsyncMock(return_value=([rel], []))
+        mock_client.get_status_details = AsyncMock(return_value=([rel], [], []))
         with patch("jujumate.screens.main_screen.JujuClient", return_value=mock_client):
             screen._fetch_relations("ctrl", "dev")
             await pilot.pause()

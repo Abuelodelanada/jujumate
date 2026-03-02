@@ -8,7 +8,7 @@ from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import DataTable, Label
 
-from jujumate.models.entities import AppInfo, MachineInfo, OfferInfo, RelationInfo, UnitInfo
+from jujumate.models.entities import AppInfo, MachineInfo, OfferInfo, RelationInfo, SAASInfo, UnitInfo
 from jujumate.widgets.resource_table import Column, ResourceTable
 logger = logging.getLogger(__name__)
 
@@ -48,6 +48,13 @@ def _colored_relation(endpoint: str) -> Text:
         text.append(rel, style="#19B6EE")
         return text
     return Text(endpoint)
+
+_SAAS_COLUMNS = [
+    Column("SAAS", "s-saas-name"),
+    Column("Status", "s-saas-status", width=12),
+    Column("Store", "s-saas-store", width=18),
+    Column("URL", "s-saas-url"),
+]
 
 _APP_COLUMNS = [
     Column("Name", "s-app-name"),
@@ -194,6 +201,8 @@ class StatusView(Widget):
 
     def compose(self) -> ComposeResult:
         with _TrackedScroll():
+            yield Label("SAAS", classes="section-label", id="status-saas-label")
+            yield ResourceTable(columns=_SAAS_COLUMNS, id="status-saas-table")
             yield Label("Applications", classes="section-label")
             yield ResourceTable(columns=_APP_COLUMNS, id="status-apps-table")
             yield Label("Units", classes="section-label")
@@ -208,6 +217,8 @@ class StatusView(Widget):
         yield Label("▼ more below", id="scroll-indicator")
 
     def on_mount(self) -> None:
+        self.query_one("#status-saas-label").display = False
+        self.query_one("#status-saas-table").display = False
         self.query_one("#status-offers-label").display = False
         self.query_one("#status-offers-table").display = False
         self.query_one("#status-machines-label").display = False
@@ -252,6 +263,14 @@ class StatusView(Widget):
         self.query_one("#status-apps-table", ResourceTable).update_rows(rows)
         self._restore_cursor("status-apps-table", len(full_msgs))
         logger.debug("StatusView apps updated: %d rows", len(rows))
+
+    def update_saas(self, saas: list[SAASInfo]) -> None:
+        rows = [(s.name, _colored_status(s.status), s.store, s.url) for s in saas]
+        has_saas = bool(rows)
+        self.query_one("#status-saas-label").display = has_saas
+        self.query_one("#status-saas-table").display = has_saas
+        self.query_one("#status-saas-table", ResourceTable).update_rows(rows)
+        logger.debug("StatusView SAAS updated: %d rows", len(rows))
 
     def update_units(self, units: list[UnitInfo], is_kubernetes: bool = False) -> None:
         table = self.query_one("#status-units-table", ResourceTable)

@@ -20,6 +20,7 @@ from jujumate.client.watcher import (
     ModelsUpdated,
     OffersUpdated,
     RelationsUpdated,
+    SaasUpdated,
     UnitsUpdated,
 )
 from jujumate.config import JujuConfigError, load_config
@@ -31,6 +32,7 @@ from jujumate.models.entities import (
     ModelInfo,
     OfferInfo,
     RelationInfo,
+    SAASInfo,
     UnitInfo,
 )
 from jujumate.screens.help_screen import HelpScreen
@@ -73,6 +75,7 @@ class MainScreen(Screen):
         self._all_units: list[UnitInfo] = []
         self._all_relations: list[RelationInfo] = []
         self._all_offers: list[OfferInfo] = []
+        self._all_saas: list[SAASInfo] = []
         self._all_machines: list[MachineInfo] = []
         # Connection state
         self._is_connected: bool = False
@@ -209,10 +212,14 @@ class MainScreen(Screen):
         offers = [
             o for o in self._all_offers if o.model == self._selected_model
         ] if self._selected_model else []
+        saas = [
+            s for s in self._all_saas if s.model == self._selected_model
+        ] if self._selected_model else []
         status_view = self.query_one("#status-view", StatusView)
         status_view.update_apps(apps)
         status_view.update_units(units, is_kubernetes=is_kubernetes)
         status_view.update_machines(machines, is_kubernetes=is_kubernetes)
+        status_view.update_saas(saas)
         status_view.update_offers(offers)
         status_view.update_relations(relations)
 
@@ -313,6 +320,14 @@ class MainScreen(Screen):
         self._refresh_header()
         logger.debug("Offers updated for model '%s': %d", message.model, len(message.offers))
 
+    def on_saas_updated(self, message: SaasUpdated) -> None:
+        # Replace SAAS for this model (keep other models' SAAS intact)
+        self._all_saas = [
+            s for s in self._all_saas if s.model != message.model
+        ] + message.saas
+        self._refresh_status_view()
+        logger.debug("SAAS updated for model '%s': %d", message.model, len(message.saas))
+
     def on_data_refreshed(self, message: DataRefreshed) -> None:
         self._is_connected = True
         self._last_refresh_ts = message.timestamp.strftime("%H:%M:%S")
@@ -395,13 +410,14 @@ class MainScreen(Screen):
     async def _fetch_relations(self, controller_name: str, model_name: str) -> None:
         try:
             async with JujuClient(controller_name=controller_name) as client:
-                relations, offers = await client.get_status_details(model_name)
+                relations, offers, saas = await client.get_status_details(model_name)
             logger.debug(
-                "Fetched %d relations, %d offers for model '%s'",
-                len(relations), len(offers), model_name,
+                "Fetched %d relations, %d offers, %d saas for model '%s'",
+                len(relations), len(offers), len(saas), model_name,
             )
             self.post_message(RelationsUpdated(model=model_name, relations=relations))
             self.post_message(OffersUpdated(model=model_name, offers=offers))
+            self.post_message(SaasUpdated(model=model_name, saas=saas))
         except Exception:
             logger.exception("Failed to fetch status details for model '%s'", model_name)
 

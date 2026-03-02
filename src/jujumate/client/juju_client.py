@@ -9,6 +9,7 @@ from jujumate.models.entities import (
     MachineInfo,
     ModelInfo,
     OfferInfo,
+    SAASInfo,
     RelationInfo,
     UnitInfo,
 )
@@ -227,10 +228,11 @@ class JujuClient:
 
     async def get_status_details(
         self, model_name: str
-    ) -> tuple[list[RelationInfo], list[OfferInfo]]:
-        """Fetch relations and offers for a model in a single connection."""
+    ) -> tuple[list[RelationInfo], list[OfferInfo], list[SAASInfo]]:
+        """Fetch relations, offers and SAAS for a model in a single connection."""
         relations: list[RelationInfo] = []
         offers: list[OfferInfo] = []
+        saas: list[SAASInfo] = []
         model = await self._controller.get_model(model_name)
         try:
             status = await model.get_status()
@@ -286,14 +288,43 @@ class JujuClient:
                             role=ep.role or "",
                         )
                     )
+            # Juju 3.6+ renamed "remote-applications" to "application-endpoints".
+            # python-libjuju doesn't know about the new field yet, so it ends up in unknown_fields.
+            app_endpoints: dict = (status.unknown_fields or {}).get("application-endpoints", {})
+            remote_apps: dict = status.remote_applications or {}
+            for remote_name, ep in app_endpoints.items():
+                offer_url = ep.get("url", "") if isinstance(ep, dict) else ""
+                store = offer_url.split(":")[0] if ":" in offer_url else "local"
+                app_status = ep.get("application-status", {}) if isinstance(ep, dict) else {}
+                saas.append(
+                    SAASInfo(
+                        model=model_name,
+                        name=remote_name,
+                        status=app_status.get("current", "") if isinstance(app_status, dict) else "",
+                        store=store,
+                        url=offer_url,
+                    )
+                )
+            for remote_name, remote_st in remote_apps.items():
+                offer_url = remote_st.offer_url or ""
+                store = offer_url.split(":")[0] if ":" in offer_url else "local"
+                saas.append(
+                    SAASInfo(
+                        model=model_name,
+                        name=remote_name,
+                        status=remote_st.status.status if remote_st.status else "",
+                        store=store,
+                        url=offer_url,
+                    )
+                )
         finally:
             await model.disconnect()
         logger.debug(
-            "Status details for model '%s': %d relations, %d offers",
-            model_name, len(relations), len(offers),
+            "Status details for model '%s': %d relations, %d offers, %d saas",
+            model_name, len(relations), len(offers), len(saas),
         )
-        return relations, offers
+        return relations, offers, saas
 
     async def get_relations(self, model_name: str) -> list[RelationInfo]:
-        relations, _ = await self.get_status_details(model_name)
+        relations, _, _ = await self.get_status_details(model_name)
         return relations
