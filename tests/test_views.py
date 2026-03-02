@@ -522,7 +522,7 @@ async def test_status_view_update_machines():
         await pilot.pause()
         table = view.query_one("#status-machines-table", ResourceTable)
         assert table.query_one("DataTable").row_count == 2
-        assert view.query_one("#status-machines-label").display is True
+        assert view.query_one("#status-machines-table").display is True
 
 
 @pytest.mark.asyncio
@@ -539,7 +539,6 @@ async def test_status_view_update_machines_hidden_for_kubernetes():
         ]
         view.update_machines(machines, is_kubernetes=True)
         await pilot.pause()
-        assert view.query_one("#status-machines-label").display is False
         assert view.query_one("#status-machines-table").display is False
 
 
@@ -554,7 +553,7 @@ async def test_status_view_update_machines_hidden_when_empty():
         await _mount_view(app, pilot, view)
         view.update_machines([])
         await pilot.pause()
-        assert view.query_one("#status-machines-label").display is False
+        assert view.query_one("#status-machines-table").display is False
 
 
 def test_colored_relation_no_colon():
