@@ -197,7 +197,7 @@ class MainScreen(Screen):
         else:
             apps = [a for a in self._all_apps if a.model == self._selected_model]
             app_names = {a.name for a in apps}
-            units = [u for u in self._all_units if u.app in app_names]
+            units = [u for u in self._all_units if u.model == self._selected_model]
             machines = [
                 m for m in self._all_machines
                 if m.model == self._selected_model

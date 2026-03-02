@@ -110,7 +110,7 @@ class JujuPoller:
         all_controllers: dict[str, ControllerInfo] = {}  # dedup by controller name
         all_models: dict[tuple[str, str], ModelInfo] = {}  # dedup by (controller, model)
         all_apps: dict[tuple[str, str], AppInfo] = {}  # dedup by (model, app)
-        all_units: dict[tuple[str, str], UnitInfo] = {}  # dedup by (app, unit)
+        all_units: dict[tuple[str, str, str], UnitInfo] = {}  # dedup by (model, app, unit)
         all_machines: dict[tuple[str, str], MachineInfo] = {}  # dedup by (model, machine)
         failed = 0
 
@@ -129,7 +129,7 @@ class JujuPoller:
                         for app in apps:
                             all_apps[(app.model, app.name)] = app
                         for unit in units:
-                            all_units[(unit.app, unit.name)] = unit
+                            all_units[(unit.model, unit.app, unit.name)] = unit
                         for machine in machines:
                             all_machines[(model_name, machine.id)] = machine
             except Exception:

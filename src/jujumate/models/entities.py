@@ -88,6 +88,7 @@ class UnitInfo:
     ports: str = ""
     message: str = ""
     subordinate_of: str = ""  # principal unit name, empty if this is a principal
+    model: str = ""
 
 
 @dataclass

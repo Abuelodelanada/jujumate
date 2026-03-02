@@ -137,6 +137,7 @@ class JujuClient:
                             UnitInfo(
                                 name=unit_name,
                                 app=app_name,
+                                model=model_name,
                                 machine=unit_st.machine or "",
                                 workload_status=unit_st.workload_status.status if unit_st.workload_status else "",
                                 agent_status=unit_st.agent_status.status if unit_st.agent_status else "",
@@ -152,6 +153,7 @@ class JujuClient:
                                 UnitInfo(
                                     name=sub_name,
                                     app=sub_app,
+                                    model=model_name,
                                     machine=unit_st.machine or "",
                                     workload_status=sub_st.workload_status.status if sub_st.workload_status else "",
                                     agent_status=sub_st.agent_status.status if sub_st.agent_status else "",
