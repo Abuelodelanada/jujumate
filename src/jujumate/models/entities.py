@@ -129,3 +129,15 @@ class MachineInfo:
     base: str
     az: str
     message: str = ""
+
+
+@dataclass
+class SecretInfo:
+    uri: str
+    label: str
+    owner: str
+    description: str
+    revision: int
+    rotate_policy: str
+    created: str
+    updated: str

@@ -13,6 +13,7 @@ from jujumate.models.entities import (
     RelationDataEntry,
     RelationInfo,
     SAASInfo,
+    SecretInfo,
     UnitInfo,
 )
 
@@ -330,6 +331,32 @@ class JujuClient:
             model_name, len(relations), len(offers), len(saas),
         )
         return relations, offers, saas
+
+    async def get_secrets(self, model_name: str) -> list[SecretInfo]:
+        """Fetch all secrets visible in the given model."""
+        secrets: list[SecretInfo] = []
+        model = await self._controller.get_model(model_name)
+        try:
+            results = await model.list_secrets()
+            for s in (results or []):
+                owner = getattr(s, "owner_tag", "") or ""
+                # Strip "application-" / "model-" prefix from owner tag
+                if "-" in owner:
+                    owner = owner.split("-", 1)[1]
+                secrets.append(SecretInfo(
+                    uri=getattr(s, "uri", "") or "",
+                    label=getattr(s, "label", "") or "",
+                    owner=owner,
+                    description=getattr(s, "description", "") or "",
+                    revision=getattr(s, "latest_revision", 0) or 0,
+                    rotate_policy=getattr(s, "rotate_policy", "") or "",
+                    created=getattr(s, "create_time", "") or "",
+                    updated=getattr(s, "update_time", "") or "",
+                ))
+        finally:
+            await model.disconnect()
+        logger.debug("Secrets for '%s': %d entries", model_name, len(secrets))
+        return secrets
 
     async def get_app_config(self, model_name: str, app_name: str) -> list[AppConfigEntry]:
         """Fetch configuration entries for an application."""

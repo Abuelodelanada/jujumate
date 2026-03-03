@@ -18,6 +18,7 @@ HELP_TEXT = """\
 [bold cyan]Actions[/bold cyan]
   [bold]Enter[/bold]   Drill-down / view app config or relation data
   [bold]/[/bold]       Filter (Status tab) — Esc to clear
+  [bold]S[/bold]       Secrets (requires model selected)
   [bold]r[/bold]       Refresh data
   [bold]y[/bold]       Copy relation data to clipboard
   [bold]Esc[/bold]     Clear filter

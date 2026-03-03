@@ -38,6 +38,7 @@ from jujumate.models.entities import (
 from jujumate.screens.app_config_screen import AppConfigScreen
 from jujumate.screens.help_screen import HelpScreen
 from jujumate.screens.relation_data_screen import RelationDataScreen
+from jujumate.screens.secrets_screen import SecretsScreen
 from jujumate.settings import AppSettings, load_settings
 from jujumate.widgets.clouds_view import CloudsView
 from jujumate.widgets.controllers_view import ControllersView
@@ -54,6 +55,7 @@ class MainScreen(Screen):
         Binding("C", "switch_tab('tab-controllers')", "Controllers"),
         Binding("m", "switch_tab('tab-models')", "Models"),
         Binding("s", "switch_tab('tab-status')", "Status"),
+        Binding("S", "show_secrets", "Secrets", show=False),
         Binding("r", "refresh_data", "Refresh"),
         Binding("escape", "clear_filter", "Clear filter", show=False),
         Binding("question_mark", "show_help", "Help"),
@@ -157,6 +159,12 @@ class MainScreen(Screen):
 
     def action_show_help(self) -> None:
         self.app.push_screen(HelpScreen())
+
+    def action_show_secrets(self) -> None:
+        if not self._selected_controller or not self._selected_model:
+            self.notify("Select a model first", severity="warning")
+            return
+        self.app.push_screen(SecretsScreen(self._selected_controller, self._selected_model))
 
     # ── Filter helpers ────────────────────────────────────────────────────────
 
