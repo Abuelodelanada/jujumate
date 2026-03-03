@@ -17,11 +17,9 @@ from jujumate.models.entities import RelationDataEntry, RelationInfo
 logger = logging.getLogger(__name__)
 
 # Ubuntu palette
-_C_PROVIDER = "#19B6EE"   # Cyan  — provider side
-_C_REQUIRER = "#E95420"   # Orange — requirer side
+_C_PROVIDER = "#77216F"   # Aubergine — provider side
+_C_REQUIRER = "#E95420"   # Ubuntu Orange — requirer side
 _C_PEER     = "#EFB73E"   # Yellow — peer side
-_C_APP      = "#EFB73E"   # Yellow — app-level bag label
-_C_UNIT     = "#26A269"   # Green  — unit-level bag label
 _C_KEY      = "bold white"
 _C_META     = "dim"
 
@@ -105,10 +103,10 @@ def _build_relation_renderable(
     # ── Application data row ─────────────────────────────────────────────────
     app_cells = []
     for app, color in zip(apps, colors):
-        label = Text("application data", style=f"bold {_C_APP}")
+        label = Text("application data", style=f"bold {color}")
         bag_panel = Panel(
             _kv_table(app_bags[app]),
-            border_style=_C_APP,
+            border_style=color,
             expand=True,
         )
         app_cells.append(Group(label, bag_panel))
@@ -118,7 +116,7 @@ def _build_relation_renderable(
     unit_cells = []
     for app, color in zip(apps, colors):
         units = unit_bags[app]
-        label = Text("unit data", style=f"bold {_C_UNIT}")
+        label = Text("unit data", style=f"bold {color}")
         if units:
             panels = [_unit_panel(u, d, False, color) for u, d in sorted(units.items())]
             unit_cells.append(Group(label, *panels))
