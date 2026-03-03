@@ -260,7 +260,6 @@ class RelationDataView(Widget):
         self.query_one("#rd-scroll").display = False
 
     def action_copy_to_clipboard(self) -> None:
-        """Copy current relation data as plain text to the system clipboard."""
         if not self._current_relation or not self._current_entries:
             self.notify("No relation data to copy", severity="warning")
             return

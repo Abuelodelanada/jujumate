@@ -10,8 +10,6 @@ from textual.widgets import TabbedContent, TabPane
 
 from jujumate.client.juju_client import JujuClient
 from jujumate.client.watcher import (
-    AppConfigFetchError,
-    AppConfigFetched,
     AppsUpdated,
     CloudsUpdated,
     ConnectionFailed,
@@ -21,8 +19,6 @@ from jujumate.client.watcher import (
     MachinesUpdated,
     ModelsUpdated,
     OffersUpdated,
-    RelationDataFetchError,
-    RelationDataUpdated,
     RelationsUpdated,
     SaasUpdated,
     UnitsUpdated,
@@ -39,14 +35,14 @@ from jujumate.models.entities import (
     SAASInfo,
     UnitInfo,
 )
+from jujumate.screens.app_config_screen import AppConfigScreen
 from jujumate.screens.help_screen import HelpScreen
+from jujumate.screens.relation_data_screen import RelationDataScreen
 from jujumate.settings import AppSettings, load_settings
-from jujumate.widgets.app_config_view import AppConfigView
 from jujumate.widgets.clouds_view import CloudsView
 from jujumate.widgets.controllers_view import ControllersView
 from jujumate.widgets.jujumate_header import HeaderContext, JujuMateHeader
 from jujumate.widgets.models_view import ModelsView
-from jujumate.widgets.relation_data_view import RelationDataView
 from jujumate.widgets.status_view import StatusView
 
 logger = logging.getLogger(__name__)
@@ -58,7 +54,6 @@ class MainScreen(Screen):
         Binding("C", "switch_tab('tab-controllers')", "Controllers"),
         Binding("m", "switch_tab('tab-models')", "Models"),
         Binding("s", "switch_tab('tab-status')", "Status"),
-        Binding("d", "switch_tab('tab-relation-data')", "Rel. Data", show=False),
         Binding("r", "refresh_data", "Refresh"),
         Binding("escape", "clear_filter", "Clear filter", show=False),
         Binding("question_mark", "show_help", "Help"),
@@ -101,15 +96,8 @@ class MainScreen(Screen):
                 yield ModelsView(id="models-view")
             with TabPane("Status", id="tab-status"):
                 yield StatusView(id="status-view")
-            with TabPane("Relation Data", id="tab-relation-data"):
-                yield RelationDataView(id="relation-data-view")
-            with TabPane("App Config", id="tab-app-config"):
-                yield AppConfigView(id="app-config-view")
 
     def on_mount(self) -> None:
-        tc = self.query_one(TabbedContent)
-        tc.hide_tab("tab-relation-data")
-        tc.hide_tab("tab-app-config")
         self.run_worker(self._connect_and_poll(), exclusive=True)
 
     async def _connect_and_poll(self) -> None:
@@ -141,15 +129,11 @@ class MainScreen(Screen):
             self._poll_timer.stop()
 
     def action_switch_tab(self, tab_id: str) -> None:
-        self.query_one(TabbedContent).active = tab_id
+        tc = self.query_one(TabbedContent)
+        tc.active = tab_id
         self._refresh_header()
 
     def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
-        pane_id = event.pane.id if event.pane else ""
-        if pane_id not in ("tab-relation-data", "tab-app-config"):
-            tc = self.query_one(TabbedContent)
-            tc.hide_tab("tab-relation-data")
-            tc.hide_tab("tab-app-config")
         self._refresh_header()
 
     async def action_refresh_data(self) -> None:
@@ -416,84 +400,16 @@ class MainScreen(Screen):
             logger.exception("Failed to fetch status details for model '%s'", model_name)
 
     def on_status_view_app_selected(self, message: StatusView.AppSelected) -> None:
-        """User pressed Enter on an app — fetch its config and switch tab."""
-        app = message.app
         if not self._selected_controller or not self._selected_model:
             return
-        tc = self.query_one(TabbedContent)
-        tc.show_tab("tab-app-config")
-        self.query_one("#app-config-view", AppConfigView).show_loading(app)
-        self.action_switch_tab("tab-app-config")
-        self._fetch_app_config(self._selected_controller, self._selected_model, app)
-
-    @work(exclusive=True)
-    async def _fetch_app_config(
-        self, controller_name: str, model_name: str, app: AppInfo
-    ) -> None:
-        try:
-            async with JujuClient(controller_name=controller_name) as client:
-                entries = await client.get_app_config(model_name, app.name)
-            self.post_message(AppConfigFetched(app=app, entries=entries))
-        except Exception as exc:
-            logger.exception("Failed to fetch config for app '%s'", app.name)
-            self.post_message(AppConfigFetchError(app=app, error=str(exc)))
-
-    def on_app_config_fetched(self, message: AppConfigFetched) -> None:
-        self.query_one("#app-config-view", AppConfigView).update(message.app, message.entries)
-
-    def on_app_config_fetch_error(self, message: AppConfigFetchError) -> None:
-        self.query_one("#app-config-view", AppConfigView).show_error(message.app, message.error)
+        self.app.push_screen(AppConfigScreen(self._selected_controller, self._selected_model, message.app))
 
     def on_status_view_relation_selected(self, message: StatusView.RelationSelected) -> None:
-        """User pressed Enter on a relation — fetch its data bags and switch tab."""
         relation = message.relation
         if not self._selected_controller or not relation.relation_id:
             return
-        tc = self.query_one(TabbedContent)
-        tc.show_tab("tab-relation-data")
-        self.query_one("#relation-data-view", RelationDataView).show_loading(relation)
-        self.action_switch_tab("tab-relation-data")
-        provider_app = relation.provider.split(":")[0]
-        requirer_app = relation.requirer.split(":")[0]
-        self._fetch_relation_data(
+        self.app.push_screen(RelationDataScreen(
             self._selected_controller,
             relation.model or self._selected_model or "",
             relation,
-            provider_app,
-            requirer_app,
-        )
-
-    @work(exclusive=True)
-    async def _fetch_relation_data(
-        self,
-        controller_name: str,
-        model_name: str,
-        relation: RelationInfo,
-        provider_app: str,
-        requirer_app: str,
-    ) -> None:
-        try:
-            async with JujuClient(controller_name=controller_name) as client:
-                entries = await client.get_relation_data(
-                    model_name, relation.relation_id, provider_app, requirer_app
-                )
-            logger.debug(
-                "Fetched relation data for relation %d: %d entries",
-                relation.relation_id, len(entries),
-            )
-            self.post_message(RelationDataUpdated(relation=relation, entries=entries))
-        except Exception as exc:
-            logger.exception(
-                "Failed to fetch relation data for relation %d", relation.relation_id
-            )
-            self.post_message(RelationDataFetchError(relation=relation, error=str(exc)))
-
-    def on_relation_data_updated(self, message: RelationDataUpdated) -> None:
-        self.query_one("#relation-data-view", RelationDataView).update(
-            message.relation, message.entries
-        )
-
-    def on_relation_data_fetch_error(self, message: RelationDataFetchError) -> None:
-        self.query_one("#relation-data-view", RelationDataView).show_error(
-            message.relation, message.error
-        )
+        ))

@@ -560,7 +560,8 @@ class StatusView(Widget):
     def check_action(self, action: str, parameters: tuple) -> bool | None:
         if action == "close_filter":
             try:
-                return self.query_one("#filter-input", Input).display
+                fi = self.query_one("#filter-input", Input)
+                return fi.display or bool(self._filter)
             except Exception:
                 return False
         return True

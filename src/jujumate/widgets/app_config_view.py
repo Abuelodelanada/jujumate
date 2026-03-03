@@ -176,7 +176,6 @@ class AppConfigView(Widget):
         self.query_one("#ac-scroll").display = False
 
     def action_copy_to_clipboard(self) -> None:
-        """Copy current app config as plain text to clipboard."""
         if not self._current_app:
             self.notify("No config to copy", severity="warning")
             return
