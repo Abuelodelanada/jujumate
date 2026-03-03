@@ -2,12 +2,14 @@ import logging
 from typing import Any
 
 from rich.text import Text
+from textual import on
 from textual.app import ComposeResult
+from textual.binding import Binding
 from textual.containers import VerticalScroll
 from textual.message import Message
 from textual.reactive import reactive
 from textual.widget import Widget
-from textual.widgets import DataTable, Label
+from textual.widgets import DataTable, Input, Label
 
 from jujumate.models.entities import AppInfo, MachineInfo, OfferInfo, RelationInfo, SAASInfo, UnitInfo
 from jujumate.widgets.resource_table import Column, ResourceTable
@@ -123,6 +125,14 @@ _MACHINE_COLUMNS = [
 _MSG_TRUNC_WIDTH = 60
 
 
+def _matches_filter(text: str, *fields: Any) -> bool:
+    """Return True if *text* is a case-insensitive substring of any field, or text is empty."""
+    if not text:
+        return True
+    lf = text.lower()
+    return any(lf in str(f).lower() for f in fields)
+
+
 def _trunc_msg(text: str) -> str:
     """Truncate a message to _MSG_TRUNC_WIDTH chars, appending … if needed."""
     if len(text) <= _MSG_TRUNC_WIDTH:
@@ -153,6 +163,11 @@ class _TrackedScroll(VerticalScroll):
 
 class StatusView(Widget):
     """Displays a juju-status–style overview for the selected model."""
+
+    BINDINGS = [
+        Binding("/", "activate_filter", show=False),
+        Binding("escape", "close_filter", show=False),
+    ]
 
     class RelationSelected(Message):
         """Posted when the user presses Enter on a relation row."""
@@ -196,6 +211,13 @@ class StatusView(Widget):
         height: 1fr;
         scrollbar-size: 0 0;
     }
+    StatusView #filter-input {
+        display: none;
+        height: 1;
+        border: none;
+        padding: 0 2;
+        background: $boost;
+    }
     StatusView #msg-bar {
         height: 1;
         width: 100%;
@@ -213,6 +235,7 @@ class StatusView(Widget):
     """
 
     _show_more: reactive[bool] = reactive(False)
+    _filter: reactive[str] = reactive("", init=False)
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
@@ -221,6 +244,14 @@ class StatusView(Widget):
         self._last_active_table: str = ""
         self._relations: list[RelationInfo] = []
         self._apps: list[AppInfo] = []
+        self._all_saas: list[SAASInfo] = []
+        self._all_units: list[UnitInfo] = []
+        self._all_machines: list[MachineInfo] = []
+        self._all_offers: list[OfferInfo] = []
+        self._all_relations: list[RelationInfo] = []
+        self._displayed_apps: list[AppInfo] = []
+        self._displayed_relations: list[RelationInfo] = []
+        self._is_kubernetes: bool = False
 
     def compose(self) -> ComposeResult:
         with _TrackedScroll(id="status-scroll"):
@@ -242,6 +273,7 @@ class StatusView(Widget):
             t = ResourceTable(columns=_REL_COLUMNS, id="status-rels-table")
             t.border_title = "Integrations"
             yield t
+        yield Input(placeholder="/ Filter…", id="filter-input")
         yield Label("", id="msg-bar")
         yield Label("▼ more below", id="scroll-indicator")
 
@@ -270,9 +302,18 @@ class StatusView(Widget):
             pass
 
     def update_apps(self, apps: list[AppInfo]) -> None:
+        self._apps = apps
+        self._render_apps()
+
+    def _render_apps(self) -> None:
+        filtered = [
+            a for a in self._apps
+            if _matches_filter(self._filter, a.name, a.charm, a.channel, a.status, a.message)
+        ]
+        self._displayed_apps = filtered
         rows = []
         full_msgs = []
-        for a in apps:
+        for a in filtered:
             rows.append((
                 a.name,
                 a.version,
@@ -286,25 +327,45 @@ class StatusView(Widget):
                 _trunc_msg(a.message),
             ))
             full_msgs.append(a.message)
-        self._apps = apps
         self._row_messages["status-apps-table"] = full_msgs
         self.query_one("#status-apps-table", ResourceTable).update_rows(rows)
         self._restore_cursor("status-apps-table", len(full_msgs))
         logger.debug("StatusView apps updated: %d rows", len(rows))
 
     def update_saas(self, saas: list[SAASInfo]) -> None:
-        rows = [(s.name, _colored_status(s.status), s.store, s.url) for s in saas]
+        self._all_saas = saas
+        self._render_saas()
+
+    def _render_saas(self) -> None:
+        filtered = [
+            s for s in self._all_saas
+            if _matches_filter(self._filter, s.name, s.status, s.store, s.url)
+        ]
+        rows = [(s.name, _colored_status(s.status), s.store, s.url) for s in filtered]
         has_saas = bool(rows)
         self.query_one("#status-saas-table").display = has_saas
         self.query_one("#status-saas-table", ResourceTable).update_rows(rows)
         logger.debug("StatusView SAAS updated: %d rows", len(rows))
 
     def update_units(self, units: list[UnitInfo], is_kubernetes: bool = False) -> None:
+        self._all_units = units
+        self._is_kubernetes = is_kubernetes
+        self._render_units()
+
+    def _render_units(self) -> None:
         table = self.query_one("#status-units-table", ResourceTable)
-        ordered = _group_units(units)
+        filtered = [
+            u for u in self._all_units
+            if _matches_filter(
+                self._filter,
+                u.name, u.workload_status, u.agent_status,
+                u.machine, u.public_address, u.address, u.message,
+            )
+        ]
+        ordered = _group_units(filtered)
         rows = []
         full_msgs = []
-        if is_kubernetes:
+        if self._is_kubernetes:
             table.reset_columns(_UNIT_COLUMNS_K8S)
             for u in ordered:
                 name = f"  {u.name}" if u.subordinate_of else u.name
@@ -330,14 +391,22 @@ class StatusView(Widget):
         self._row_messages["status-units-table"] = full_msgs
         table.update_rows(rows)
         self._restore_cursor("status-units-table", len(full_msgs))
-        logger.debug("StatusView units updated: %d rows (k8s=%s)", len(rows), is_kubernetes)
+        logger.debug("StatusView units updated: %d rows (k8s=%s)", len(rows), self._is_kubernetes)
 
     def update_offers(self, offers: list[OfferInfo]) -> None:
-        has_offers = bool(offers)
+        self._all_offers = offers
+        self._render_offers()
+
+    def _render_offers(self) -> None:
+        filtered = [
+            o for o in self._all_offers
+            if _matches_filter(self._filter, o.name, o.application, o.charm, o.endpoint, o.interface)
+        ]
+        has_offers = bool(filtered)
         self.query_one("#status-offers-table").display = has_offers
         rows = [
             (o.name, o.application, o.charm, str(o.rev), o.connected, o.endpoint, o.interface, o.role)
-            for o in offers
+            for o in filtered
         ]
         self.query_one("#status-offers-table", ResourceTable).update_rows(rows)
         self._restore_cursor("status-offers-table", len(rows))
@@ -346,14 +415,25 @@ class StatusView(Widget):
     def update_machines(
         self, machines: list[MachineInfo], is_kubernetes: bool = False
     ) -> None:
-        show = bool(machines) and not is_kubernetes
+        self._all_machines = machines
+        self._is_kubernetes = is_kubernetes
+        self._render_machines()
+
+    def _render_machines(self) -> None:
+        show = bool(self._all_machines) and not self._is_kubernetes
         self.query_one("#status-machines-table").display = show
         if not show:
             self.query_one("#status-machines-table", ResourceTable).update_rows([])
             return
+        filtered = [
+            m for m in self._all_machines
+            if _matches_filter(
+                self._filter, m.id, m.state, m.address, m.instance_id, m.base, m.az, m.message
+            )
+        ]
         rows = []
         full_msgs = []
-        for m in machines:
+        for m in filtered:
             rows.append((
                 m.id, _colored_status(m.state), _colored_ip(m.address), m.instance_id, m.base, m.az,
                 _trunc_msg(m.message),
@@ -415,10 +495,19 @@ class StatusView(Widget):
             pass
 
     def update_relations(self, relations: list[RelationInfo]) -> None:
-        self._relations = relations
+        self._all_relations = relations
+        self._render_relations()
+
+    def _render_relations(self) -> None:
+        filtered = [
+            r for r in self._all_relations
+            if _matches_filter(self._filter, r.provider, r.requirer, r.interface, r.type)
+        ]
+        self._displayed_relations = filtered
+        self._relations = filtered
         rows = [
             (_colored_relation(r.provider), _colored_relation(r.requirer), r.interface, r.type)
-            for r in relations
+            for r in filtered
         ]
         table = self.query_one("#status-rels-table", ResourceTable)
         table.display = bool(rows)
@@ -433,10 +522,71 @@ class StatusView(Widget):
             table_id = getattr(table_widget, "id", None)
             idx = event.cursor_row
             if table_id == "status-rels-table":
-                if 0 <= idx < len(self._relations):
-                    self.post_message(StatusView.RelationSelected(self._relations[idx]))
+                if 0 <= idx < len(self._displayed_relations):
+                    self.post_message(StatusView.RelationSelected(self._displayed_relations[idx]))
             elif table_id == "status-apps-table":
-                if 0 <= idx < len(self._apps):
-                    self.post_message(StatusView.AppSelected(self._apps[idx]))
+                if 0 <= idx < len(self._displayed_apps):
+                    self.post_message(StatusView.AppSelected(self._displayed_apps[idx]))
+        except Exception:
+            pass
+
+    def _rerender_all(self) -> None:
+        """Re-apply the current filter to all tables."""
+        try:
+            self._render_apps()
+        except Exception:
+            pass
+        try:
+            self._render_saas()
+        except Exception:
+            pass
+        try:
+            self._render_units()
+        except Exception:
+            pass
+        try:
+            self._render_offers()
+        except Exception:
+            pass
+        try:
+            self._render_machines()
+        except Exception:
+            pass
+        try:
+            self._render_relations()
+        except Exception:
+            pass
+
+    def check_action(self, action: str, parameters: tuple) -> bool | None:
+        if action == "close_filter":
+            try:
+                return self.query_one("#filter-input", Input).display
+            except Exception:
+                return False
+        return True
+
+    def action_activate_filter(self) -> None:
+        fi = self.query_one("#filter-input", Input)
+        fi.display = True
+        fi.focus()
+
+    def action_close_filter(self) -> None:
+        fi = self.query_one("#filter-input", Input)
+        fi.value = ""
+        self._filter = ""
+        fi.display = False
+        self._rerender_all()
+
+    @on(Input.Changed, "#filter-input")
+    def _on_filter_changed(self, event: Input.Changed) -> None:
+        self._filter = event.value
+        self._rerender_all()
+
+    @on(Input.Submitted, "#filter-input")
+    def _on_filter_submitted(self, event: Input.Submitted) -> None:
+        fi = self.query_one("#filter-input", Input)
+        fi.display = False
+        try:
+            self.query_one("#status-apps-table DataTable", DataTable).focus()
         except Exception:
             pass
