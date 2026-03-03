@@ -1,23 +1,66 @@
-"""Modal screen showing all secrets for the selected model."""
+"""Modal screens for secrets list and secret detail."""
 
 import logging
 
-from rich import box as rich_box
-from rich.table import Table
 from rich.text import Text
 from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import VerticalScroll
+from textual.containers import Vertical
 from textual.screen import ModalScreen
-from textual.widgets import Label, Static
+from textual.widgets import DataTable, Label
 
 from jujumate.client.juju_client import JujuClient
 from jujumate.models.entities import SecretInfo
 
 logger = logging.getLogger(__name__)
 
-_HEADER_COLOR = "#E95420"
+
+class SecretDetailScreen(ModalScreen):
+    """Modal overlay showing full details of a single secret."""
+
+    BINDINGS = [Binding("escape", "dismiss", show=False)]
+
+    DEFAULT_CSS = """
+    SecretDetailScreen {
+        align: center middle;
+    }
+    SecretDetailScreen #detail-panel {
+        width: 70%;
+        height: auto;
+        background: $surface;
+        border: round $accent;
+        padding: 1 2;
+    }
+    SecretDetailScreen #detail-title {
+        text-style: bold;
+        color: $accent;
+        padding-bottom: 1;
+    }
+    SecretDetailScreen .detail-row {
+        height: auto;
+    }
+    """
+
+    def __init__(self, secret: SecretInfo) -> None:
+        super().__init__()
+        self._secret = secret
+
+    def compose(self) -> ComposeResult:
+        s = self._secret
+        with Vertical(id="detail-panel"):
+            yield Label(f"Secret — {s.label or s.uri}", id="detail-title")
+            for field, value in [
+                ("URI", s.uri),
+                ("Label", s.label or "—"),
+                ("Owner", s.owner or "—"),
+                ("Revision", str(s.revision)),
+                ("Rotation policy", s.rotate_policy or "—"),
+                ("Created", s.created or "—"),
+                ("Updated", s.updated or "—"),
+                ("Description", s.description or "—"),
+            ]:
+                yield Label(f"[bold]{field}:[/bold]  {value}", classes="detail-row")
 
 
 class SecretsScreen(ModalScreen):
@@ -41,15 +84,14 @@ class SecretsScreen(ModalScreen):
         color: $accent;
         padding-bottom: 1;
     }
-    SecretsScreen #secrets-body {
-        height: 1fr;
-        scrollbar-size-vertical: 0;
-    }
     SecretsScreen #secrets-loading {
         height: 1fr;
         content-align: center middle;
         color: $text-muted;
         text-style: italic;
+    }
+    SecretsScreen DataTable {
+        height: 1fr;
     }
     """
 
@@ -57,15 +99,18 @@ class SecretsScreen(ModalScreen):
         super().__init__()
         self._controller_name = controller_name
         self._model_name = model_name
+        self._secrets: list[SecretInfo] = []
 
     def compose(self) -> ComposeResult:
-        with VerticalScroll(id="secrets-panel"):
+        with Vertical(id="secrets-panel"):
             yield Label(f"Secrets — {self._model_name}", id="secrets-title")
             yield Label("Loading…", id="secrets-loading")
-            yield Static("", id="secrets-body")
+            yield DataTable(id="secrets-table", show_cursor=True, cursor_type="row")
 
     def on_mount(self) -> None:
-        self.query_one("#secrets-body").display = False
+        dt = self.query_one("#secrets-table", DataTable)
+        dt.add_columns("URI", "Label", "Owner", "Rev", "Rotation", "Description")
+        dt.display = False
         self._fetch(self._controller_name, self._model_name)
 
     @work
@@ -79,43 +124,32 @@ class SecretsScreen(ModalScreen):
             self._show_error(str(exc))
 
     def _populate(self, secrets: list[SecretInfo]) -> None:
-        self.query_one("#secrets-loading").display = False
-        body = self.query_one("#secrets-body", Static)
+        self._secrets = secrets
+        loading = self.query_one("#secrets-loading")
+        loading.display = False
+        dt = self.query_one("#secrets-table", DataTable)
         if not secrets:
-            body.update(Text("No secrets found.", style="dim italic"))
-            body.display = True
+            loading.update("No secrets found.")
+            loading.display = True
             return
-
-        t = Table(
-            box=rich_box.SIMPLE_HEAD,
-            show_header=True,
-            expand=True,
-            header_style=f"bold {_HEADER_COLOR}",
-            border_style="dim",
-            padding=(0, 1, 1, 1),
-        )
-        t.add_column("URI")
-        t.add_column("Label", width=20)
-        t.add_column("Owner", width=20)
-        t.add_column("Rev", width=5)
-        t.add_column("Rotation", width=12)
-        t.add_column("Description")
-
-        for s in secrets:
-            t.add_row(
+        for i, s in enumerate(secrets):
+            dt.add_row(
                 Text(s.uri, style="#19B6EE"),
                 s.label or "—",
                 s.owner or "—",
                 str(s.revision),
                 s.rotate_policy or "—",
                 s.description or "—",
+                key=str(i),
             )
+        dt.display = True
 
-        body.update(t)
-        body.display = True
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        idx = int(str(event.row_key.value))
+        if 0 <= idx < len(self._secrets):
+            self.app.push_screen(SecretDetailScreen(self._secrets[idx]))
 
     def _show_error(self, error: str) -> None:
-        self.query_one("#secrets-loading").display = False
-        body = self.query_one("#secrets-body", Static)
-        body.update(Text(f"Error: {error}", style="bold red"))
-        body.display = True
+        loading = self.query_one("#secrets-loading")
+        loading.update(Text(f"Error: {error}", style="bold red"))
+        loading.display = True

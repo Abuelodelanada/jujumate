@@ -43,7 +43,7 @@ class HelpScreen(ModalScreen):
     }
 
     HelpScreen #help-panel {
-        width: 42;
+        width: 60;
         height: auto;
         max-height: 80%;
         padding: 1 2;
