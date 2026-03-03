@@ -240,7 +240,7 @@ class StatusView(Widget):
             t.border_title = "Offers"
             yield t
             t = ResourceTable(columns=_REL_COLUMNS, id="status-rels-table")
-            t.border_title = "Relations"
+            t.border_title = "Integrations"
             yield t
         yield Label("", id="msg-bar")
         yield Label("▼ more below", id="scroll-indicator")
