@@ -330,6 +330,7 @@ class StatusView(Widget):
             for o in offers
         ]
         self.query_one("#status-offers-table", ResourceTable).update_rows(rows)
+        self._restore_cursor("status-offers-table", len(rows))
         logger.debug("StatusView offers updated: %d rows", len(rows))
 
     def update_machines(
@@ -410,6 +411,7 @@ class StatusView(Widget):
             for r in relations
         ]
         self.query_one("#status-rels-table", ResourceTable).update_rows(rows)
+        self._restore_cursor("status-rels-table", len(rows))
         logger.debug("StatusView relations updated: %d rows", len(rows))
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:

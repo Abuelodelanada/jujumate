@@ -126,8 +126,16 @@ class MainScreen(Screen):
             logger.info("Will auto-select model '%s' after first poll", juju_config.current_model)
         await self._poller.poll_once()
         self._poll_timer = self.set_interval(
-            self._settings.refresh_interval, self._poller.poll_once
+            self._settings.refresh_interval, self._periodic_poll
         )
+
+    async def _periodic_poll(self) -> None:
+        """Timer callback: only poll if the Status tab is currently active."""
+        if not self._poller:
+            return
+        active_tab = self.query_one(TabbedContent).active
+        if active_tab == "tab-status":
+            await self._poller.poll_once()
 
     async def on_unmount(self) -> None:
         if self._poll_timer is not None:
