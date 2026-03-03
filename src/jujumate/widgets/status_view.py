@@ -180,11 +180,11 @@ class StatusView(Widget):
     }
     StatusView ResourceTable {
         height: auto;
-        border: tall $accent;
+        border: solid $accent;
         border-title-color: $accent;
         border-title-style: bold;
-        margin-bottom: 1;
-        padding: 0 1;
+        margin-bottom: 0;
+        padding: 1 1 0 1;
     }
     StatusView DataTable {
         height: auto;
