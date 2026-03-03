@@ -58,21 +58,12 @@ async def test_keybinding_m_switches_to_models():
 
 
 @pytest.mark.asyncio
-async def test_keybinding_a_switches_to_apps():
+async def test_keybinding_s_switches_to_status():
     app = JujuMateApp()
     async with app.run_test() as pilot:
         await pilot.pause()
-        await pilot.press("a")
-        assert app.screen.query_one(TabbedContent).active == "tab-apps"
-
-
-@pytest.mark.asyncio
-async def test_keybinding_u_switches_to_units():
-    app = JujuMateApp()
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        await pilot.press("u")
-        assert app.screen.query_one(TabbedContent).active == "tab-units"
+        await pilot.press("s")
+        assert app.screen.query_one(TabbedContent).active == "tab-status"
 
 
 @pytest.mark.asyncio
@@ -275,7 +266,6 @@ async def test_controller_selected_switches_to_models_and_filters():
 
 @pytest.mark.asyncio
 async def test_model_selected_switches_to_status_and_filters():
-    from jujumate.widgets.apps_view import AppsView
     from jujumate.widgets.models_view import ModelsView
     from jujumate.widgets.status_view import StatusView
 
@@ -297,32 +287,9 @@ async def test_model_selected_switches_to_status_and_filters():
             await pilot.pause()
             await pilot.pause()
         assert app.screen.query_one(TabbedContent).active == "tab-status"
-        # Apps tab still filtered by model
-        apps_view = screen.query_one("#apps-view", AppsView)
-        assert apps_view.query_one("DataTable").row_count == 1
         # Status view shows apps for selected model
         status_view = screen.query_one("#status-view", StatusView)
         assert status_view.query_one("#status-apps-table DataTable").row_count == 1
-
-
-@pytest.mark.asyncio
-async def test_app_selected_switches_to_units_and_filters():
-    from jujumate.widgets.apps_view import AppsView
-    from jujumate.widgets.units_view import UnitsView
-
-    app = JujuMateApp()
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        screen = app.screen
-        screen._all_units = [
-            UnitInfo("pg/0", "pg", "0", "active", "idle"),
-            UnitInfo("mysql/0", "mysql", "0", "active", "idle"),
-        ]
-        screen.on_apps_view_app_selected(AppsView.AppSelected(name="pg"))
-        await pilot.pause()
-        assert app.screen.query_one(TabbedContent).active == "tab-units"
-        units_view = screen.query_one("#units-view", UnitsView)
-        assert units_view.query_one("DataTable").row_count == 1
 
 
 @pytest.mark.asyncio

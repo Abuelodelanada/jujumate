@@ -3,12 +3,10 @@ from textual.widgets import DataTable, Label, TabbedContent
 
 from jujumate.app import JujuMateApp
 from jujumate.models.entities import AppInfo, CloudInfo, ControllerInfo, MachineInfo, ModelInfo, UnitInfo
-from jujumate.widgets.apps_view import AppsView
 from jujumate.widgets.clouds_view import CloudsView
 from jujumate.widgets.controllers_view import ControllersView
 from jujumate.widgets.models_view import ModelsView
 from jujumate.widgets.resource_table import ResourceTable
-from jujumate.widgets.units_view import UnitsView
 
 
 async def _mount_view(app, pilot, view):
@@ -72,28 +70,6 @@ async def test_models_view_without_region():
 
 
 @pytest.mark.asyncio
-async def test_apps_view_update():
-    app = JujuMateApp()
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        view = AppsView(id="test-apps")
-        await _mount_view(app, pilot, view)
-        view.update([AppInfo("postgresql", "dev", "postgresql", "14/stable", 363, 2, "active")])
-        assert view.query_one(ResourceTable).query_one("DataTable").row_count == 1
-
-
-@pytest.mark.asyncio
-async def test_units_view_update():
-    app = JujuMateApp()
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        view = UnitsView(id="test-units")
-        await _mount_view(app, pilot, view)
-        view.update([UnitInfo("postgresql/0", "postgresql", "0", "active", "idle", "10.0.0.1")])
-        assert view.query_one(ResourceTable).query_one("DataTable").row_count == 1
-
-
-@pytest.mark.asyncio
 async def test_clouds_view_emits_cloud_selected():
     received: list[CloudsView.CloudSelected] = []
     app = JujuMateApp()
@@ -139,19 +115,6 @@ async def test_models_view_emits_model_selected():
         view = ModelsView(id="test-models")
         await _mount_view(app, pilot, view)
         view.update([ModelInfo("dev", "prod", "aws", "", "available")])
-        await pilot.pause()
-        dt = view.query_one(DataTable)
-        assert dt.row_count == 1
-
-
-@pytest.mark.asyncio
-async def test_apps_view_emits_app_selected():
-    app = JujuMateApp()
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        view = AppsView(id="test-apps")
-        await _mount_view(app, pilot, view)
-        view.update([AppInfo("pg", "dev", "pg", "14/stable", 1)])
         await pilot.pause()
         dt = view.query_one(DataTable)
         assert dt.row_count == 1
@@ -224,29 +187,6 @@ async def test_models_view_row_selection_posts_model_selected():
         assert len(posted) == 1
         assert isinstance(posted[0], ModelsView.ModelSelected)
         assert posted[0].name == "dev"
-
-
-@pytest.mark.asyncio
-async def test_apps_view_row_selection_posts_app_selected():
-    from unittest.mock import MagicMock, patch
-
-    app = JujuMateApp()
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        view = AppsView(id="test-apps2")
-        await _mount_view(app, pilot, view)
-        view.update([AppInfo("pg", "dev", "pg", "14/stable", 1)])
-        await pilot.pause()
-
-        event = MagicMock()
-        event.row_key.value = "pg"
-        posted: list = []
-        with patch.object(view, "post_message", side_effect=posted.append):
-            view.on_data_table_row_selected(event)
-
-        assert len(posted) == 1
-        assert isinstance(posted[0], AppsView.AppSelected)
-        assert posted[0].name == "pg"
 
 
 @pytest.mark.asyncio
@@ -375,8 +315,6 @@ def test_jujumate_header_stats_by_tab():
         ("tab-clouds", {"cloud_count": 3}, "clouds", "3"),
         ("tab-controllers", {"controller_count": 2}, "controllers", "2"),
         ("tab-models", {"model_count": 5}, "models", "5"),
-        ("tab-apps", {"app_count": 4}, "apps", "4"),
-        ("tab-units", {"unit_count": 7}, "units", "7"),
     ]:
         ctx = HeaderContext(active_tab=tab, **count_field)
         result = header._build_stats(ctx)

@@ -14,8 +14,6 @@ HELP_TEXT = """\
   [bold]C[/bold]       Controllers
   [bold]m[/bold]       Models
   [bold]s[/bold]       Status
-  [bold]a[/bold]       Apps
-  [bold]u[/bold]       Units
 
 [bold cyan]Actions[/bold cyan]
   [bold]Enter[/bold]   Drill-down into selected row

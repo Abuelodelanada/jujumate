@@ -21,7 +21,6 @@ class HeaderContext:
     selected_cloud: str | None = None
     selected_controller: str | None = None
     selected_model: str | None = None
-    selected_app: str | None = None
     cloud_count: int = 0
     controller_count: int = 0
     model_count: int = 0
@@ -101,8 +100,6 @@ class JujuMateHeader(Widget):
             parts.append(f"[bold {_BORDER_COLOR}]controller:[/bold {_BORDER_COLOR}] [bold white]{ctx.selected_controller}[/bold white]")
         if ctx.selected_model:
             parts.append(f"[bold {_BORDER_COLOR}]model:[/bold {_BORDER_COLOR}] [bold white]{ctx.selected_model}[/bold white]")
-        if ctx.selected_app:
-            parts.append(f"[bold {_BORDER_COLOR}]app:[/bold {_BORDER_COLOR}] [bold white]{ctx.selected_app}[/bold white]")
         sep = f" [dim]›[/dim] "
         return sep.join(parts) if parts else ""
 
@@ -129,10 +126,6 @@ class JujuMateHeader(Widget):
             if ctx.relation_count:
                 parts.append(stat("relations", ctx.relation_count))
             return "  [dim]·[/dim]  ".join(parts)
-        elif tab == "tab-apps":
-            return stat("apps", ctx.app_count)
-        elif tab == "tab-units":
-            return stat("units", ctx.unit_count)
         return ""
 
     def _build_status(self, ctx: HeaderContext) -> str:

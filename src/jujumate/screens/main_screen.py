@@ -39,14 +39,12 @@ from jujumate.models.entities import (
 )
 from jujumate.screens.help_screen import HelpScreen
 from jujumate.settings import AppSettings, load_settings
-from jujumate.widgets.apps_view import AppsView
 from jujumate.widgets.clouds_view import CloudsView
 from jujumate.widgets.controllers_view import ControllersView
 from jujumate.widgets.jujumate_header import HeaderContext, JujuMateHeader
 from jujumate.widgets.models_view import ModelsView
 from jujumate.widgets.relation_data_view import RelationDataView
 from jujumate.widgets.status_view import StatusView
-from jujumate.widgets.units_view import UnitsView
 
 logger = logging.getLogger(__name__)
 
@@ -57,8 +55,6 @@ class MainScreen(Screen):
         Binding("C", "switch_tab('tab-controllers')", "Controllers"),
         Binding("m", "switch_tab('tab-models')", "Models"),
         Binding("s", "switch_tab('tab-status')", "Status"),
-        Binding("a", "switch_tab('tab-apps')", "Apps"),
-        Binding("u", "switch_tab('tab-units')", "Units"),
         Binding("d", "switch_tab('tab-relation-data')", "Rel. Data", show=False),
         Binding("r", "refresh_data", "Refresh"),
         Binding("escape", "clear_filter", "Clear filter", show=False),
@@ -88,7 +84,6 @@ class MainScreen(Screen):
         self._selected_cloud: str | None = None
         self._selected_controller: str | None = None
         self._selected_model: str | None = None
-        self._selected_app: str | None = None
         # Auto-select: populated from Juju config on startup, cleared after first use
         self._auto_select_model: str | None = None
 
@@ -103,10 +98,6 @@ class MainScreen(Screen):
                 yield ModelsView(id="models-view")
             with TabPane("Status", id="tab-status"):
                 yield StatusView(id="status-view")
-            with TabPane("Apps", id="tab-apps"):
-                yield AppsView(id="apps-view")
-            with TabPane("Units", id="tab-units"):
-                yield UnitsView(id="units-view")
             with TabPane("Relation Data", id="tab-relation-data"):
                 yield RelationDataView(id="relation-data-view")
 
@@ -155,11 +146,8 @@ class MainScreen(Screen):
         self._selected_cloud = None
         self._selected_controller = None
         self._selected_model = None
-        self._selected_app = None
         self._refresh_controllers_view()
         self._refresh_models_view()
-        self._refresh_apps_view()
-        self._refresh_units_view()
         self._refresh_status_view()
         self._refresh_header()
         self.notify("Filter cleared — showing all resources")
@@ -187,20 +175,6 @@ class MainScreen(Screen):
             if self._selected_controller is None or m.controller == self._selected_controller
         ]
         self.query_one("#models-view", ModelsView).update(filtered)
-
-    def _refresh_apps_view(self) -> None:
-        filtered = [
-            a
-            for a in self._all_apps
-            if self._selected_model is None or a.model == self._selected_model
-        ]
-        self.query_one("#apps-view", AppsView).update(filtered)
-
-    def _refresh_units_view(self) -> None:
-        filtered = [
-            u for u in self._all_units if self._selected_app is None or u.app == self._selected_app
-        ]
-        self.query_one("#units-view", UnitsView).update(filtered)
 
     def _refresh_status_view(self) -> None:
         if self._selected_model is None:
@@ -252,14 +226,6 @@ class MainScreen(Screen):
             m for m in self._all_models
             if self._selected_controller is None or m.controller == self._selected_controller
         ]
-        filtered_apps = [
-            a for a in self._all_apps
-            if self._selected_model is None or a.model == self._selected_model
-        ]
-        filtered_units = [
-            u for u in self._all_units
-            if self._selected_app is None or u.app == self._selected_app
-        ]
         status_offers = [o for o in self._all_offers if o.model == self._selected_model] if self._selected_model else []
         status_relations = [r for r in self._all_relations if r.model == self._selected_model] if self._selected_model else []
         status_saas = [s for s in self._all_saas if s.model == self._selected_model] if self._selected_model else []
@@ -278,12 +244,11 @@ class MainScreen(Screen):
             selected_cloud=effective_cloud,
             selected_controller=self._selected_controller,
             selected_model=self._selected_model,
-            selected_app=self._selected_app,
             cloud_count=len(self._all_clouds),
             controller_count=len(filtered_controllers),
             model_count=len(filtered_models),
-            app_count=len(status_apps) if active_tab == "tab-status" else len(filtered_apps),
-            unit_count=len(status_units) if active_tab == "tab-status" else len(filtered_units),
+            app_count=len(status_apps),
+            unit_count=len(status_units),
             offer_count=len(status_offers),
             relation_count=len(status_relations),
             saas_count=len(status_saas),
@@ -312,13 +277,11 @@ class MainScreen(Screen):
 
     def on_apps_updated(self, message: AppsUpdated) -> None:
         self._all_apps = message.apps
-        self._refresh_apps_view()
         self._refresh_status_view()
         self._refresh_header()
 
     def on_units_updated(self, message: UnitsUpdated) -> None:
         self._all_units = message.units
-        self._refresh_units_view()
         self._refresh_status_view()
         self._refresh_header()
 
@@ -369,8 +332,6 @@ class MainScreen(Screen):
             return
         self._selected_controller = model_info.controller
         self._selected_model = model_name
-        self._refresh_apps_view()
-        self._refresh_units_view()
         self._refresh_status_view()
         self._fetch_relations(self._selected_controller, self._selected_model)
         self._refresh_header()
@@ -389,11 +350,9 @@ class MainScreen(Screen):
         self._selected_cloud = message.name
         self._selected_controller = None
         self._selected_model = None
-        self._selected_app = None
         self._refresh_controllers_view()
         self._refresh_models_view()
-        self._refresh_apps_view()
-        self._refresh_units_view()
+        self._refresh_status_view()
         self.action_switch_tab("tab-controllers")
 
     def on_controllers_view_controller_selected(
@@ -401,10 +360,8 @@ class MainScreen(Screen):
     ) -> None:
         self._selected_controller = message.name
         self._selected_model = None
-        self._selected_app = None
         self._refresh_models_view()
-        self._refresh_apps_view()
-        self._refresh_units_view()
+        self._refresh_status_view()
         filtered_count = sum(
             1 for m in self._all_models if m.controller == self._selected_controller
         )
@@ -421,9 +378,6 @@ class MainScreen(Screen):
     def on_models_view_model_selected(self, message: ModelsView.ModelSelected) -> None:
         # message.name is "controller/modelname" — extract just the model name
         self._selected_model = message.name.split("/", 1)[-1]
-        self._selected_app = None
-        self._refresh_apps_view()
-        self._refresh_units_view()
         self._refresh_status_view()
         if self._selected_controller:
             self._fetch_relations(self._selected_controller, self._selected_model)
@@ -444,13 +398,6 @@ class MainScreen(Screen):
             self.post_message(SaasUpdated(model=model_name, saas=saas))
         except Exception:
             logger.exception("Failed to fetch status details for model '%s'", model_name)
-
-    def on_apps_view_app_selected(self, message: AppsView.AppSelected) -> None:
-        # message.name is "model/appname" — extract just the app name
-        self._selected_app = message.name.split("/", 1)[-1]
-        self._refresh_units_view()
-        self._refresh_header()
-        self.action_switch_tab("tab-units")
 
     def on_status_view_relation_selected(self, message: StatusView.RelationSelected) -> None:
         """User pressed Enter on a relation — fetch its data bags and switch tab."""
