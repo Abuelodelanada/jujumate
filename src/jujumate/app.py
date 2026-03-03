@@ -60,6 +60,10 @@ class JujuMateApp(App):
         background: #4D4845;
         text-style: bold;
     }
+    ToastRack {
+        dock: top;
+        align: right top;
+    }
     """
 
     def __init__(self, settings: AppSettings | None = None) -> None:
