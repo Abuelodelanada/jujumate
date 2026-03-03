@@ -20,6 +20,7 @@ HELP_TEXT = """\
 [bold cyan]Actions[/bold cyan]
   [bold]Enter[/bold]   Drill-down into selected row
   [bold]r[/bold]       Refresh data
+  [bold]y[/bold]       Copy relation data to clipboard
   [bold]Esc[/bold]     Clear filter
   [bold]q[/bold]       Quit
 
