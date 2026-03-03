@@ -4,17 +4,8 @@ A terminal UI for [Juju](https://juju.is) — monitor all your infrastructure re
 
 Inspired by [K9s](https://k9scli.io/) and [KDash](https://github.com/kdash-rs/kdash).
 
-```
-╭─ ⬢ JujuMate ──────────────────╮  cloud: aws  ›  controller: prod  ›  model: cos
-│ Juju infrastructure TUI        │  ────────────────────────────────────────────────
-│ ⣾ Live · 12:34:56              │  apps: 5  ·  units: 8  ·  relations: 3
-╰────────────────────────────────╯
- Clouds  Controllers  Models  Status  Relation Data
+<img width="1195" height="878" alt="image" src="https://github.com/user-attachments/assets/8382e7a7-bb60-4fab-93bc-cade54cbb025" />
 
-  NAME          TYPE        REGION       STATUS
-  aws-cloud     ec2         us-east-1    ●
-  my-openstack  openstack   —            ●
-```
 
 ## Requirements
 
