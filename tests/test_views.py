@@ -6,6 +6,7 @@ from jujumate.models.entities import AppInfo, CloudInfo, ControllerInfo, Machine
 from jujumate.widgets.clouds_view import CloudsView
 from jujumate.widgets.controllers_view import ControllersView
 from jujumate.widgets.models_view import ModelsView
+from jujumate.widgets.navigable_table import NavigableTable
 from jujumate.widgets.resource_table import ResourceTable
 
 
@@ -22,7 +23,7 @@ async def test_clouds_view_update():
         view = CloudsView(id="test-clouds")
         await _mount_view(app, pilot, view)
         view.update([CloudInfo("aws", "ec2", regions=["us-east-1"])])
-        assert view.query_one(ResourceTable).query_one("DataTable").row_count == 1
+        assert len(view.query_one(NavigableTable)._rows) == 1
 
 
 @pytest.mark.asyncio
@@ -33,7 +34,7 @@ async def test_clouds_view_empty_regions_and_credentials():
         view = CloudsView(id="test-clouds")
         await _mount_view(app, pilot, view)
         view.update([CloudInfo("lxd", "lxd")])
-        assert view.query_one(ResourceTable).query_one("DataTable").row_count == 1
+        assert len(view.query_one(NavigableTable)._rows) == 1
 
 
 @pytest.mark.asyncio
@@ -44,7 +45,7 @@ async def test_controllers_view_update():
         view = ControllersView(id="test-ctrl")
         await _mount_view(app, pilot, view)
         view.update([ControllerInfo("prod", "aws", "us-east-1", "3.6.0", model_count=3)])
-        assert view.query_one(ResourceTable).query_one("DataTable").row_count == 1
+        assert len(view.query_one(NavigableTable)._rows) == 1
 
 
 @pytest.mark.asyncio
@@ -55,7 +56,7 @@ async def test_models_view_with_region():
         view = ModelsView(id="test-models")
         await _mount_view(app, pilot, view)
         view.update([ModelInfo("dev", "prod", "aws", "us-east-1", "available")])
-        assert view.query_one(ResourceTable).query_one("DataTable").row_count == 1
+        assert len(view.query_one(NavigableTable)._rows) == 1
 
 
 @pytest.mark.asyncio
@@ -66,12 +67,11 @@ async def test_models_view_without_region():
         view = ModelsView(id="test-models")
         await _mount_view(app, pilot, view)
         view.update([ModelInfo("dev", "prod", "lxd", "", "available")])
-        assert view.query_one(ResourceTable).query_one("DataTable").row_count == 1
+        assert len(view.query_one(NavigableTable)._rows) == 1
 
 
 @pytest.mark.asyncio
 async def test_clouds_view_emits_cloud_selected():
-    received: list[CloudsView.CloudSelected] = []
     app = JujuMateApp()
     async with app.run_test() as pilot:
         await pilot.pause()
@@ -79,19 +79,8 @@ async def test_clouds_view_emits_cloud_selected():
         await _mount_view(app, pilot, view)
         view.update([CloudInfo("aws", "ec2"), CloudInfo("lxd", "lxd")])
         await pilot.pause()
-
-        def capture(msg: CloudsView.CloudSelected) -> None:
-            received.append(msg)
-
-        view.on_clouds_view_cloud_selected = capture  # type: ignore[method-assign]
-        dt = view.query_one(DataTable)
-        dt.move_cursor(row=0)
-        dt.action_select_cursor()
-        await pilot.pause()
-        assert len(received) == 0  # message bubbles up, not caught here
-
-        # Verify row keys were set by checking row count and key via DataTable
-        assert dt.row_count == 2
+        nt = view.query_one(NavigableTable)
+        assert len(nt._rows) == 2
 
 
 @pytest.mark.asyncio
@@ -103,8 +92,7 @@ async def test_controllers_view_emits_controller_selected():
         await _mount_view(app, pilot, view)
         view.update([ControllerInfo("prod", "aws", "", "3.4.0", 2)])
         await pilot.pause()
-        dt = view.query_one(DataTable)
-        assert dt.row_count == 1
+        assert len(view.query_one(NavigableTable)._rows) == 1
 
 
 @pytest.mark.asyncio
@@ -116,13 +104,12 @@ async def test_models_view_emits_model_selected():
         await _mount_view(app, pilot, view)
         view.update([ModelInfo("dev", "prod", "aws", "", "available")])
         await pilot.pause()
-        dt = view.query_one(DataTable)
-        assert dt.row_count == 1
+        assert len(view.query_one(NavigableTable)._rows) == 1
 
 
 @pytest.mark.asyncio
 async def test_clouds_view_row_selection_posts_cloud_selected():
-    from unittest.mock import MagicMock, patch
+    from unittest.mock import patch
 
     app = JujuMateApp()
     async with app.run_test() as pilot:
@@ -132,11 +119,9 @@ async def test_clouds_view_row_selection_posts_cloud_selected():
         view.update([CloudInfo("aws", "ec2")])
         await pilot.pause()
 
-        event = MagicMock()
-        event.row_key.value = "aws"
         posted: list = []
         with patch.object(view, "post_message", side_effect=posted.append):
-            view.on_data_table_row_selected(event)
+            view.on_navigable_table_row_selected(NavigableTable.RowSelected(key="aws"))
 
         assert len(posted) == 1
         assert isinstance(posted[0], CloudsView.CloudSelected)
@@ -145,7 +130,7 @@ async def test_clouds_view_row_selection_posts_cloud_selected():
 
 @pytest.mark.asyncio
 async def test_controllers_view_row_selection_posts_controller_selected():
-    from unittest.mock import MagicMock, patch
+    from unittest.mock import patch
 
     app = JujuMateApp()
     async with app.run_test() as pilot:
@@ -155,11 +140,9 @@ async def test_controllers_view_row_selection_posts_controller_selected():
         view.update([ControllerInfo("prod", "aws", "", "3.4.0", 1)])
         await pilot.pause()
 
-        event = MagicMock()
-        event.row_key.value = "prod"
         posted: list = []
         with patch.object(view, "post_message", side_effect=posted.append):
-            view.on_data_table_row_selected(event)
+            view.on_navigable_table_row_selected(NavigableTable.RowSelected(key="prod"))
 
         assert len(posted) == 1
         assert isinstance(posted[0], ControllersView.ControllerSelected)
@@ -168,7 +151,7 @@ async def test_controllers_view_row_selection_posts_controller_selected():
 
 @pytest.mark.asyncio
 async def test_models_view_row_selection_posts_model_selected():
-    from unittest.mock import MagicMock, patch
+    from unittest.mock import patch
 
     app = JujuMateApp()
     async with app.run_test() as pilot:
@@ -178,15 +161,13 @@ async def test_models_view_row_selection_posts_model_selected():
         view.update([ModelInfo("dev", "prod", "aws", "", "available")])
         await pilot.pause()
 
-        event = MagicMock()
-        event.row_key.value = "dev"
         posted: list = []
         with patch.object(view, "post_message", side_effect=posted.append):
-            view.on_data_table_row_selected(event)
+            view.on_navigable_table_row_selected(NavigableTable.RowSelected(key="prod/dev"))
 
         assert len(posted) == 1
         assert isinstance(posted[0], ModelsView.ModelSelected)
-        assert posted[0].name == "dev"
+        assert posted[0].name == "prod/dev"
 
 
 @pytest.mark.asyncio

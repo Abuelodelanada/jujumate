@@ -4,10 +4,10 @@ from typing import Any
 from textual.app import ComposeResult
 from textual.message import Message
 from textual.widget import Widget
-from textual.widgets import DataTable
 
 from jujumate.models.entities import ModelInfo
-from jujumate.widgets.resource_table import Column, ResourceTable
+from jujumate.widgets.navigable_table import NavigableTable
+from jujumate.widgets.resource_table import Column
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ class ModelsView(Widget):
         super().__init__(*args, **kwargs)
 
     def compose(self) -> ComposeResult:
-        yield ResourceTable(columns=_COLUMNS, id="models-table")
+        yield NavigableTable(columns=_COLUMNS, id="models-table")
 
     def update(self, models: list[ModelInfo]) -> None:
         rows = [
@@ -48,10 +48,9 @@ class ModelsView(Widget):
             for m in models
         ]
         keys = [f"{m.controller}/{m.name}" for m in models]
-        self.query_one(ResourceTable).update_rows(rows, keys=keys)
+        self.query_one(NavigableTable).update_rows(rows, keys=keys)
         logger.debug("ModelsView updated with %d models", len(models))
 
-    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
-        event.stop()
-        if event.row_key.value:
-            self.post_message(self.ModelSelected(name=str(event.row_key.value)))
+    def on_navigable_table_row_selected(self, message: NavigableTable.RowSelected) -> None:
+        message.stop()
+        self.post_message(self.ModelSelected(name=message.key))

@@ -4,10 +4,10 @@ from typing import Any
 from textual.app import ComposeResult
 from textual.message import Message
 from textual.widget import Widget
-from textual.widgets import DataTable
 
 from jujumate.models.entities import ControllerInfo
-from jujumate.widgets.resource_table import Column, ResourceTable
+from jujumate.widgets.navigable_table import NavigableTable
+from jujumate.widgets.resource_table import Column
 
 logger = logging.getLogger(__name__)
 
@@ -32,17 +32,16 @@ class ControllersView(Widget):
         super().__init__(*args, **kwargs)
 
     def compose(self) -> ComposeResult:
-        yield ResourceTable(columns=_COLUMNS, id="controllers-table")
+        yield NavigableTable(columns=_COLUMNS, id="controllers-table")
 
     def update(self, controllers: list[ControllerInfo]) -> None:
         rows = [
             (c.name, c.cloud, c.region, c.juju_version, str(c.model_count)) for c in controllers
         ]
         keys = [c.name for c in controllers]
-        self.query_one(ResourceTable).update_rows(rows, keys=keys)
+        self.query_one(NavigableTable).update_rows(rows, keys=keys)
         logger.debug("ControllersView updated with %d controllers", len(controllers))
 
-    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
-        event.stop()
-        if event.row_key.value:
-            self.post_message(self.ControllerSelected(name=str(event.row_key.value)))
+    def on_navigable_table_row_selected(self, message: NavigableTable.RowSelected) -> None:
+        message.stop()
+        self.post_message(self.ControllerSelected(name=message.key))

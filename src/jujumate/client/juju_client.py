@@ -3,6 +3,7 @@ import logging
 from juju.controller import Controller
 
 from jujumate.models.entities import (
+    AppConfigEntry,
     AppInfo,
     CloudInfo,
     ControllerInfo,
@@ -329,6 +330,35 @@ class JujuClient:
             model_name, len(relations), len(offers), len(saas),
         )
         return relations, offers, saas
+
+    async def get_app_config(self, model_name: str, app_name: str) -> list[AppConfigEntry]:
+        """Fetch configuration entries for an application."""
+        entries: list[AppConfigEntry] = []
+        model = await self._controller.get_model(model_name)
+        try:
+            app = model.applications.get(app_name)
+            if not app:
+                logger.warning("get_app_config: app '%s' not found in model '%s'", app_name, model_name)
+                return entries
+            config = await app.get_config()
+            for key, data in sorted(config.items()):
+                if not isinstance(data, dict):
+                    continue
+                source = str(data.get("source", "default"))
+                value = str(data.get("value", ""))
+                default = str(data.get("default", value if source == "default" else ""))
+                entries.append(AppConfigEntry(
+                    key=key,
+                    value=value,
+                    default=default,
+                    type=str(data.get("type", "")),
+                    description=str(data.get("description", "")),
+                    source=source,
+                ))
+        finally:
+            await model.disconnect()
+        logger.debug("App config for '%s/%s': %d entries", model_name, app_name, len(entries))
+        return entries
 
     async def get_relations(self, model_name: str) -> list[RelationInfo]:
         relations, _, _ = await self.get_status_details(model_name)

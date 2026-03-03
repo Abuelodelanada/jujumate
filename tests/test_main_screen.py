@@ -30,6 +30,7 @@ from jujumate.models.entities import (
     UnitInfo,
 )
 from jujumate.settings import AppSettings
+from jujumate.widgets.navigable_table import NavigableTable
 
 
 @pytest.mark.asyncio
@@ -239,7 +240,7 @@ async def test_cloud_selected_switches_to_controllers_and_filters():
         assert app.screen.query_one(TabbedContent).active == "tab-controllers"
         # Should only show aws controller
         ctrl_view = screen.query_one("#controllers-view", ControllersView)
-        assert ctrl_view.query_one("DataTable").row_count == 1
+        assert len(ctrl_view.query_one(NavigableTable)._rows) == 1
 
 
 @pytest.mark.asyncio
@@ -261,7 +262,7 @@ async def test_controller_selected_switches_to_models_and_filters():
         await pilot.pause()
         assert app.screen.query_one(TabbedContent).active == "tab-models"
         models_view = screen.query_one("#models-view", ModelsView)
-        assert models_view.query_one("DataTable").row_count == 1
+        assert len(models_view.query_one(NavigableTable)._rows) == 1
 
 
 @pytest.mark.asyncio
@@ -312,7 +313,7 @@ async def test_clear_filter_resets_all_selections():
         assert screen._selected_controller is None
         # Both controllers should show now
         ctrl_view = screen.query_one("#controllers-view", ControllersView)
-        assert ctrl_view.query_one("DataTable").row_count == 2
+        assert len(ctrl_view.query_one(NavigableTable)._rows) == 2
 
 
 def test_asyncio_exception_handler_suppresses_closed_errors():

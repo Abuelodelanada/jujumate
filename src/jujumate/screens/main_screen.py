@@ -10,6 +10,8 @@ from textual.widgets import TabbedContent, TabPane
 
 from jujumate.client.juju_client import JujuClient
 from jujumate.client.watcher import (
+    AppConfigFetchError,
+    AppConfigFetched,
     AppsUpdated,
     CloudsUpdated,
     ConnectionFailed,
@@ -39,6 +41,7 @@ from jujumate.models.entities import (
 )
 from jujumate.screens.help_screen import HelpScreen
 from jujumate.settings import AppSettings, load_settings
+from jujumate.widgets.app_config_view import AppConfigView
 from jujumate.widgets.clouds_view import CloudsView
 from jujumate.widgets.controllers_view import ControllersView
 from jujumate.widgets.jujumate_header import HeaderContext, JujuMateHeader
@@ -100,6 +103,8 @@ class MainScreen(Screen):
                 yield StatusView(id="status-view")
             with TabPane("Relation Data", id="tab-relation-data"):
                 yield RelationDataView(id="relation-data-view")
+            with TabPane("App Config", id="tab-app-config"):
+                yield AppConfigView(id="app-config-view")
 
     def on_mount(self) -> None:
         self.run_worker(self._connect_and_poll(), exclusive=True)
@@ -398,6 +403,33 @@ class MainScreen(Screen):
             self.post_message(SaasUpdated(model=model_name, saas=saas))
         except Exception:
             logger.exception("Failed to fetch status details for model '%s'", model_name)
+
+    def on_status_view_app_selected(self, message: StatusView.AppSelected) -> None:
+        """User pressed Enter on an app — fetch its config and switch tab."""
+        app = message.app
+        if not self._selected_controller or not self._selected_model:
+            return
+        self.query_one("#app-config-view", AppConfigView).show_loading(app)
+        self.action_switch_tab("tab-app-config")
+        self._fetch_app_config(self._selected_controller, self._selected_model, app)
+
+    @work(exclusive=True)
+    async def _fetch_app_config(
+        self, controller_name: str, model_name: str, app: AppInfo
+    ) -> None:
+        try:
+            async with JujuClient(controller_name=controller_name) as client:
+                entries = await client.get_app_config(model_name, app.name)
+            self.post_message(AppConfigFetched(app=app, entries=entries))
+        except Exception as exc:
+            logger.exception("Failed to fetch config for app '%s'", app.name)
+            self.post_message(AppConfigFetchError(app=app, error=str(exc)))
+
+    def on_app_config_fetched(self, message: AppConfigFetched) -> None:
+        self.query_one("#app-config-view", AppConfigView).update(message.app, message.entries)
+
+    def on_app_config_fetch_error(self, message: AppConfigFetchError) -> None:
+        self.query_one("#app-config-view", AppConfigView).show_error(message.app, message.error)
 
     def on_status_view_relation_selected(self, message: StatusView.RelationSelected) -> None:
         """User pressed Enter on a relation — fetch its data bags and switch tab."""

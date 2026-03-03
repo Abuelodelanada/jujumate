@@ -7,6 +7,7 @@ from textual.widget import Widget
 
 from jujumate.client.juju_client import JujuClient
 from jujumate.models.entities import (
+    AppConfigEntry,
     AppInfo,
     CloudInfo,
     ControllerInfo,
@@ -97,6 +98,22 @@ class RelationDataFetchError(JujuDataMessage):
     """Posted when fetching relation data bags failed."""
 
     relation: RelationInfo = field(default_factory=lambda: RelationInfo("", "", "", "", ""))
+    error: str = ""
+
+
+@dataclass
+class AppConfigFetched(JujuDataMessage):
+    """Posted when app configuration has been fetched."""
+
+    app: AppInfo = field(default_factory=lambda: AppInfo("", "", "", "", 0))
+    entries: list[AppConfigEntry] = field(default_factory=list)
+
+
+@dataclass
+class AppConfigFetchError(JujuDataMessage):
+    """Posted when fetching app configuration failed."""
+
+    app: AppInfo = field(default_factory=lambda: AppInfo("", "", "", "", 0))
     error: str = ""
 
 

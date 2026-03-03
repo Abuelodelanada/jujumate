@@ -4,10 +4,10 @@ from typing import Any
 from textual.app import ComposeResult
 from textual.message import Message
 from textual.widget import Widget
-from textual.widgets import DataTable
 
 from jujumate.models.entities import CloudInfo
-from jujumate.widgets.resource_table import Column, ResourceTable
+from jujumate.widgets.navigable_table import NavigableTable
+from jujumate.widgets.resource_table import Column
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ class CloudsView(Widget):
         super().__init__(*args, **kwargs)
 
     def compose(self) -> ComposeResult:
-        yield ResourceTable(columns=_COLUMNS, id="clouds-table")
+        yield NavigableTable(columns=_COLUMNS, id="clouds-table")
 
     def update(self, clouds: list[CloudInfo]) -> None:
         rows = [
@@ -44,10 +44,9 @@ class CloudsView(Widget):
             for c in clouds
         ]
         keys = [c.name for c in clouds]
-        self.query_one(ResourceTable).update_rows(rows, keys=keys)
+        self.query_one(NavigableTable).update_rows(rows, keys=keys)
         logger.debug("CloudsView updated with %d clouds", len(clouds))
 
-    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
-        event.stop()
-        if event.row_key.value:
-            self.post_message(self.CloudSelected(name=str(event.row_key.value)))
+    def on_navigable_table_row_selected(self, message: NavigableTable.RowSelected) -> None:
+        message.stop()
+        self.post_message(self.CloudSelected(name=message.key))

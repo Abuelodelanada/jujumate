@@ -89,6 +89,22 @@ class RelationDataEntry:
 
 
 @dataclass
+class AppConfigEntry:
+    """A single config entry for an application."""
+
+    key: str
+    value: str
+    default: str
+    type: str
+    description: str
+    source: str  # "default" or "user"
+
+    @property
+    def is_default(self) -> bool:
+        return self.source == "default"
+
+
+@dataclass
 class UnitInfo:
     name: str
     app: str

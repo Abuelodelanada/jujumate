@@ -161,6 +161,13 @@ class StatusView(Widget):
             super().__init__()
             self.relation = relation
 
+    class AppSelected(Message):
+        """Posted when the user presses Enter on an app row."""
+
+        def __init__(self, app: AppInfo) -> None:
+            super().__init__()
+            self.app = app
+
     DEFAULT_CSS = """
     StatusView {
         height: 1fr;
@@ -213,6 +220,7 @@ class StatusView(Widget):
         self._last_cursor: dict[str, int] = {}
         self._last_active_table: str = ""
         self._relations: list[RelationInfo] = []
+        self._apps: list[AppInfo] = []
 
     def compose(self) -> ComposeResult:
         with _TrackedScroll():
@@ -277,6 +285,7 @@ class StatusView(Widget):
                 _trunc_msg(a.message),
             ))
             full_msgs.append(a.message)
+        self._apps = apps
         self._row_messages["status-apps-table"] = full_msgs
         self.query_one("#status-apps-table", ResourceTable).update_rows(rows)
         self._restore_cursor("status-apps-table", len(full_msgs))
@@ -415,13 +424,16 @@ class StatusView(Widget):
         logger.debug("StatusView relations updated: %d rows", len(rows))
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
-        """Post RelationSelected when user presses Enter on a relation row."""
+        """Post RelationSelected or AppSelected when user presses Enter on a row."""
         try:
             table_widget = event.data_table.parent
-            if not table_widget or getattr(table_widget, "id", None) != "status-rels-table":
-                return
+            table_id = getattr(table_widget, "id", None)
             idx = event.cursor_row
-            if 0 <= idx < len(self._relations):
-                self.post_message(StatusView.RelationSelected(self._relations[idx]))
+            if table_id == "status-rels-table":
+                if 0 <= idx < len(self._relations):
+                    self.post_message(StatusView.RelationSelected(self._relations[idx]))
+            elif table_id == "status-apps-table":
+                if 0 <= idx < len(self._apps):
+                    self.post_message(StatusView.AppSelected(self._apps[idx]))
         except Exception:
             pass
