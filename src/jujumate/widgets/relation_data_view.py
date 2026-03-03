@@ -196,6 +196,7 @@ class RelationDataView(Widget):
     }
     RelationDataView #rd-scroll {
         height: 1fr;
+        scrollbar-size-vertical: 0;
     }
     RelationDataView #rd-content {
         height: auto;
