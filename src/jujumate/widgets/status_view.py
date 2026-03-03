@@ -249,6 +249,7 @@ class StatusView(Widget):
         self.query_one("#status-saas-table").display = False
         self.query_one("#status-offers-table").display = False
         self.query_one("#status-machines-table").display = False
+        self.query_one("#status-rels-table").display = False
         self._update_scroll_indicator()
 
     def _update_scroll_indicator(self) -> None:
@@ -419,7 +420,9 @@ class StatusView(Widget):
             (_colored_relation(r.provider), _colored_relation(r.requirer), r.interface, r.type)
             for r in relations
         ]
-        self.query_one("#status-rels-table", ResourceTable).update_rows(rows)
+        table = self.query_one("#status-rels-table", ResourceTable)
+        table.display = bool(rows)
+        table.update_rows(rows)
         self._restore_cursor("status-rels-table", len(rows))
         logger.debug("StatusView relations updated: %d rows", len(rows))
 
