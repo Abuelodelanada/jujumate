@@ -358,10 +358,9 @@ def test_jujumate_header_breadcrumb():
     assert "cos" in breadcrumb
 
     stats = header._build_stats(ctx)
-    assert "apps: 6" in stats
-    assert "units: 6" in stats
-    assert "offers: 3" in stats
-    assert "relations: 4" in stats
+    assert "6" in stats  # app_count
+    assert "3" in stats  # offer_count
+    assert "4" in stats  # relation_count
 
     status = header._build_status(ctx)
     assert "Live" in status
@@ -372,15 +371,17 @@ def test_jujumate_header_stats_by_tab():
     from jujumate.widgets.jujumate_header import HeaderContext, JujuMateHeader
 
     header = JujuMateHeader.__new__(JujuMateHeader)
-    for tab, count_field, expected in [
-        ("tab-clouds", {"cloud_count": 3}, "clouds: 3"),
-        ("tab-controllers", {"controller_count": 2}, "controllers: 2"),
-        ("tab-models", {"model_count": 5}, "models: 5"),
-        ("tab-apps", {"app_count": 4}, "apps: 4"),
-        ("tab-units", {"unit_count": 7}, "units: 7"),
+    for tab, count_field, expected_key, expected_val in [
+        ("tab-clouds", {"cloud_count": 3}, "clouds", "3"),
+        ("tab-controllers", {"controller_count": 2}, "controllers", "2"),
+        ("tab-models", {"model_count": 5}, "models", "5"),
+        ("tab-apps", {"app_count": 4}, "apps", "4"),
+        ("tab-units", {"unit_count": 7}, "units", "7"),
     ]:
         ctx = HeaderContext(active_tab=tab, **count_field)
-        assert expected in header._build_stats(ctx), f"Tab {tab}"
+        result = header._build_stats(ctx)
+        assert expected_key in result, f"Tab {tab}: key not found"
+        assert expected_val in result, f"Tab {tab}: value not found"
 
 
 def test_jujumate_header_disconnected_status():

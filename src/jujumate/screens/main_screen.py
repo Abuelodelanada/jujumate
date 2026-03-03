@@ -262,12 +262,20 @@ class MainScreen(Screen):
         ]
         status_offers = [o for o in self._all_offers if o.model == self._selected_model] if self._selected_model else []
         status_relations = [r for r in self._all_relations if r.model == self._selected_model] if self._selected_model else []
+        status_saas = [s for s in self._all_saas if s.model == self._selected_model] if self._selected_model else []
+        status_machines = [m for m in self._all_machines if m.model == self._selected_model] if self._selected_model else []
         status_apps = [a for a in self._all_apps if a.model == self._selected_model] if self._selected_model else []
         status_app_names = {a.name for a in status_apps}
         status_units = [u for u in self._all_units if u.app in status_app_names]
+        # Derive cloud from selected model if not explicitly set
+        effective_cloud = self._selected_cloud
+        if not effective_cloud and self._selected_model:
+            model_info = next((m for m in self._all_models if m.name == self._selected_model), None)
+            if model_info:
+                effective_cloud = model_info.cloud
         ctx = HeaderContext(
             active_tab=active_tab,
-            selected_cloud=self._selected_cloud,
+            selected_cloud=effective_cloud,
             selected_controller=self._selected_controller,
             selected_model=self._selected_model,
             selected_app=self._selected_app,
@@ -278,6 +286,8 @@ class MainScreen(Screen):
             unit_count=len(status_units) if active_tab == "tab-status" else len(filtered_units),
             offer_count=len(status_offers),
             relation_count=len(status_relations),
+            saas_count=len(status_saas),
+            machine_count=len(status_machines),
             is_connected=self._is_connected,
             timestamp=self._last_refresh_ts,
         )
