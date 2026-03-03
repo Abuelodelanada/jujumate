@@ -107,6 +107,9 @@ class MainScreen(Screen):
                 yield AppConfigView(id="app-config-view")
 
     def on_mount(self) -> None:
+        tc = self.query_one(TabbedContent)
+        tc.hide_tab("tab-relation-data")
+        tc.hide_tab("tab-app-config")
         self.run_worker(self._connect_and_poll(), exclusive=True)
 
     async def _connect_and_poll(self) -> None:
@@ -139,6 +142,14 @@ class MainScreen(Screen):
 
     def action_switch_tab(self, tab_id: str) -> None:
         self.query_one(TabbedContent).active = tab_id
+        self._refresh_header()
+
+    def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
+        pane_id = event.pane.id if event.pane else ""
+        if pane_id not in ("tab-relation-data", "tab-app-config"):
+            tc = self.query_one(TabbedContent)
+            tc.hide_tab("tab-relation-data")
+            tc.hide_tab("tab-app-config")
         self._refresh_header()
 
     async def action_refresh_data(self) -> None:
@@ -409,6 +420,8 @@ class MainScreen(Screen):
         app = message.app
         if not self._selected_controller or not self._selected_model:
             return
+        tc = self.query_one(TabbedContent)
+        tc.show_tab("tab-app-config")
         self.query_one("#app-config-view", AppConfigView).show_loading(app)
         self.action_switch_tab("tab-app-config")
         self._fetch_app_config(self._selected_controller, self._selected_model, app)
@@ -436,6 +449,8 @@ class MainScreen(Screen):
         relation = message.relation
         if not self._selected_controller or not relation.relation_id:
             return
+        tc = self.query_one(TabbedContent)
+        tc.show_tab("tab-relation-data")
         self.query_one("#relation-data-view", RelationDataView).show_loading(relation)
         self.action_switch_tab("tab-relation-data")
         provider_app = relation.provider.split(":")[0]
