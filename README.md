@@ -5,19 +5,15 @@ A terminal UI for [Juju](https://juju.is) — monitor all your infrastructure re
 Inspired by [K9s](https://k9scli.io/) and [KDash](https://github.com/kdash-rs/kdash).
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  JujuMate v0.1  │  Controller: prod-controller  │  ⣾ Live   │
-├─────────────────────────────────────────────────────────────┤
-│  [Clouds] [Controllers] [Models] [Apps] [Units]             │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  NAME          TYPE        REGION       STATUS             │
-│  aws-cloud     ec2         us-east-1    ●                  │
-│  my-openstack  openstack   —            ●                  │
-│                                                             │
-├─────────────────────────────────────────────────────────────┤
-│  <c>Clouds <m>Models <a>Apps <u>Units  </>Filter  <q>Quit  │
-└─────────────────────────────────────────────────────────────┘
+╭─ ⬢ JujuMate ──────────────────╮  cloud: aws  ›  controller: prod  ›  model: cos
+│ Juju infrastructure TUI        │  ────────────────────────────────────────────────
+│ ⣾ Live · 12:34:56              │  apps: 5  ·  units: 8  ·  relations: 3
+╰────────────────────────────────╯
+ Clouds  Controllers  Models  Status  Relation Data
+
+  NAME          TYPE        REGION       STATUS
+  aws-cloud     ec2         us-east-1    ●
+  my-openstack  openstack   —            ●
 ```
 
 ## Requirements
@@ -40,19 +36,19 @@ jujumate
 
 JujuMate reads your existing Juju configuration from `~/.local/share/juju/` automatically — no extra setup needed.
 
-### Keybindings
+## Keybindings
 
 | Key | Action |
 |-----|--------|
 | `c` | Clouds |
 | `C` | Controllers |
 | `m` | Models |
-| `a` | Applications |
-| `u` | Units |
+| `s` | Status |
 | `↑↓` | Navigate rows |
 | `Enter` | Drill-down |
-| `/` | Filter |
+| `Esc` | Clear filter |
 | `r` | Refresh |
+| `?` | Help |
 | `q` | Quit |
 
 ## Configuration

@@ -137,10 +137,10 @@ class MainScreen(Screen):
         self._refresh_header()
 
     async def action_refresh_data(self) -> None:
+        self.notify("Refreshing…")
         if self._poller:
             await self._poller.poll_once()
         logger.info("Manual refresh triggered")
-        self.notify("Refreshing…")
 
     def action_clear_filter(self) -> None:
         self._selected_cloud = None

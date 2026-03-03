@@ -43,13 +43,12 @@ jujumate/
 │   │   └── help_screen.py     # Modal overlay with keyboard shortcuts (? key)
 │   ├── widgets/
 │   │   ├── resource_table.py  # Generic reusable DataTable base
-│   │   ├── jujumate_header.py # Custom header: context, counts, connection status
+│   │   ├── jujumate_header.py # Custom header: K9s-style panel, breadcrumb, stats
 │   │   ├── clouds_view.py
 │   │   ├── controllers_view.py
 │   │   ├── models_view.py
-│   │   ├── apps_view.py
-│   │   ├── units_view.py
-│   │   └── status_view.py     # Combined view: apps + units + offers + relations
+│   │   ├── relation_data_view.py  # jhack-style relation databag viewer
+│   │   └── status_view.py     # Combined view: apps + units + machines + offers + relations + SAAS
 │   ├── models/
 │   │   └── entities.py        # Dataclasses: CloudInfo, ControllerInfo, ModelInfo,
 │   │                          #   AppInfo, UnitInfo, OfferInfo, RelationInfo
@@ -95,10 +94,8 @@ The app uses `background: ansi_default` CSS and excludes Textual's `ANSIToTrueco
 | `C` | Controllers tab |
 | `m` | Models tab |
 | `s` | Status tab |
-| `a` | Apps tab |
-| `u` | Units tab |
 | `↑↓` | Navigate table rows |
-| `Enter` | Drill-down (e.g. Model → its Apps) |
+| `Enter` | Drill-down (e.g. Model → its Status) |
 | `Esc` | Clear drill-down filter |
 | `r` | Force refresh |
 | `?` | Help overlay (shows all shortcuts) |
@@ -113,13 +110,12 @@ No persistent footer — shortcuts are shown on demand via `?` (K9s-style modal 
 | Clouds | Name, Type, Regions, Credentials |
 | Controllers | Name, Cloud, Region, Juju Version, Models |
 | Models | Name, Controller, Cloud/Region, Status, Machines, Apps |
-| Apps | Name, Model, Charm, Channel, Rev, Units, Status, Message |
-| Units | Name, App, Machine/Pod, Workload, Agent, Address |
 | Status > Apps | Name, Version, Status, Scale, Charm, Channel, Rev, Address, Exposed, Message |
 | Status > Units (K8s) | Unit, Workload, Agent, Address, Ports, Message |
 | Status > Units (IaaS) | Unit, Workload, Agent, Machine, Public Address, Ports, Message |
 | Status > Offers | Offer, Application, Charm, Rev, Connected, Endpoint, Interface, Role |
 | Status > Relations | Provider, Requirer, Interface, Type |
+| Relation Data | jhack-style two-column layout: metadata, application data bag, unit data bags |
 
 ### Status indicators
 
