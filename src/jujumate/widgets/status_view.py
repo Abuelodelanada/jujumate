@@ -171,6 +171,7 @@ class StatusView(Widget):
     DEFAULT_CSS = """
     StatusView {
         height: 1fr;
+        layout: vertical;
     }
     StatusView .section-label {
         padding: 1 2 0 2;
@@ -191,11 +192,11 @@ class StatusView(Widget):
         scrollbar-size: 0 0;
         overflow-x: hidden;
     }
-    StatusView VerticalScroll {
+    StatusView #status-scroll {
+        height: 1fr;
         scrollbar-size: 0 0;
     }
     StatusView #msg-bar {
-        dock: bottom;
         height: 1;
         width: 100%;
         padding: 0 2;
@@ -203,7 +204,6 @@ class StatusView(Widget):
         text-style: italic;
     }
     StatusView #scroll-indicator {
-        dock: bottom;
         height: 1;
         width: 100%;
         text-align: center;
@@ -223,7 +223,7 @@ class StatusView(Widget):
         self._apps: list[AppInfo] = []
 
     def compose(self) -> ComposeResult:
-        with _TrackedScroll():
+        with _TrackedScroll(id="status-scroll"):
             t = ResourceTable(columns=_SAAS_COLUMNS, id="status-saas-table")
             t.border_title = "SAAS"
             yield t
@@ -253,7 +253,7 @@ class StatusView(Widget):
 
     def _update_scroll_indicator(self) -> None:
         try:
-            vs = self.query_one(_TrackedScroll)
+            vs = self.query_one("#status-scroll", _TrackedScroll)
         except Exception:
             return
         at_bottom = vs.scroll_y >= vs.max_scroll_y
