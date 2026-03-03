@@ -4,6 +4,7 @@ from typing import Any
 from rich.text import Text
 from textual.app import ComposeResult
 from textual.containers import VerticalScroll
+from textual.message import Message
 from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import DataTable, Label
@@ -153,6 +154,13 @@ class _TrackedScroll(VerticalScroll):
 class StatusView(Widget):
     """Displays a juju-status–style overview for the selected model."""
 
+    class RelationSelected(Message):
+        """Posted when the user presses Enter on a relation row."""
+
+        def __init__(self, relation: RelationInfo) -> None:
+            super().__init__()
+            self.relation = relation
+
     DEFAULT_CSS = """
     StatusView {
         height: 1fr;
@@ -204,6 +212,7 @@ class StatusView(Widget):
         self._row_messages: dict[str, list[str]] = {}
         self._last_cursor: dict[str, int] = {}
         self._last_active_table: str = ""
+        self._relations: list[RelationInfo] = []
 
     def compose(self) -> ComposeResult:
         with _TrackedScroll():
@@ -395,9 +404,22 @@ class StatusView(Widget):
             pass
 
     def update_relations(self, relations: list[RelationInfo]) -> None:
+        self._relations = relations
         rows = [
             (_colored_relation(r.provider), _colored_relation(r.requirer), r.interface, r.type)
             for r in relations
         ]
         self.query_one("#status-rels-table", ResourceTable).update_rows(rows)
         logger.debug("StatusView relations updated: %d rows", len(rows))
+
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        """Post RelationSelected when user presses Enter on a relation row."""
+        try:
+            table_widget = event.data_table.parent
+            if not table_widget or getattr(table_widget, "id", None) != "status-rels-table":
+                return
+            idx = event.cursor_row
+            if 0 <= idx < len(self._relations):
+                self.post_message(StatusView.RelationSelected(self._relations[idx]))
+        except Exception:
+            pass

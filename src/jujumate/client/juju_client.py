@@ -9,8 +9,9 @@ from jujumate.models.entities import (
     MachineInfo,
     ModelInfo,
     OfferInfo,
-    SAASInfo,
+    RelationDataEntry,
     RelationInfo,
+    SAASInfo,
     UnitInfo,
 )
 
@@ -252,6 +253,7 @@ class JujuClient:
                             requirer=f"{peer.application}:{peer.name}",
                             interface=rel.interface or "",
                             type="peer",
+                            relation_id=rel.id_ or 0,
                         )
                     )
                 elif provider and requirer:
@@ -262,6 +264,7 @@ class JujuClient:
                             requirer=f"{requirer.application}:{requirer.name}",
                             interface=rel.interface or "",
                             type="regular",
+                            relation_id=rel.id_ or 0,
                         )
                     )
             for offer_name, offer_st in (status.offers or {}).items():
@@ -330,3 +333,92 @@ class JujuClient:
     async def get_relations(self, model_name: str) -> list[RelationInfo]:
         relations, _, _ = await self.get_status_details(model_name)
         return relations
+
+    async def get_relation_data(
+        self,
+        model_name: str,
+        relation_id: int,
+        provider_app: str,
+        requirer_app: str,
+    ) -> list[RelationDataEntry]:
+        """Fetch relation data bags for both sides of a relation.
+
+        Calls Application.UnitsInfo for one unit on each side.  From the
+        provider unit we get: provider app-level data + requirer units' data.
+        From the requirer unit we get: requirer app-level data + provider units' data.
+        """
+        from juju.client import client as juju_client
+
+        model = await self._controller.get_model(model_name)
+        try:
+            facade = juju_client.ApplicationFacade.from_connection(model.connection())
+            entries: list[RelationDataEntry] = []
+            is_peer = provider_app == requirer_app
+            sides: list[tuple[str, str, str, str]] = []  # (app, own_side, other_side, other_app)
+            if is_peer:
+                sides = [(provider_app, "peer", "peer", provider_app)]
+            else:
+                sides = [
+                    (provider_app, "provider", "requirer", requirer_app),
+                    (requirer_app, "requirer", "provider", provider_app),
+                ]
+
+            for app_name, _own_side, other_side, other_app_name in sides:
+                app = model.applications.get(app_name)
+                if not app or not app.units:
+                    logger.debug("get_relation_data: no app or no units for %s", app_name)
+                    continue
+                unit_obj = next(iter(app.units))
+                unit_tag = "unit-" + unit_obj.name.replace("/", "-")
+                logger.debug("get_relation_data: querying unit %s (tag=%s)", unit_obj.name, unit_tag)
+                result = await facade.UnitsInfo(entities=[juju_client.Entity(unit_tag)])
+                logger.debug("get_relation_data: raw result type=%s value=%r", type(result), result)
+                if not result.results:
+                    continue
+                unit_result = result.results[0]
+                logger.debug(
+                    "get_relation_data: unit_result type=%s error=%r result=%r",
+                    type(unit_result), unit_result.error, unit_result.result,
+                )
+                if unit_result.error or not unit_result.result:
+                    continue
+                logger.debug(
+                    "get_relation_data: relation_data count=%d, looking for relation_id=%d",
+                    len(unit_result.result.relation_data or []), relation_id,
+                )
+                for ep_data in unit_result.result.relation_data or []:
+                    logger.debug(
+                        "get_relation_data: ep_data relation_id=%r endpoint=%r applicationdata=%r unit_relation_data keys=%r",
+                        ep_data.relation_id, ep_data.endpoint,
+                        ep_data.applicationdata,
+                        list((ep_data.unit_relation_data or {}).keys()),
+                    )
+                    if ep_data.relation_id != relation_id:
+                        continue
+                    # Application-level data bag (remote side's app data)
+                    if ep_data.applicationdata:
+                        for k, v in sorted(ep_data.applicationdata.items()):
+                            entries.append(RelationDataEntry(
+                                side=other_side,
+                                unit=other_app_name,
+                                key=k,
+                                value=str(v),
+                                scope="app",
+                            ))
+                    # Unit-level data bags from the OTHER side's units
+                    for unit_n, rel_data in (ep_data.unit_relation_data or {}).items():
+                        if rel_data and rel_data.unitdata:
+                            for k, v in sorted(rel_data.unitdata.items()):
+                                entries.append(RelationDataEntry(
+                                    side=other_side,
+                                    unit=unit_n,
+                                    key=k,
+                                    value=str(v),
+                                    scope="unit",
+                                ))
+        finally:
+            await model.disconnect()
+        logger.debug(
+            "Relation data for relation %d: %d entries", relation_id, len(entries)
+        )
+        return entries

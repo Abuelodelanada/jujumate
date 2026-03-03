@@ -19,6 +19,8 @@ from jujumate.client.watcher import (
     MachinesUpdated,
     ModelsUpdated,
     OffersUpdated,
+    RelationDataFetchError,
+    RelationDataUpdated,
     RelationsUpdated,
     SaasUpdated,
     UnitsUpdated,
@@ -42,6 +44,7 @@ from jujumate.widgets.clouds_view import CloudsView
 from jujumate.widgets.controllers_view import ControllersView
 from jujumate.widgets.jujumate_header import HeaderContext, JujuMateHeader
 from jujumate.widgets.models_view import ModelsView
+from jujumate.widgets.relation_data_view import RelationDataView
 from jujumate.widgets.status_view import StatusView
 from jujumate.widgets.units_view import UnitsView
 
@@ -56,6 +59,7 @@ class MainScreen(Screen):
         Binding("s", "switch_tab('tab-status')", "Status"),
         Binding("a", "switch_tab('tab-apps')", "Apps"),
         Binding("u", "switch_tab('tab-units')", "Units"),
+        Binding("d", "switch_tab('tab-relation-data')", "Rel. Data", show=False),
         Binding("r", "refresh_data", "Refresh"),
         Binding("escape", "clear_filter", "Clear filter", show=False),
         Binding("question_mark", "show_help", "Help"),
@@ -103,6 +107,8 @@ class MainScreen(Screen):
                 yield AppsView(id="apps-view")
             with TabPane("Units", id="tab-units"):
                 yield UnitsView(id="units-view")
+            with TabPane("Relation Data", id="tab-relation-data"):
+                yield RelationDataView(id="relation-data-view")
 
     def on_mount(self) -> None:
         self.run_worker(self._connect_and_poll(), exclusive=True)
@@ -427,3 +433,55 @@ class MainScreen(Screen):
         self._refresh_units_view()
         self._refresh_header()
         self.action_switch_tab("tab-units")
+
+    def on_status_view_relation_selected(self, message: StatusView.RelationSelected) -> None:
+        """User pressed Enter on a relation — fetch its data bags and switch tab."""
+        relation = message.relation
+        if not self._selected_controller or not relation.relation_id:
+            return
+        self.query_one("#relation-data-view", RelationDataView).show_loading(relation)
+        self.action_switch_tab("tab-relation-data")
+        provider_app = relation.provider.split(":")[0]
+        requirer_app = relation.requirer.split(":")[0]
+        self._fetch_relation_data(
+            self._selected_controller,
+            relation.model or self._selected_model or "",
+            relation,
+            provider_app,
+            requirer_app,
+        )
+
+    @work(exclusive=True)
+    async def _fetch_relation_data(
+        self,
+        controller_name: str,
+        model_name: str,
+        relation: RelationInfo,
+        provider_app: str,
+        requirer_app: str,
+    ) -> None:
+        try:
+            async with JujuClient(controller_name=controller_name) as client:
+                entries = await client.get_relation_data(
+                    model_name, relation.relation_id, provider_app, requirer_app
+                )
+            logger.debug(
+                "Fetched relation data for relation %d: %d entries",
+                relation.relation_id, len(entries),
+            )
+            self.post_message(RelationDataUpdated(relation=relation, entries=entries))
+        except Exception as exc:
+            logger.exception(
+                "Failed to fetch relation data for relation %d", relation.relation_id
+            )
+            self.post_message(RelationDataFetchError(relation=relation, error=str(exc)))
+
+    def on_relation_data_updated(self, message: RelationDataUpdated) -> None:
+        self.query_one("#relation-data-view", RelationDataView).update(
+            message.relation, message.entries
+        )
+
+    def on_relation_data_fetch_error(self, message: RelationDataFetchError) -> None:
+        self.query_one("#relation-data-view", RelationDataView).show_error(
+            message.relation, message.error
+        )

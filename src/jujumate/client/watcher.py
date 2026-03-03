@@ -13,6 +13,7 @@ from jujumate.models.entities import (
     MachineInfo,
     ModelInfo,
     OfferInfo,
+    RelationDataEntry,
     RelationInfo,
     SAASInfo,
     UnitInfo,
@@ -81,6 +82,22 @@ class DataRefreshed(JujuDataMessage):
     """Posted after a full refresh cycle completes."""
 
     timestamp: datetime = field(default_factory=datetime.now)
+
+
+@dataclass
+class RelationDataUpdated(JujuDataMessage):
+    """Posted when relation data bags have been fetched."""
+
+    relation: RelationInfo = field(default_factory=lambda: RelationInfo("", "", "", "", ""))
+    entries: list[RelationDataEntry] = field(default_factory=list)
+
+
+@dataclass
+class RelationDataFetchError(JujuDataMessage):
+    """Posted when fetching relation data bags failed."""
+
+    relation: RelationInfo = field(default_factory=lambda: RelationInfo("", "", "", "", ""))
+    error: str = ""
 
 
 @dataclass
