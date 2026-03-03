@@ -153,7 +153,7 @@ def _group_units(units: list) -> list:
     return result
 
 
-class _TrackedScroll(VerticalScroll):
+class _TrackedScroll(VerticalScroll, can_focus=False):
     """VerticalScroll that notifies its parent when scroll_y changes."""
 
     def watch_scroll_y(self, value: float) -> None:
