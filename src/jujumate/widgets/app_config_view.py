@@ -12,19 +12,19 @@ from textual.containers import VerticalScroll
 from textual.widget import Widget
 from textual.widgets import Label, Static
 
+from jujumate import palette
 from jujumate.models.entities import AppConfigEntry, AppInfo
 
 logger = logging.getLogger(__name__)
 
-_C_CHANGED = "#E95420"   # Ubuntu Orange — user-set values
 _C_KEY = "bold white"
 _C_META = "dim"
 
 
 def _colored_status(status: str) -> Text:
     colors = {
-        "active": "#26A269", "blocked": "#FF5555",
-        "error": "#FF5555", "waiting": "#EFB73E", "maintenance": "#EFB73E",
+        "active": palette.SUCCESS, "blocked": palette.ERROR,
+        "error": palette.ERROR, "waiting": palette.WARNING, "maintenance": palette.WARNING,
     }
     color = colors.get(status.strip().lower(), "")
     return Text(status, style=color) if color else Text(status)
@@ -42,8 +42,8 @@ def _build_config_renderable(app: AppInfo, entries: list[AppConfigEntry]) -> Gro
     meta.add_row("status", _colored_status(app.status))
     header = Panel(
         meta,
-        title=Text(app.name, style=f"bold {_C_CHANGED}"),
-        border_style=_C_CHANGED,
+        title=Text(app.name, style=f"bold {palette.PRIMARY}"),
+        border_style=palette.PRIMARY,
         expand=True,
         padding=(0, 1),
     )
@@ -56,7 +56,7 @@ def _build_config_renderable(app: AppInfo, entries: list[AppConfigEntry]) -> Gro
         box=rich_box.SIMPLE_HEAD,
         show_header=True,
         expand=True,
-        header_style=f"bold {_C_CHANGED}",
+        header_style=f"bold {palette.PRIMARY}",
         padding=(0, 1, 1, 1),
     )
     t.add_column("Key", no_wrap=True)
@@ -66,9 +66,9 @@ def _build_config_renderable(app: AppInfo, entries: list[AppConfigEntry]) -> Gro
 
     for e in changed:
         key_text = Text()
-        key_text.append("★ ", style=f"bold {_C_CHANGED}")
-        key_text.append(e.key, style=f"bold {_C_CHANGED}")
-        value_text = Text(e.value, style=f"bold {_C_CHANGED}")
+        key_text.append("★ ", style=f"bold {palette.PRIMARY}")
+        key_text.append(e.key, style=f"bold {palette.PRIMARY}")
+        value_text = Text(e.value, style=f"bold {palette.PRIMARY}")
         if e.default and e.default != e.value:
             value_text.append(f"  [default: {e.default}]", style="dim")
         t.add_row(key_text, e.type, value_text, e.description)

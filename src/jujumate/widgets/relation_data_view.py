@@ -12,16 +12,13 @@ from textual.containers import VerticalScroll
 from textual.widget import Widget
 from textual.widgets import Label, Static
 
+from jujumate import palette
 from jujumate.models.entities import RelationDataEntry, RelationInfo
 
 logger = logging.getLogger(__name__)
 
-# Ubuntu palette
-_C_PROVIDER = "#77216F"   # Aubergine — provider side
-_C_REQUIRER = "#E95420"   # Ubuntu Orange — requirer side
-_C_PEER     = "#EFB73E"   # Yellow — peer side
-_C_KEY      = "bold white"
-_C_META     = "dim"
+_C_KEY  = "bold white"
+_C_META = "dim"
 
 
 def _kv_table(data: dict[str, str]) -> Table:
@@ -60,7 +57,7 @@ def _build_relation_renderable(
     sides = ["peer"] if is_peer else ["provider", "requirer"]
     apps   = [provider_app] if is_peer else [provider_app, requirer_app]
     eps    = [provider_endpoint] if is_peer else [provider_endpoint, requirer_endpoint]
-    colors = [_C_PEER] if is_peer else [_C_PROVIDER, _C_REQUIRER]
+    colors = [palette.WARNING] if is_peer else [palette.SECONDARY, palette.PRIMARY]
 
     # Group entries
     app_bags: dict[str, dict[str, str]] = {a: {} for a in apps}
@@ -81,7 +78,7 @@ def _build_relation_renderable(
         box=rich_box.ROUNDED,
         show_header=True,
         expand=True,
-        border_style="#E95420",
+        border_style=palette.PRIMARY,
         header_style="bold",
     )
     for app, color in zip(apps, colors):

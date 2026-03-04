@@ -9,10 +9,13 @@ background: "#2C001E"   # Aubergine dark
 surface: "#5E2750"      # Aubergine mid
 panel: "#3D0F35"        # Between dark and mid
 warning: "#EFB73E"
-error: "#DA3450"
-success: "#0E8420"
+error: "#FF5555"
+success: "#26A269"
 dark: true
 variables:
+  link: "#19B6EE"
+  muted: "#888888"
+  pulse-off: "#004d26"
   block-cursor-background: "#4D4845"
   block-cursor-blurred-background: "#4D4845"
   block-cursor-foreground: "#FFFFFF"

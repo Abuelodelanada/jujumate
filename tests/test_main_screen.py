@@ -1,11 +1,12 @@
 from datetime import datetime
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from textual.widgets import DataTable, TabbedContent
+from textual.widgets import DataTable, Label, TabbedContent
 from textual.widgets._data_table import RowKey
 
-from jujumate.app import JujuMateApp
+from jujumate.app import JujuMateApp, _asyncio_exception_handler
 from jujumate.client.watcher import (
     AppsUpdated,
     CloudsUpdated,
@@ -26,8 +27,10 @@ from jujumate.models.entities import (
     AppInfo,
     CloudInfo,
     ControllerInfo,
+    ControllerOfferInfo,
     MachineInfo,
     ModelInfo,
+    OfferEndpoint,
     OfferInfo,
     RelationDataEntry,
     RelationInfo,
@@ -35,8 +38,19 @@ from jujumate.models.entities import (
     SecretInfo,
     UnitInfo,
 )
+from jujumate.screens.app_config_screen import AppConfigScreen
+from jujumate.screens.main_screen import MainScreen
+from jujumate.screens.offers_screen import OfferDetailScreen, OffersScreen
+from jujumate.screens.relation_data_screen import RelationDataScreen
+from jujumate.screens.secrets_screen import SecretDetailScreen, SecretsScreen
 from jujumate.settings import AppSettings
+from jujumate.widgets.app_config_view import AppConfigView
+from jujumate.widgets.clouds_view import CloudsView
+from jujumate.widgets.controllers_view import ControllersView
+from jujumate.widgets.models_view import ModelsView
 from jujumate.widgets.navigable_table import NavigableTable
+from jujumate.widgets.relation_data_view import RelationDataView
+from jujumate.widgets.status_view import StatusView
 
 
 @pytest.mark.asyncio
@@ -121,9 +135,6 @@ async def test_action_refresh_data_without_poller(pilot):
 @pytest.mark.asyncio
 async def test_refresh_header_before_mount_does_not_crash():
     """_refresh_header guard: calling before widgets are mounted must not raise."""
-    from jujumate.screens.main_screen import MainScreen
-    from jujumate.settings import AppSettings
-    from pathlib import Path
 
     screen = MainScreen(settings=AppSettings(juju_data_dir=Path("/nonexistent")))
     # Calling without a mounted app should silently return (guard path)
@@ -187,8 +198,6 @@ async def test_action_refresh_data_with_poller(pilot):
 
 @pytest.mark.asyncio
 async def test_cloud_selected_switches_to_controllers_and_filters(pilot):
-    from jujumate.widgets.clouds_view import CloudsView
-    from jujumate.widgets.controllers_view import ControllersView
 
     screen = pilot.app.screen
     # Populate data
@@ -208,8 +217,6 @@ async def test_cloud_selected_switches_to_controllers_and_filters(pilot):
 
 @pytest.mark.asyncio
 async def test_controller_selected_switches_to_models_and_filters(pilot):
-    from jujumate.widgets.controllers_view import ControllersView
-    from jujumate.widgets.models_view import ModelsView
 
     screen = pilot.app.screen
     screen._all_models = [
@@ -227,8 +234,6 @@ async def test_controller_selected_switches_to_models_and_filters(pilot):
 
 @pytest.mark.asyncio
 async def test_model_selected_switches_to_status_and_filters(pilot):
-    from jujumate.widgets.models_view import ModelsView
-    from jujumate.widgets.status_view import StatusView
 
     screen = pilot.app.screen
     screen._all_apps = [
@@ -252,7 +257,6 @@ async def test_model_selected_switches_to_status_and_filters(pilot):
 
 @pytest.mark.asyncio
 async def test_clear_filter_resets_cloud_and_controller(pilot):
-    from jujumate.widgets.controllers_view import ControllersView
 
     screen = pilot.app.screen
     screen._selected_cloud = "aws"
@@ -294,7 +298,6 @@ async def test_clear_filter_noop_when_model_selected(pilot):
     pytest.param({"message": "some asyncio message"}, False, id="asyncio-message"),
 ])
 def test_asyncio_exception_handler(context, should_suppress):
-    from jujumate.app import _asyncio_exception_handler
 
     loop = MagicMock()
     _asyncio_exception_handler(loop, context)
@@ -306,7 +309,6 @@ def test_asyncio_exception_handler(context, should_suppress):
 
 @pytest.mark.asyncio
 async def test_relations_updated_populates_status_view(pilot):
-    from jujumate.widgets.status_view import StatusView
 
     screen = pilot.app.screen
     screen._selected_model = "dev"
@@ -347,7 +349,6 @@ async def test_relations_updated_replaces_existing_for_same_model(pilot):
 
 @pytest.mark.asyncio
 async def test_offers_updated_populates_status_view(pilot):
-    from jujumate.widgets.status_view import StatusView
 
     screen = pilot.app.screen
     screen._selected_model = "cos"
@@ -366,7 +367,6 @@ async def test_offers_updated_populates_status_view(pilot):
 
 @pytest.mark.asyncio
 async def test_machines_updated_populates_status_view(pilot):
-    from jujumate.widgets.status_view import StatusView
 
     screen = pilot.app.screen
     screen._selected_model = "dev"
@@ -385,7 +385,6 @@ async def test_machines_updated_populates_status_view(pilot):
 
 @pytest.mark.asyncio
 async def test_fetch_relations_worker_posts_message(pilot):
-    from jujumate.models.entities import RelationInfo
 
     screen = pilot.app.screen
     rel = RelationInfo("dev", "pg:db", "wp:db", "pgsql", "regular")
@@ -471,7 +470,6 @@ async def test_help_screen_closes_with_escape(pilot):
 
 @pytest.mark.asyncio
 async def test_secrets_screen_populate_with_secrets(pilot):
-    from jujumate.screens.secrets_screen import SecretsScreen
 
     secrets = [
         SecretInfo(uri="csec:abc123", label="my-secret", owner="dev",
@@ -491,7 +489,6 @@ async def test_secrets_screen_populate_with_secrets(pilot):
 
 @pytest.mark.asyncio
 async def test_secrets_screen_populate_empty(pilot):
-    from jujumate.screens.secrets_screen import SecretsScreen
 
     with patch.object(SecretsScreen, "_fetch"):
         screen = SecretsScreen("ctrl", "dev")
@@ -505,7 +502,6 @@ async def test_secrets_screen_populate_empty(pilot):
 
 @pytest.mark.asyncio
 async def test_secrets_screen_show_error(pilot):
-    from jujumate.screens.secrets_screen import SecretsScreen
 
     with patch.object(SecretsScreen, "_fetch"):
         screen = SecretsScreen("ctrl", "dev")
@@ -520,7 +516,6 @@ async def test_secrets_screen_show_error(pilot):
 
 @pytest.mark.asyncio
 async def test_secrets_screen_row_selected_pushes_detail(pilot):
-    from jujumate.screens.secrets_screen import SecretDetailScreen, SecretsScreen
 
     secrets = [SecretInfo(uri="csec:abc", label="my-secret", owner="dev",
                           description="", revision=1, rotate_policy="", created="2024-01-01", updated="2024-01-01")]
@@ -540,7 +535,6 @@ async def test_secrets_screen_row_selected_pushes_detail(pilot):
 
 @pytest.mark.asyncio
 async def test_secrets_screen_row_selected_out_of_range_safe(pilot):
-    from jujumate.screens.secrets_screen import SecretsScreen
 
     with patch.object(SecretsScreen, "_fetch"):
         screen = SecretsScreen("ctrl", "dev")
@@ -558,9 +552,7 @@ async def test_secrets_screen_row_selected_out_of_range_safe(pilot):
 
 @pytest.mark.asyncio
 async def test_secret_detail_screen_shows_fields(pilot):
-    from textual.widgets import Label
 
-    from jujumate.screens.secrets_screen import SecretDetailScreen
 
     secret = SecretInfo(uri="csec:abc123", label="my-secret", owner="dev",
                         description="A test secret", revision=1, rotate_policy="",
@@ -581,8 +573,6 @@ async def test_secret_detail_screen_shows_fields(pilot):
 
 @pytest.mark.asyncio
 async def test_app_config_screen_success(pilot):
-    from jujumate.screens.app_config_screen import AppConfigScreen
-    from jujumate.widgets.app_config_view import AppConfigView
 
     ai = AppInfo("pg", "dev", "postgresql", "14/stable", 363, status="active")
     entries = [AppConfigEntry("port", "5432", "5432", "int", "Port", "default")]
@@ -599,8 +589,6 @@ async def test_app_config_screen_success(pilot):
 
 @pytest.mark.asyncio
 async def test_app_config_screen_fetch_error(pilot):
-    from jujumate.screens.app_config_screen import AppConfigScreen
-    from jujumate.widgets.app_config_view import AppConfigView
 
     ai = AppInfo("pg", "dev", "postgresql", "14/stable", 363, status="active")
 
@@ -621,8 +609,6 @@ async def test_app_config_screen_fetch_error(pilot):
 
 @pytest.mark.asyncio
 async def test_relation_data_screen_success(pilot):
-    from jujumate.screens.relation_data_screen import RelationDataScreen
-    from jujumate.widgets.relation_data_view import RelationDataView
 
     rel = RelationInfo("dev", "pg:db", "wp:db", "pgsql", "regular", relation_id=1)
     entries = [RelationDataEntry("provider", "pg", "host", "10.0.0.1", "app")]
@@ -639,8 +625,6 @@ async def test_relation_data_screen_success(pilot):
 
 @pytest.mark.asyncio
 async def test_relation_data_screen_fetch_error(pilot):
-    from jujumate.screens.relation_data_screen import RelationDataScreen
-    from jujumate.widgets.relation_data_view import RelationDataView
 
     rel = RelationInfo("dev", "pg:db", "wp:db", "pgsql", "regular", relation_id=1)
 
@@ -752,8 +736,6 @@ async def test_models_updated_keeps_selected_model_when_still_exists(pilot):
 
 @pytest.mark.asyncio
 async def test_offers_screen_populate_with_offers(pilot):
-    from jujumate.models.entities import ControllerOfferInfo, OfferEndpoint
-    from jujumate.screens.offers_screen import OffersScreen
 
     offers = [
         ControllerOfferInfo(
@@ -781,7 +763,6 @@ async def test_offers_screen_populate_with_offers(pilot):
 
 @pytest.mark.asyncio
 async def test_offers_screen_populate_empty(pilot):
-    from jujumate.screens.offers_screen import OffersScreen
 
     with patch.object(OffersScreen, "_fetch"):
         screen = OffersScreen("my-ctrl")
@@ -795,7 +776,6 @@ async def test_offers_screen_populate_empty(pilot):
 
 @pytest.mark.asyncio
 async def test_offers_screen_show_error(pilot):
-    from jujumate.screens.offers_screen import OffersScreen
 
     with patch.object(OffersScreen, "_fetch"):
         screen = OffersScreen("my-ctrl")
@@ -809,8 +789,6 @@ async def test_offers_screen_show_error(pilot):
 
 @pytest.mark.asyncio
 async def test_offers_screen_row_selected_pushes_detail(pilot):
-    from jujumate.models.entities import ControllerOfferInfo, OfferEndpoint
-    from jujumate.screens.offers_screen import OfferDetailScreen, OffersScreen
 
     offers = [
         ControllerOfferInfo(
@@ -836,10 +814,7 @@ async def test_offers_screen_row_selected_pushes_detail(pilot):
 
 @pytest.mark.asyncio
 async def test_offer_detail_screen_shows_fields(pilot):
-    from textual.widgets import Label
 
-    from jujumate.models.entities import ControllerOfferInfo, OfferEndpoint
-    from jujumate.screens.offers_screen import OfferDetailScreen
 
     offer = ControllerOfferInfo(
         model="cos", name="prom-scrape", offer_url="admin/cos.prom-scrape",
@@ -870,7 +845,6 @@ async def test_action_show_offers_no_controller(pilot):
 @pytest.mark.asyncio
 async def test_action_show_offers_pushes_screen(pilot):
     """Shift+O with a controller opens OffersScreen."""
-    from jujumate.screens.offers_screen import OffersScreen
 
     screen = pilot.app.screen
     screen._selected_controller = "my-ctrl"
@@ -883,8 +857,6 @@ async def test_action_show_offers_pushes_screen(pilot):
 @pytest.mark.asyncio
 async def test_offer_detail_screen_populate_consumers(pilot):
     """_populate_consumers fills the connections table with SAASInfo rows."""
-    from jujumate.models.entities import ControllerOfferInfo, OfferEndpoint
-    from jujumate.screens.offers_screen import OfferDetailScreen
 
     offer = ControllerOfferInfo(
         model="cos", name="prom", offer_url="admin/cos.prom",
@@ -910,9 +882,6 @@ async def test_offer_detail_screen_populate_consumers(pilot):
 @pytest.mark.asyncio
 async def test_offer_detail_fetch_consumers_scans_all_controllers(pilot):
     """_fetch_consumers scans models across all known controllers."""
-    from jujumate.config import JujuConfig
-    from jujumate.models.entities import ControllerOfferInfo, OfferEndpoint
-    from jujumate.screens.offers_screen import OfferDetailScreen
 
     offer = ControllerOfferInfo(
         model="cos", name="prom", offer_url="admin/cos.prom",

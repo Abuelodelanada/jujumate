@@ -7,7 +7,7 @@ to a real Juju controller by patching ``load_config`` to raise
 suite can run safely on machines that have Juju installed.
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 import pytest_asyncio

@@ -11,21 +11,30 @@ from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import DataTable, Input, Label
 
-from jujumate.models.entities import AppInfo, MachineInfo, OfferInfo, RelationInfo, SAASInfo, UnitInfo
+from jujumate import palette
+from jujumate.models.entities import (
+    AppInfo,
+    MachineInfo,
+    OfferInfo,
+    RelationInfo,
+    SAASInfo,
+    UnitInfo,
+)
 from jujumate.widgets.resource_table import Column, ResourceTable
+
 logger = logging.getLogger(__name__)
 
 _STATUS_COLORS: dict[str, str] = {
-    "active": "#26A269",
-    "idle": "#26A269",
-    "started": "#26A269",
-    "blocked": "#FF5555",
-    "error": "#FF5555",
-    "terminated": "#FF5555",
-    "maintenance": "#EFB73E",
-    "waiting": "#EFB73E",
-    "executing": "#EFB73E",
-    "unknown": "#888888",
+    "active":      palette.SUCCESS,
+    "idle":        palette.SUCCESS,
+    "started":     palette.SUCCESS,
+    "blocked":     palette.ERROR,
+    "error":       palette.ERROR,
+    "terminated":  palette.ERROR,
+    "maintenance": palette.WARNING,
+    "waiting":     palette.WARNING,
+    "executing":   palette.WARNING,
+    "unknown":     palette.MUTED,
 }
 
 
@@ -38,19 +47,19 @@ def _colored_status(status: str) -> Text:
 
 
 def _colored_ip(address: str) -> Text:
-    """Color an IP address in Ubuntu Cyan."""
+    """Color an IP address."""
     if address:
-        return Text(address, style="#19B6EE")
+        return Text(address, style=palette.LINK)
     return Text(address)
 
 
 def _colored_relation(endpoint: str) -> Text:
-    """Color the :rel_name part of an APP:REL endpoint in Ubuntu Orange."""
+    """Color the :rel_name part of an APP:REL endpoint."""
     if ":" in endpoint:
         app, rel = endpoint.split(":", 1)
         text = Text(app)
-        text.append(":", style="#19B6EE")
-        text.append(rel, style="#19B6EE")
+        text.append(":", style=palette.LINK)
+        text.append(rel, style=palette.LINK)
         return text
     return Text(endpoint)
 

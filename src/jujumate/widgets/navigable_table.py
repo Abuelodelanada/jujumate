@@ -12,11 +12,10 @@ from textual.message import Message
 from textual.widget import Widget
 from textual.widgets import Label, Static
 
+from jujumate import palette
 from jujumate.widgets.resource_table import Column
 
 logger = logging.getLogger(__name__)
-
-_HEADER_COLOR = "#E95420"
 
 
 class NavigableTable(Widget, can_focus=True):
@@ -92,7 +91,7 @@ class NavigableTable(Widget, can_focus=True):
             box=rich_box.SIMPLE_HEAD,
             show_header=True,
             expand=True,
-            header_style=f"bold {_HEADER_COLOR}",
+            header_style=f"bold {palette.PRIMARY}",
             border_style="dim",
             padding=(0, 1, 1, 1),
         )
@@ -100,7 +99,7 @@ class NavigableTable(Widget, can_focus=True):
         for col in self._columns:
             t.add_column(col.label, width=col.width)
         for i, row in enumerate(self._rows):
-            arrow = Text("❯", style=f"bold {_HEADER_COLOR}") if i == self._cursor else Text("")
+            arrow = Text("❯", style=f"bold {palette.PRIMARY}") if i == self._cursor else Text("")
             t.add_row(arrow, *row)
 
         self.query_one("#nt-content", Static).update(t)

@@ -1,6 +1,12 @@
-import pytest
 from unittest.mock import MagicMock, patch
-from textual.widgets import DataTable, Label, TabbedContent
+
+import pytest
+from rich.console import Group
+from rich.panel import Panel
+from rich.table import Table
+from rich.text import Text
+from textual import events
+from textual.widgets import DataTable, Input, Label, TabbedContent
 from textual.widgets._data_table import RowKey
 
 from jujumate.app import JujuMateApp
@@ -11,17 +17,44 @@ from jujumate.models.entities import (
     ControllerInfo,
     MachineInfo,
     ModelInfo,
+    OfferInfo,
     RelationDataEntry,
     RelationInfo,
     SAASInfo,
     UnitInfo,
 )
+from jujumate.widgets.app_config_view import (
+    AppConfigView,
+    _build_config_renderable,
+)
+from jujumate.widgets.app_config_view import (
+    _format_plain_text as _ac_format_plain_text,
+)
+from jujumate.widgets.apps_view import AppsView
 from jujumate.widgets.clouds_view import CloudsView
 from jujumate.widgets.controllers_view import ControllersView
+from jujumate.widgets.jujumate_header import HeaderContext, JujuMateHeader
 from jujumate.widgets.models_view import ModelsView
 from jujumate.widgets.navigable_table import NavigableTable
-from jujumate.widgets.resource_table import ResourceTable
-from jujumate.widgets.status_view import _MSG_TRUNC_WIDTH
+from jujumate.widgets.relation_data_view import (
+    RelationDataView,
+    _build_relation_renderable,
+    _kv_table,
+    _unit_panel,
+)
+from jujumate.widgets.relation_data_view import (
+    _format_plain_text as _rd_format_plain_text,
+)
+from jujumate.widgets.resource_table import Column, ResourceTable
+from jujumate.widgets.status_view import (
+    _MSG_TRUNC_WIDTH,
+    StatusView,
+    _colored_relation,
+    _group_units,
+    _TrackedScroll,
+    _trunc_msg,
+)
+from jujumate.widgets.units_view import UnitsView
 
 
 async def _mount_view(pilot, view):
@@ -182,7 +215,6 @@ async def test_view_row_selection_posts_message(
     ),
 ])
 async def test_status_view_update_tables(pilot, view_id, update_method_name, entities, extra_kwargs, table_id):
-    from jujumate.widgets.status_view import StatusView
 
     view = StatusView(id=view_id)
     await _mount_view(pilot, view)
@@ -193,7 +225,6 @@ async def test_status_view_update_tables(pilot, view_id, update_method_name, ent
 
 @pytest.mark.asyncio
 async def test_status_view_update_units_kubernetes(pilot):
-    from jujumate.widgets.status_view import StatusView
 
     view = StatusView(id="test-status-units-k8s")
     await _mount_view(pilot, view)
@@ -209,8 +240,6 @@ async def test_status_view_update_units_kubernetes(pilot):
 
 @pytest.mark.asyncio
 async def test_status_view_update_offers(pilot):
-    from jujumate.models.entities import OfferInfo
-    from jujumate.widgets.status_view import StatusView
 
     view = StatusView(id="test-status-offers")
     await _mount_view(pilot, view)
@@ -229,7 +258,6 @@ async def test_status_view_update_offers(pilot):
 
 
 def test_jujumate_header_breadcrumb():
-    from jujumate.widgets.jujumate_header import HeaderContext, JujuMateHeader
 
     header = JujuMateHeader.__new__(JujuMateHeader)
     ctx = HeaderContext(
@@ -258,7 +286,6 @@ def test_jujumate_header_breadcrumb():
 
 
 def test_jujumate_header_stats_by_tab():
-    from jujumate.widgets.jujumate_header import HeaderContext, JujuMateHeader
 
     header = JujuMateHeader.__new__(JujuMateHeader)
     for tab, count_field, expected_key, expected_val in [
@@ -273,7 +300,6 @@ def test_jujumate_header_stats_by_tab():
 
 
 def test_jujumate_header_disconnected_status():
-    from jujumate.widgets.jujumate_header import HeaderContext, JujuMateHeader
 
     header = JujuMateHeader.__new__(JujuMateHeader)
     ctx = HeaderContext(is_connected=False)
@@ -281,7 +307,6 @@ def test_jujumate_header_disconnected_status():
 
 
 def test_jujumate_header_empty_breadcrumb():
-    from jujumate.widgets.jujumate_header import HeaderContext, JujuMateHeader
 
     header = JujuMateHeader.__new__(JujuMateHeader)
     ctx = HeaderContext()
@@ -289,7 +314,6 @@ def test_jujumate_header_empty_breadcrumb():
 
 
 def test_jujumate_header_stats_unknown_tab():
-    from jujumate.widgets.jujumate_header import HeaderContext, JujuMateHeader
 
     header = JujuMateHeader.__new__(JujuMateHeader)
     ctx = HeaderContext(active_tab="tab-unknown")
@@ -297,7 +321,6 @@ def test_jujumate_header_stats_unknown_tab():
 
 
 def test_jujumate_header_connected_no_timestamp():
-    from jujumate.widgets.jujumate_header import HeaderContext, JujuMateHeader
 
     header = JujuMateHeader.__new__(JujuMateHeader)
     ctx = HeaderContext(is_connected=True, timestamp="")
@@ -312,7 +335,6 @@ def test_jujumate_header_connected_no_timestamp():
     pytest.param("x" * (_MSG_TRUNC_WIDTH + 5), None, True, id="long"),
 ])
 def test_trunc_msg(text, expected, check_truncated):
-    from jujumate.widgets.status_view import _trunc_msg
 
     result = _trunc_msg(text)
     if check_truncated:
@@ -324,7 +346,6 @@ def test_trunc_msg(text, expected, check_truncated):
 
 @pytest.mark.asyncio
 async def test_status_view_scroll_indicator_hidden_when_content_fits():
-    from jujumate.widgets.status_view import StatusView
 
     app = JujuMateApp()
     async with app.run_test(size=(120, 60)) as pilot:
@@ -339,7 +360,6 @@ async def test_status_view_scroll_indicator_hidden_when_content_fits():
 
 @pytest.mark.asyncio
 async def test_status_view_scroll_indicator_shown_when_content_overflows():
-    from jujumate.widgets.status_view import StatusView
 
     app = JujuMateApp()
     async with app.run_test(size=(120, 10)) as pilot:
@@ -361,7 +381,6 @@ async def test_status_view_scroll_indicator_shown_when_content_overflows():
 
 @pytest.mark.asyncio
 async def test_tracked_scroll_notifies_parent():
-    from jujumate.widgets.status_view import StatusView, _TrackedScroll
 
     app = JujuMateApp()
     async with app.run_test(size=(120, 10)) as pilot:
@@ -384,7 +403,6 @@ async def test_tracked_scroll_notifies_parent():
 @pytest.mark.asyncio
 async def test_status_view_scroll_indicator_handles_missing_widgets():
     """Cover defensive except branches when widgets aren't mounted."""
-    from jujumate.widgets.status_view import StatusView
 
     view = StatusView(id="test-detached")
     # _update_scroll_indicator with no _TrackedScroll mounted
@@ -396,7 +414,6 @@ async def test_status_view_scroll_indicator_handles_missing_widgets():
 
 @pytest.mark.asyncio
 async def test_status_view_update_machines(pilot):
-    from jujumate.widgets.status_view import StatusView
 
     view = StatusView(id="test-status-machines")
     await _mount_view(pilot, view)
@@ -413,7 +430,6 @@ async def test_status_view_update_machines(pilot):
 
 @pytest.mark.asyncio
 async def test_status_view_update_machines_hidden_for_kubernetes(pilot):
-    from jujumate.widgets.status_view import StatusView
 
     view = StatusView(id="test-status-machines-k8s")
     await _mount_view(pilot, view)
@@ -427,7 +443,6 @@ async def test_status_view_update_machines_hidden_for_kubernetes(pilot):
 
 @pytest.mark.asyncio
 async def test_status_view_update_machines_hidden_when_empty(pilot):
-    from jujumate.widgets.status_view import StatusView
 
     view = StatusView(id="test-status-machines-empty")
     await _mount_view(pilot, view)
@@ -437,9 +452,7 @@ async def test_status_view_update_machines_hidden_when_empty(pilot):
 
 
 def test_colored_relation_no_colon():
-    from rich.text import Text
 
-    from jujumate.widgets.status_view import _colored_relation
 
     result = _colored_relation("myapp")
     assert isinstance(result, Text)
@@ -448,7 +461,6 @@ def test_colored_relation_no_colon():
 
 @pytest.mark.asyncio
 async def test_status_view_msg_bar_updates_on_row_highlight(pilot):
-    from jujumate.widgets.status_view import StatusView
 
     view = pilot.app.screen.query_one("#status-view", StatusView)
     long_msg = "unit is waiting for something to happen"
@@ -466,7 +478,6 @@ async def test_status_view_msg_bar_updates_on_row_highlight(pilot):
 @pytest.mark.asyncio
 async def test_status_view_msg_bar_handles_out_of_range(pilot):
     """Cover defensive path when cursor_row is out of range."""
-    from jujumate.widgets.status_view import StatusView
 
     view = pilot.app.screen.query_one("#status-view", StatusView)
     # _row_messages is empty — simulate a stale highlight event
@@ -480,11 +491,8 @@ async def test_status_view_msg_bar_handles_out_of_range(pilot):
 @pytest.mark.asyncio
 async def test_status_view_msg_bar_handles_bad_parent(pilot):
     """Cover except branch when data_table.parent has no id."""
-    from unittest.mock import MagicMock
 
-    from textual.widgets._data_table import RowKey
 
-    from jujumate.widgets.status_view import StatusView
 
     view = pilot.app.screen.query_one("#status-view", StatusView)
     bad_dt = MagicMock()
@@ -498,7 +506,6 @@ async def test_status_view_msg_bar_handles_bad_parent(pilot):
 @pytest.mark.asyncio
 async def test_status_view_msg_bar_handles_missing_label():
     """Cover except branch when #msg-bar is not yet mounted."""
-    from jujumate.widgets.status_view import StatusView
 
     view = StatusView(id="detached-msg-bar")
     dt_mock = type("FakeDT", (), {"parent": type("FakeParent", (), {"id": "status-apps-table"})()})()
@@ -508,7 +515,6 @@ async def test_status_view_msg_bar_handles_missing_label():
 
 def test_restore_cursor_handles_unmounted():
     """Cover except branch of _restore_cursor when widget is not mounted."""
-    from jujumate.widgets.status_view import StatusView
 
     view = StatusView(id="detached-restore")
     view._restore_cursor("status-apps-table", 5)
@@ -517,7 +523,6 @@ def test_restore_cursor_handles_unmounted():
 @pytest.mark.asyncio
 async def test_restore_cursor_moves_datatable_cursor(pilot):
     """Cover _restore_cursor moving cursor to last-known position."""
-    from jujumate.widgets.status_view import StatusView
 
     view = pilot.app.screen.query_one("#status-view", StatusView)
     msgs = ["msg0", "msg1", "msg2"]
@@ -534,7 +539,6 @@ async def test_restore_cursor_moves_datatable_cursor(pilot):
 @pytest.mark.asyncio
 async def test_row_highlighted_updates_msg_bar(pilot):
     """Cover on_data_table_row_highlighted updating msg-bar on user navigation."""
-    from jujumate.widgets.status_view import StatusView
 
     view = pilot.app.screen.query_one("#status-view", StatusView)
     msg = "hook failed: unit not ready"
@@ -553,7 +557,6 @@ async def test_row_highlighted_updates_msg_bar(pilot):
 @pytest.mark.asyncio
 async def test_inactive_table_event_ignored_by_handler(pilot):
     """Events from non-active tables must not overwrite the msg-bar."""
-    from jujumate.widgets.status_view import StatusView
 
     view = pilot.app.screen.query_one("#status-view", StatusView)
     apps = [AppInfo("myapp", "", "myapp", "stable", 1, message="hook failed")]
@@ -576,8 +579,6 @@ async def test_inactive_table_event_ignored_by_handler(pilot):
 @pytest.mark.asyncio
 async def test_table_focused_message_updates_active_table(pilot):
     """on_resource_table_table_focused sets _last_active_table and updates msg-bar."""
-    from jujumate.widgets.status_view import StatusView
-    from jujumate.widgets.resource_table import ResourceTable
 
     view = pilot.app.screen.query_one("#status-view", StatusView)
     msg = "hook failed: timeout"
@@ -593,8 +594,6 @@ async def test_table_focused_message_updates_active_table(pilot):
 @pytest.mark.asyncio
 async def test_table_focused_message_no_id_is_safe(pilot):
     """on_resource_table_table_focused with a table that has no id does not crash."""
-    from jujumate.widgets.status_view import StatusView
-    from jujumate.widgets.resource_table import ResourceTable, Column
 
     view = pilot.app.screen.query_one("#status-view", StatusView)
     # ResourceTable without an id — handler should silently skip
@@ -609,7 +608,6 @@ async def test_table_focused_message_no_id_is_safe(pilot):
 
 @pytest.mark.asyncio
 async def test_apps_view_update(pilot):
-    from jujumate.widgets.apps_view import AppsView
 
     view = AppsView(id="test-apps")
     await pilot.app.screen.mount(view)
@@ -624,7 +622,6 @@ async def test_apps_view_update(pilot):
 
 @pytest.mark.asyncio
 async def test_apps_view_empty(pilot):
-    from jujumate.widgets.apps_view import AppsView
 
     view = AppsView(id="test-apps-empty")
     await pilot.app.screen.mount(view)
@@ -636,7 +633,6 @@ async def test_apps_view_empty(pilot):
 
 @pytest.mark.asyncio
 async def test_apps_view_row_selection_posts_app_selected(pilot):
-    from jujumate.widgets.apps_view import AppsView
 
     view = AppsView(id="test-apps-sel")
     await pilot.app.screen.mount(view)
@@ -656,7 +652,6 @@ async def test_apps_view_row_selection_posts_app_selected(pilot):
 
 @pytest.mark.asyncio
 async def test_apps_view_row_selection_ignores_none_key(pilot):
-    from jujumate.widgets.apps_view import AppsView
 
     view = AppsView(id="test-apps-none")
     await pilot.app.screen.mount(view)
@@ -679,7 +674,6 @@ async def test_apps_view_row_selection_ignores_none_key(pilot):
 
 @pytest.mark.asyncio
 async def test_units_view_update(pilot):
-    from jujumate.widgets.units_view import UnitsView
 
     view = UnitsView(id="test-units")
     await pilot.app.screen.mount(view)
@@ -694,7 +688,6 @@ async def test_units_view_update(pilot):
 
 @pytest.mark.asyncio
 async def test_units_view_empty(pilot):
-    from jujumate.widgets.units_view import UnitsView
 
     view = UnitsView(id="test-units-empty")
     await pilot.app.screen.mount(view)
@@ -711,9 +704,7 @@ async def test_units_view_empty(pilot):
 
 @pytest.mark.asyncio
 async def test_navigable_table_cursor_navigation(pilot):
-    from textual import events
 
-    from jujumate.widgets.resource_table import Column
 
     nt = NavigableTable(columns=[Column("Name", "name")], id="test-nt-nav")
     await pilot.app.screen.mount(nt)
@@ -738,9 +729,7 @@ async def test_navigable_table_cursor_navigation(pilot):
 
 @pytest.mark.asyncio
 async def test_navigable_table_enter_posts_row_selected(pilot):
-    from textual import events
 
-    from jujumate.widgets.resource_table import Column
 
     nt = NavigableTable(columns=[Column("Name", "name")], id="test-nt-enter")
     await pilot.app.screen.mount(nt)
@@ -759,9 +748,7 @@ async def test_navigable_table_enter_posts_row_selected(pilot):
 
 @pytest.mark.asyncio
 async def test_navigable_table_enter_no_rows_does_nothing(pilot):
-    from textual import events
 
-    from jujumate.widgets.resource_table import Column
 
     nt = NavigableTable(columns=[Column("Name", "name")], id="test-nt-norow")
     await pilot.app.screen.mount(nt)
@@ -778,7 +765,6 @@ async def test_navigable_table_enter_no_rows_does_nothing(pilot):
 
 
 def test_group_units_with_orphan_subordinates():
-    from jujumate.widgets.status_view import _group_units
 
     principal = UnitInfo("pg/0", "pg", "0", "active", "idle")
     sub_known = UnitInfo("nrpe/0", "nrpe", "0", "active", "idle", subordinate_of="pg/0")
@@ -790,14 +776,12 @@ def test_group_units_with_orphan_subordinates():
 
 
 def test_status_view_relation_selected_message():
-    from jujumate.widgets.status_view import StatusView
 
     rel = RelationInfo("dev", "pg:db", "wp:db", "pgsql", "regular")
     assert StatusView.RelationSelected(rel).relation is rel
 
 
 def test_status_view_app_selected_message():
-    from jujumate.widgets.status_view import StatusView
 
     ai = AppInfo("pg", "dev", "pg", "14/stable", 1)
     assert StatusView.AppSelected(ai).app is ai
@@ -805,7 +789,6 @@ def test_status_view_app_selected_message():
 
 @pytest.mark.asyncio
 async def test_status_view_update_saas_shown(pilot):
-    from jujumate.widgets.status_view import StatusView
 
     view = StatusView(id="test-saas-show")
     await pilot.app.screen.mount(view)
@@ -817,7 +800,6 @@ async def test_status_view_update_saas_shown(pilot):
 
 @pytest.mark.asyncio
 async def test_status_view_update_saas_hidden_when_empty(pilot):
-    from jujumate.widgets.status_view import StatusView
 
     view = StatusView(id="test-saas-empty")
     await pilot.app.screen.mount(view)
@@ -829,9 +811,7 @@ async def test_status_view_update_saas_hidden_when_empty(pilot):
 
 @pytest.mark.asyncio
 async def test_status_view_filter_activate_and_close(pilot):
-    from textual.widgets import Input
 
-    from jujumate.widgets.status_view import StatusView
 
     view = pilot.app.screen.query_one("#status-view", StatusView)
     fi = view.query_one("#filter-input", Input)
@@ -850,7 +830,6 @@ async def test_status_view_filter_activate_and_close(pilot):
 
 @pytest.mark.asyncio
 async def test_status_view_filter_filters_apps(pilot):
-    from jujumate.widgets.status_view import StatusView
 
     view = pilot.app.screen.query_one("#status-view", StatusView)
     view.update_apps([
@@ -871,7 +850,6 @@ async def test_status_view_filter_filters_apps(pilot):
 
 @pytest.mark.asyncio
 async def test_status_view_filter_filters_relations(pilot):
-    from jujumate.widgets.status_view import StatusView
 
     view = pilot.app.screen.query_one("#status-view", StatusView)
     view.update_relations([
@@ -887,7 +865,6 @@ async def test_status_view_filter_filters_relations(pilot):
 
 @pytest.mark.asyncio
 async def test_status_view_row_selected_posts_app_selected(pilot):
-    from jujumate.widgets.status_view import StatusView
 
     view = pilot.app.screen.query_one("#status-view", StatusView)
     view.update_apps([AppInfo("pg", "dev", "pg", "14/stable", 1)])
@@ -905,7 +882,6 @@ async def test_status_view_row_selected_posts_app_selected(pilot):
 
 @pytest.mark.asyncio
 async def test_status_view_row_selected_posts_relation_selected(pilot):
-    from jujumate.widgets.status_view import StatusView
 
     view = pilot.app.screen.query_one("#status-view", StatusView)
     view.update_relations([RelationInfo("dev", "pg:db", "wp:db", "pgsql", "regular")])
@@ -923,9 +899,7 @@ async def test_status_view_row_selected_posts_relation_selected(pilot):
 
 @pytest.mark.asyncio
 async def test_status_view_check_action_close_filter(pilot):
-    from textual.widgets import Input
 
-    from jujumate.widgets.status_view import StatusView
 
     view = pilot.app.screen.query_one("#status-view", StatusView)
     fi = view.query_one("#filter-input", Input)
@@ -965,9 +939,7 @@ async def test_status_view_check_action_close_filter(pilot):
     ),
 ])
 def test_build_config_renderable(ai, entries):
-    from rich.console import Group
 
-    from jujumate.widgets.app_config_view import _build_config_renderable
 
     assert isinstance(_build_config_renderable(ai, entries), Group)
 
@@ -996,16 +968,14 @@ def test_build_config_renderable(ai, entries):
     ),
 ])
 def test_format_plain_text_app_config(ai, entries, expected_fragments):
-    from jujumate.widgets.app_config_view import _format_plain_text
 
-    result = _format_plain_text(ai, entries)
+    result = _ac_format_plain_text(ai, entries)
     for fragment in expected_fragments:
         assert fragment in result
 
 
 @pytest.mark.asyncio
 async def test_app_config_view_update(pilot):
-    from jujumate.widgets.app_config_view import AppConfigView
 
     view = AppConfigView(id="test-ac")
     await pilot.app.screen.mount(view)
@@ -1034,7 +1004,6 @@ async def test_app_config_view_update(pilot):
     ),
 ])
 async def test_app_config_view_visibility_states(pilot, view_id, method_name, method_args):
-    from jujumate.widgets.app_config_view import AppConfigView
 
     view = AppConfigView(id=view_id)
     await pilot.app.screen.mount(view)
@@ -1051,29 +1020,23 @@ async def test_app_config_view_visibility_states(pilot, view_id, method_name, me
 
 
 def test_kv_table_with_data():
-    from jujumate.widgets.relation_data_view import _kv_table
 
     assert _kv_table({"key1": "value1", "key2": "value2"}).row_count == 2
 
 
 def test_kv_table_empty():
-    from jujumate.widgets.relation_data_view import _kv_table
 
     assert _kv_table({}).row_count == 1  # <empty> row
 
 
 def test_unit_panel_with_leader():
-    from rich.panel import Panel
 
-    from jujumate.widgets.relation_data_view import _unit_panel
 
     assert isinstance(_unit_panel("pg/0", {"key": "val"}, is_leader=True, color="#77216F"), Panel)
 
 
 def test_unit_panel_non_leader():
-    from rich.panel import Panel
 
-    from jujumate.widgets.relation_data_view import _unit_panel
 
     assert isinstance(_unit_panel("pg/1", {}, is_leader=False, color="#E95420"), Panel)
 
@@ -1094,9 +1057,7 @@ def test_unit_panel_non_leader():
     ),
 ])
 def test_build_relation_renderable(rel, entries):
-    from rich.table import Table
 
-    from jujumate.widgets.relation_data_view import _build_relation_renderable
 
     assert isinstance(_build_relation_renderable(rel, entries), Table)
 
@@ -1125,16 +1086,14 @@ def test_build_relation_renderable(rel, entries):
     ),
 ])
 def test_format_plain_text_relation(rel, entries, expected_fragments):
-    from jujumate.widgets.relation_data_view import _format_plain_text
 
-    result = _format_plain_text(rel, entries)
+    result = _rd_format_plain_text(rel, entries)
     for fragment in expected_fragments:
         assert fragment in result
 
 
 @pytest.mark.asyncio
 async def test_relation_data_view_update(pilot):
-    from jujumate.widgets.relation_data_view import RelationDataView
 
     view = RelationDataView(id="test-rd")
     await pilot.app.screen.mount(view)
@@ -1162,7 +1121,6 @@ async def test_relation_data_view_update(pilot):
     ),
 ])
 async def test_relation_data_view_visibility_states(pilot, view_id, method_name, method_args):
-    from jujumate.widgets.relation_data_view import RelationDataView
 
     view = RelationDataView(id=view_id)
     await pilot.app.screen.mount(view)
@@ -1181,7 +1139,6 @@ async def test_relation_data_view_visibility_states(pilot, view_id, method_name,
 @pytest.mark.asyncio
 async def test_status_view_row_highlighted_has_focus_sets_active_table(pilot):
     """Line 454: has_focus=True branch sets _last_active_table."""
-    from jujumate.widgets.status_view import StatusView
 
     view = pilot.app.screen.query_one("#status-view", StatusView)
     view.update_apps([AppInfo("pg", "dev", "pg", "14/stable", 1)])
@@ -1199,7 +1156,6 @@ async def test_status_view_row_highlighted_has_focus_sets_active_table(pilot):
 @pytest.mark.asyncio
 async def test_status_view_resource_table_focused_exception_safe(pilot):
     """Lines 480-481: exception in on_resource_table_table_focused is silently swallowed."""
-    from jujumate.widgets.status_view import StatusView
 
     view = pilot.app.screen.query_one("#status-view", StatusView)
 
@@ -1212,7 +1168,6 @@ async def test_status_view_resource_table_focused_exception_safe(pilot):
 @pytest.mark.asyncio
 async def test_status_view_row_selected_exception_safe(pilot):
     """Lines 530-531: exception in on_data_table_row_selected is silently swallowed."""
-    from jujumate.widgets.status_view import StatusView
 
     view = pilot.app.screen.query_one("#status-view", StatusView)
 
@@ -1227,7 +1182,6 @@ async def test_status_view_row_selected_exception_safe(pilot):
 @pytest.mark.asyncio
 async def test_status_view_rerender_all_exception_safe(pilot):
     """Lines 537-558: all six render methods raise — _rerender_all swallows each."""
-    from jujumate.widgets.status_view import StatusView
 
     view = pilot.app.screen.query_one("#status-view", StatusView)
 
@@ -1245,7 +1199,6 @@ async def test_status_view_rerender_all_exception_safe(pilot):
 @pytest.mark.asyncio
 async def test_status_view_check_action_close_filter_exception_safe(pilot):
     """Lines 565-566: query_one raises in check_action → returns False."""
-    from jujumate.widgets.status_view import StatusView
 
     view = pilot.app.screen.query_one("#status-view", StatusView)
 
@@ -1258,9 +1211,7 @@ async def test_status_view_check_action_close_filter_exception_safe(pilot):
 @pytest.mark.asyncio
 async def test_status_view_filter_changed_updates_filter(pilot):
     """Lines 583-584: Input.Changed on #filter-input sets _filter and rerenders."""
-    from textual.widgets import Input
 
-    from jujumate.widgets.status_view import StatusView
 
     view = pilot.app.screen.query_one("#status-view", StatusView)
     view.update_apps([
@@ -1283,9 +1234,7 @@ async def test_status_view_filter_changed_updates_filter(pilot):
 @pytest.mark.asyncio
 async def test_status_view_filter_submitted_hides_input(pilot):
     """Lines 588-593: Input.Submitted on #filter-input hides the input."""
-    from textual.widgets import Input
 
-    from jujumate.widgets.status_view import StatusView
 
     view = pilot.app.screen.query_one("#status-view", StatusView)
     view.action_activate_filter()

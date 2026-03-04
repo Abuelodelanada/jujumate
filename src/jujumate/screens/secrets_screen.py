@@ -10,6 +10,7 @@ from textual.containers import Vertical
 from textual.screen import ModalScreen
 from textual.widgets import DataTable, Label
 
+from jujumate import palette
 from jujumate.client.juju_client import JujuClient
 from jujumate.models.entities import SecretInfo
 
@@ -134,7 +135,7 @@ class SecretsScreen(ModalScreen):
             return
         for i, s in enumerate(secrets):
             dt.add_row(
-                Text(s.uri, style="#19B6EE"),
+                Text(s.uri, style=palette.LINK),
                 s.label or "—",
                 s.owner or "—",
                 str(s.revision),

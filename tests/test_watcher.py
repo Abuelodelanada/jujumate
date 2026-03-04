@@ -10,7 +10,6 @@ from jujumate.client.watcher import (
     ControllersUpdated,
     DataRefreshed,
     JujuPoller,
-    MachinesUpdated,
     ModelsUpdated,
     OffersUpdated,
     RelationsUpdated,

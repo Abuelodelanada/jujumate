@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from textual.app import App
 from textual.filter import ANSIToTruecolor, LineFilter
 
+from jujumate import palette as palette_mod
 from jujumate.screens.main_screen import MainScreen
 from jujumate.settings import AppSettings, load_settings
 from jujumate.theme_loader import load_all_themes
@@ -57,7 +58,7 @@ class JujuMateApp(App):
         background: ansi_default;
     }
     DataTable:focus > .datatable--cursor {
-        background: #4D4845;
+        background: $block-cursor-background;
         text-style: bold;
     }
     ToastRack {
@@ -94,4 +95,5 @@ class JujuMateApp(App):
 
         if theme_name:
             self.theme = theme_name
+            palette_mod.init(themes[theme_name])
             logger.info("Applied theme '%s'", theme_name)

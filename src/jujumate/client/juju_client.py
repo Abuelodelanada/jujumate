@@ -1,5 +1,6 @@
 import logging
 
+from juju.client import client as juju_client
 from juju.controller import Controller
 
 from jujumate.models.entities import (
@@ -411,8 +412,6 @@ class JujuClient:
         provider unit we get: provider app-level data + requirer units' data.
         From the requirer unit we get: requirer app-level data + provider units' data.
         """
-        from juju.client import client as juju_client
-
         model = await self._controller.get_model(model_name)
         try:
             facade = juju_client.ApplicationFacade.from_connection(model.connection())

@@ -3,6 +3,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from jujumate.client.juju_client import JujuClient, JujuClientError
+from jujumate.models.entities import (
+    AppConfigEntry,
+    ControllerOfferInfo,
+    RelationDataEntry,
+    SecretInfo,
+)
 
 
 @pytest.mark.asyncio
@@ -304,7 +310,6 @@ async def test_get_controllers_returns_empty_on_failure(mock_controller):
 
 @pytest.mark.asyncio
 async def test_get_relations(mock_controller):
-    from jujumate.models.entities import RelationInfo
 
     model = AsyncMock()
     status = MagicMock()
@@ -376,7 +381,6 @@ async def test_get_relations_raises_on_failure(mock_controller):
 
 @pytest.mark.asyncio
 async def test_get_status_details_returns_offers(mock_controller):
-    from jujumate.models.entities import OfferInfo
 
     model = AsyncMock()
     status = MagicMock()
@@ -427,7 +431,6 @@ async def test_get_status_details_returns_offers(mock_controller):
     pytest.param("modelonly", "modelonly", id="without-dash"),
 ])
 async def test_get_secrets_owner_tag_parsing(mock_controller, owner_tag, expected_owner):
-    from jujumate.models.entities import SecretInfo
 
     model = AsyncMock()
     model.name = "dev"
@@ -473,7 +476,6 @@ async def test_get_secrets_empty(mock_controller):
 
 @pytest.mark.asyncio
 async def test_get_app_config(mock_controller):
-    from jujumate.models.entities import AppConfigEntry
 
     model = AsyncMock()
     app_obj = AsyncMock()
@@ -536,7 +538,6 @@ async def test_get_app_config_app_not_found(mock_controller):
 
 @pytest.mark.asyncio
 async def test_get_relation_data_provider_side(mock_controller):
-    from jujumate.models.entities import RelationDataEntry
 
     model = AsyncMock()
     model.connection = MagicMock(return_value=MagicMock())
@@ -652,7 +653,6 @@ async def test_get_relation_data_skips_wrong_relation_id(mock_controller):
 @pytest.mark.asyncio
 async def test_get_status_details_saas_from_unknown_fields(mock_controller):
     """Lines 303-306: SAAS parsed from status.unknown_fields['application-endpoints'] (Juju 3.6+)."""
-    from jujumate.models.entities import SAASInfo
 
     model = AsyncMock()
     status = MagicMock()
@@ -694,7 +694,6 @@ async def test_get_status_details_saas_from_unknown_fields(mock_controller):
 @pytest.mark.asyncio
 async def test_get_status_details_saas_from_remote_applications(mock_controller):
     """Lines 316-318: SAAS parsed from status.remote_applications."""
-    from jujumate.models.entities import SAASInfo
 
     model = AsyncMock()
     status = MagicMock()
@@ -731,7 +730,6 @@ async def test_get_status_details_saas_from_remote_applications(mock_controller)
 @pytest.mark.asyncio
 async def test_get_relation_data_peer_relation(mock_controller):
     """Line 416: peer relation (provider_app == requirer_app) builds single-side list."""
-    from jujumate.models.entities import RelationDataEntry
 
     model = AsyncMock()
     model.connection = MagicMock(return_value=MagicMock())
@@ -838,7 +836,6 @@ async def test_get_relation_data_unit_result_has_error(mock_controller):
 @pytest.mark.asyncio
 async def test_get_relation_data_includes_unit_level_data(mock_controller):
     """Lines 467-469: unit_relation_data entries with unitdata are included."""
-    from jujumate.models.entities import RelationDataEntry
 
     model = AsyncMock()
     model.connection = MagicMock(return_value=MagicMock())
@@ -887,7 +884,6 @@ async def test_get_relation_data_includes_unit_level_data(mock_controller):
 @pytest.mark.asyncio
 async def test_get_controller_offers_uses_status_counts(mock_controller):
     """active/total connection counts come from model status, not list_offers.connections."""
-    from jujumate.models.entities import ControllerOfferInfo
 
     # list_offers returns offer with empty connections (non-admin scenario)
     ep = MagicMock()

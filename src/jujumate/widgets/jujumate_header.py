@@ -8,11 +8,11 @@ from textual.app import ComposeResult
 from textual.widget import Widget
 from textual.widgets import Static
 
+from jujumate import palette
+
 logger = logging.getLogger(__name__)
 
 _SUBTITLE = "Juju infrastructure TUI"
-_BORDER_COLOR = "#E95420"  # Ubuntu Orange
-_APP_NAME = "[bold #77216F]⬢[/bold #77216F] [bold white]JujuMate[/bold white]"
 
 
 @dataclass
@@ -78,15 +78,17 @@ class JujuMateHeader(Widget):
         breadcrumb = self._build_breadcrumb(ctx)
         stats = self._build_stats(ctx)
 
-        # Left: bordered panel (Ubuntu Orange border)
+        # Left: bordered panel
         inner = RichText()
         inner.append(_SUBTITLE, style="dim")
         inner.append("\n")
         inner.append_text(RichText.from_markup(status))
+        sec = palette.SECONDARY
+        app_name = f"[bold {sec}]⬢[/bold {sec}] [bold white]JujuMate[/bold white]"
         left_panel = Panel(
             inner,
-            title=_APP_NAME,
-            border_style=_BORDER_COLOR,
+            title=app_name,
+            border_style=palette.PRIMARY,
             padding=(0, 1),
         )
         self.query_one("#header-left", Static).update(left_panel)
@@ -102,20 +104,23 @@ class JujuMateHeader(Widget):
 
     def _build_breadcrumb(self, ctx: HeaderContext) -> str:
         parts = []
+        p = palette.PRIMARY
+        b, w = f"bold {p}", "bold white"
         if ctx.selected_cloud:
-            parts.append(f"[bold {_BORDER_COLOR}]cloud:[/bold {_BORDER_COLOR}] [bold white]{ctx.selected_cloud}[/bold white]")
+            parts.append(f"[{b}]cloud:[/{b}] [{w}]{ctx.selected_cloud}[/{w}]")
         if ctx.selected_controller:
-            parts.append(f"[bold {_BORDER_COLOR}]controller:[/bold {_BORDER_COLOR}] [bold white]{ctx.selected_controller}[/bold white]")
+            parts.append(f"[{b}]controller:[/{b}] [{w}]{ctx.selected_controller}[/{w}]")
         if ctx.selected_model:
-            parts.append(f"[bold {_BORDER_COLOR}]model:[/bold {_BORDER_COLOR}] [bold white]{ctx.selected_model}[/bold white]")
-        sep = f" [dim]›[/dim] "
+            parts.append(f"[{b}]model:[/{b}] [{w}]{ctx.selected_model}[/{w}]")
+        sep = " [dim]›[/dim] "
         return sep.join(parts) if parts else ""
 
     def _build_stats(self, ctx: HeaderContext) -> str:
         tab = ctx.active_tab
+        p = palette.PRIMARY
 
         def stat(label: str, value: int) -> str:
-            return f"[bold {_BORDER_COLOR}]{label}:[/bold {_BORDER_COLOR}] [bold white]{value}[/bold white]"
+            return f"[bold {p}]{label}:[/bold {p}] [bold white]{value}[/bold white]"
 
         if tab == "tab-clouds":
             return stat("clouds", ctx.cloud_count)
@@ -138,7 +143,8 @@ class JujuMateHeader(Widget):
 
     def _build_status(self, ctx: HeaderContext) -> str:
         pulse_on = getattr(self, "_pulse_on", True)
-        dot = "[bold #26A269]●[/bold #26A269]" if pulse_on else "[#004d26]●[/#004d26]"
+        s, off = palette.SUCCESS, palette.PULSE_OFF
+        dot = f"[bold {s}]●[/bold {s}]" if pulse_on else f"[{off}]●[/{off}]"
         if ctx.is_connected and ctx.timestamp:
             return f"{dot} [green]Live · {ctx.timestamp}[/green]"
         if ctx.is_connected:

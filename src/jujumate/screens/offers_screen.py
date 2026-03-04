@@ -10,6 +10,7 @@ from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import DataTable, Label, Rule
 
+from jujumate import palette
 from jujumate.client.juju_client import JujuClient
 from jujumate.config import load_config
 from jujumate.models.entities import ControllerOfferInfo, SAASInfo
@@ -18,9 +19,9 @@ from jujumate.widgets.status_view import _colored_status
 logger = logging.getLogger(__name__)
 
 _ACCESS_COLORS: dict[str, str] = {
-    "admin": "#26A269",
-    "consume": "#19B6EE",
-    "read": "#888888",
+    "admin":   palette.SUCCESS,
+    "consume": palette.LINK,
+    "read":    palette.MUTED,
 }
 
 
@@ -110,7 +111,7 @@ class OfferDetailScreen(ModalScreen):
                     for field, value in fields:
                         label = f"{field}:".ljust(col_width)
                         if field == "Offer URL":
-                            styled = f"[#19B6EE]{value}[/]"
+                            styled = f"[{palette.LINK}]{value}[/]"
                         elif field == "Access":
                             styled = _colored_access(value)
                         else:
@@ -176,7 +177,7 @@ class OfferDetailScreen(ModalScreen):
         conn_dt = self.query_one("#connections-table", DataTable)
         if consumers:
             for s in consumers:
-                app_name = Text.from_markup(f"[#19B6EE]{s.name}[/]")
+                app_name = Text.from_markup(f"[{palette.LINK}]{s.name}[/]")
                 conn_dt.add_row(s.model, app_name, _colored_status(s.status))
             conn_dt.display = True
         else:
@@ -251,14 +252,15 @@ class OffersScreen(ModalScreen):
             return
         for i, o in enumerate(offers):
             ep_summary = ", ".join(ep.name for ep in o.endpoints) or "—"
+            cnt = f"{o.active_connections}/{o.total_connections}"
             if o.total_connections == 0:
-                connected = Text(f"{o.active_connections}/{o.total_connections}", style="#888888")
+                connected = Text(cnt, style=palette.MUTED)
             elif o.active_connections == o.total_connections:
-                connected = Text(f"{o.active_connections}/{o.total_connections}", style="#26A269")
+                connected = Text(cnt, style=palette.SUCCESS)
             else:
-                connected = Text(f"{o.active_connections}/{o.total_connections}", style="#EFB73E")
+                connected = Text(cnt, style=palette.WARNING)
             dt.add_row(
-                Text(o.offer_url, style="#19B6EE"),
+                Text(o.offer_url, style=palette.LINK),
                 Text.from_markup(_colored_access(o.access or "—")),
                 ep_summary,
                 connected,
