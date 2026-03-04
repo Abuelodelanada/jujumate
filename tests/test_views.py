@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from textual.widgets import DataTable, Label, TabbedContent
 from textual.widgets._data_table import RowKey
 
@@ -21,6 +21,7 @@ from jujumate.widgets.controllers_view import ControllersView
 from jujumate.widgets.models_view import ModelsView
 from jujumate.widgets.navigable_table import NavigableTable
 from jujumate.widgets.resource_table import ResourceTable
+from jujumate.widgets.status_view import _MSG_TRUNC_WIDTH
 
 
 async def _mount_view(pilot, view):
@@ -29,11 +30,34 @@ async def _mount_view(pilot, view):
 
 
 @pytest.mark.asyncio
-async def test_clouds_view_update(pilot):
-    view = CloudsView(id="test-clouds")
+@pytest.mark.parametrize("view_id,view_class,entities,expected_rows", [
+    pytest.param(
+        "test-clouds-a",
+        CloudsView,
+        [CloudInfo("aws", "ec2", regions=["us-east-1"])],
+        1,
+        id="clouds",
+    ),
+    pytest.param(
+        "test-ctrl-a",
+        ControllersView,
+        [ControllerInfo("prod", "aws", "us-east-1", "3.6.0", model_count=3)],
+        1,
+        id="controllers",
+    ),
+    pytest.param(
+        "test-models-a",
+        ModelsView,
+        [ModelInfo("dev", "prod", "aws", "us-east-1", "available")],
+        1,
+        id="models-with-region",
+    ),
+])
+async def test_view_update_row_count(pilot, view_id, view_class, entities, expected_rows):
+    view = view_class(id=view_id)
     await _mount_view(pilot, view)
-    view.update([CloudInfo("aws", "ec2", regions=["us-east-1"])])
-    assert len(view.query_one(NavigableTable)._rows) == 1
+    view.update(entities)
+    assert len(view.query_one(NavigableTable)._rows) == expected_rows
 
 
 @pytest.mark.asyncio
@@ -41,22 +65,6 @@ async def test_clouds_view_empty_regions_and_credentials(pilot):
     view = CloudsView(id="test-clouds")
     await _mount_view(pilot, view)
     view.update([CloudInfo("lxd", "lxd")])
-    assert len(view.query_one(NavigableTable)._rows) == 1
-
-
-@pytest.mark.asyncio
-async def test_controllers_view_update(pilot):
-    view = ControllersView(id="test-ctrl")
-    await _mount_view(pilot, view)
-    view.update([ControllerInfo("prod", "aws", "us-east-1", "3.6.0", model_count=3)])
-    assert len(view.query_one(NavigableTable)._rows) == 1
-
-
-@pytest.mark.asyncio
-async def test_models_view_with_region(pilot):
-    view = ModelsView(id="test-models")
-    await _mount_view(pilot, view)
-    view.update([ModelInfo("dev", "prod", "aws", "us-east-1", "available")])
     assert len(view.query_one(NavigableTable)._rows) == 1
 
 
@@ -97,82 +105,90 @@ async def test_models_view_emits_model_selected(pilot):
 
 
 @pytest.mark.asyncio
-async def test_clouds_view_row_selection_posts_cloud_selected(pilot):
-    from unittest.mock import patch
-
-    view = CloudsView(id="test-clouds2")
+@pytest.mark.parametrize("view_id,view_class,entities,msg_class,expected_name_attr,expected_name_value,row_key", [
+    pytest.param(
+        "test-clouds-b",
+        CloudsView,
+        [CloudInfo("aws", "ec2")],
+        CloudsView.CloudSelected,
+        "name",
+        "aws",
+        "aws",
+        id="clouds",
+    ),
+    pytest.param(
+        "test-ctrl-b",
+        ControllersView,
+        [ControllerInfo("prod", "aws", "", "3.4.0", 1)],
+        ControllersView.ControllerSelected,
+        "name",
+        "prod",
+        "prod",
+        id="controllers",
+    ),
+    pytest.param(
+        "test-models-b",
+        ModelsView,
+        [ModelInfo("dev", "prod", "aws", "", "available")],
+        ModelsView.ModelSelected,
+        "name",
+        "prod/dev",
+        "prod/dev",
+        id="models",
+    ),
+])
+async def test_view_row_selection_posts_message(
+    pilot, view_id, view_class, entities, msg_class, expected_name_attr, expected_name_value, row_key
+):
+    view = view_class(id=view_id)
     await _mount_view(pilot, view)
-    view.update([CloudInfo("aws", "ec2")])
+    view.update(entities)
     await pilot.pause()
 
     posted: list = []
     with patch.object(view, "post_message", side_effect=posted.append):
-        view.on_navigable_table_row_selected(NavigableTable.RowSelected(key="aws"))
+        view.on_navigable_table_row_selected(NavigableTable.RowSelected(key=row_key))
 
     assert len(posted) == 1
-    assert isinstance(posted[0], CloudsView.CloudSelected)
-    assert posted[0].name == "aws"
+    assert isinstance(posted[0], msg_class)
+    assert getattr(posted[0], expected_name_attr) == expected_name_value
 
 
 @pytest.mark.asyncio
-async def test_controllers_view_row_selection_posts_controller_selected(pilot):
-    from unittest.mock import patch
-
-    view = ControllersView(id="test-ctrl2")
-    await _mount_view(pilot, view)
-    view.update([ControllerInfo("prod", "aws", "", "3.4.0", 1)])
-    await pilot.pause()
-
-    posted: list = []
-    with patch.object(view, "post_message", side_effect=posted.append):
-        view.on_navigable_table_row_selected(NavigableTable.RowSelected(key="prod"))
-
-    assert len(posted) == 1
-    assert isinstance(posted[0], ControllersView.ControllerSelected)
-    assert posted[0].name == "prod"
-
-
-@pytest.mark.asyncio
-async def test_models_view_row_selection_posts_model_selected(pilot):
-    from unittest.mock import patch
-
-    view = ModelsView(id="test-models2")
-    await _mount_view(pilot, view)
-    view.update([ModelInfo("dev", "prod", "aws", "", "available")])
-    await pilot.pause()
-
-    posted: list = []
-    with patch.object(view, "post_message", side_effect=posted.append):
-        view.on_navigable_table_row_selected(NavigableTable.RowSelected(key="prod/dev"))
-
-    assert len(posted) == 1
-    assert isinstance(posted[0], ModelsView.ModelSelected)
-    assert posted[0].name == "prod/dev"
-
-
-@pytest.mark.asyncio
-async def test_status_view_update_apps(pilot):
+@pytest.mark.parametrize("view_id,update_method_name,entities,extra_kwargs,table_id", [
+    pytest.param(
+        "test-sv-apps",
+        "update_apps",
+        [AppInfo("pg", "dev", "pg", "14/stable", 1, status="active")],
+        {},
+        "#status-apps-table",
+        id="apps",
+    ),
+    pytest.param(
+        "test-sv-units",
+        "update_units",
+        [UnitInfo("pg/0", "pg", "0", "active", "idle", "10.0.0.1")],
+        {"is_kubernetes": False},
+        "#status-units-table",
+        id="units",
+    ),
+    pytest.param(
+        "test-sv-rels",
+        "update_relations",
+        [RelationInfo("dev", "postgresql:db", "wordpress:db", "pgsql", "regular")],
+        {},
+        "#status-rels-table",
+        id="relations",
+    ),
+])
+async def test_status_view_update_tables(pilot, view_id, update_method_name, entities, extra_kwargs, table_id):
     from jujumate.widgets.status_view import StatusView
 
-    view = StatusView(id="test-status")
+    view = StatusView(id=view_id)
     await _mount_view(pilot, view)
-    view.update_apps([AppInfo("pg", "dev", "pg", "14/stable", 1, status="active")])
+    getattr(view, update_method_name)(entities, **extra_kwargs)
     await pilot.pause()
-    assert view.query_one("#status-apps-table", ResourceTable).query_one("DataTable").row_count == 1
-
-
-@pytest.mark.asyncio
-async def test_status_view_update_units(pilot):
-    from jujumate.widgets.status_view import StatusView
-
-    view = StatusView(id="test-status-units")
-    await _mount_view(pilot, view)
-
-    from jujumate.models.entities import UnitInfo
-
-    view.update_units([UnitInfo("pg/0", "pg", "0", "active", "idle", "10.0.0.1")], is_kubernetes=False)
-    await pilot.pause()
-    assert view.query_one("#status-units-table", ResourceTable).query_one("DataTable").row_count == 1
+    assert view.query_one(table_id, ResourceTable).query_one("DataTable").row_count == 1
 
 
 @pytest.mark.asyncio
@@ -189,18 +205,6 @@ async def test_status_view_update_units_kubernetes(pilot):
     col_labels = [str(col.label) for col in table.ordered_columns]
     assert "Machine" not in col_labels
     assert "Address" in col_labels
-
-
-@pytest.mark.asyncio
-async def test_status_view_update_relations(pilot):
-    from jujumate.models.entities import RelationInfo
-    from jujumate.widgets.status_view import StatusView
-
-    view = StatusView(id="test-status-rels")
-    await _mount_view(pilot, view)
-    view.update_relations([RelationInfo("dev", "postgresql:db", "wordpress:db", "pgsql", "regular")])
-    await pilot.pause()
-    assert view.query_one("#status-rels-table", ResourceTable).query_one("DataTable").row_count == 1
 
 
 @pytest.mark.asyncio
@@ -302,20 +306,20 @@ def test_jujumate_header_connected_no_timestamp():
     assert "·" not in status
 
 
-def test_trunc_msg_short_text():
+@pytest.mark.parametrize("text,expected,check_truncated", [
+    pytest.param("", "", False, id="empty"),
+    pytest.param("short", "short", False, id="short"),
+    pytest.param("x" * (_MSG_TRUNC_WIDTH + 5), None, True, id="long"),
+])
+def test_trunc_msg(text, expected, check_truncated):
     from jujumate.widgets.status_view import _trunc_msg
 
-    assert _trunc_msg("") == ""
-    assert _trunc_msg("short") == "short"
-
-
-def test_trunc_msg_long_text():
-    from jujumate.widgets.status_view import _MSG_TRUNC_WIDTH, _trunc_msg
-
-    long_msg = "x" * (_MSG_TRUNC_WIDTH + 5)
-    result = _trunc_msg(long_msg)
-    assert len(result) == _MSG_TRUNC_WIDTH
-    assert result.endswith("…")
+    result = _trunc_msg(text)
+    if check_truncated:
+        assert len(result) == _MSG_TRUNC_WIDTH
+        assert result.endswith("…")
+    else:
+        assert result == expected
 
 
 @pytest.mark.asyncio
@@ -945,55 +949,58 @@ async def test_status_view_check_action_close_filter(pilot):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def test_build_config_renderable_with_changed_values():
+@pytest.mark.parametrize("ai,entries", [
+    pytest.param(
+        AppInfo("pg", "dev", "postgresql", "14/stable", 363, status="active"),
+        [
+            AppConfigEntry("log-level", "DEBUG", "INFO", "string", "Log level", "user"),
+            AppConfigEntry("port", "5432", "5432", "int", "Port", "default"),
+        ],
+        id="with-changed-values",
+    ),
+    pytest.param(
+        AppInfo("pg", "dev", "pg", "", 363),
+        [],
+        id="empty-entries",
+    ),
+])
+def test_build_config_renderable(ai, entries):
     from rich.console import Group
 
     from jujumate.widgets.app_config_view import _build_config_renderable
 
-    ai = AppInfo("pg", "dev", "postgresql", "14/stable", 363, status="active")
-    entries = [
-        AppConfigEntry("log-level", "DEBUG", "INFO", "string", "Log level", "user"),
-        AppConfigEntry("port", "5432", "5432", "int", "Port", "default"),
-    ]
     assert isinstance(_build_config_renderable(ai, entries), Group)
 
 
-def test_build_config_renderable_empty_entries():
-    from rich.console import Group
-
-    from jujumate.widgets.app_config_view import _build_config_renderable
-
-    assert isinstance(_build_config_renderable(AppInfo("pg", "dev", "pg", "", 363), []), Group)
-
-
-def test_format_plain_text_app_config_with_changed():
+@pytest.mark.parametrize("ai,entries,expected_fragments", [
+    pytest.param(
+        AppInfo("pg", "dev", "postgresql", "14/stable", 363),
+        [
+            AppConfigEntry("log-level", "DEBUG", "INFO", "string", "Log level", "user"),
+            AppConfigEntry("port", "5432", "5432", "int", "Port", "default"),
+        ],
+        ["pg", "log-level: DEBUG", "port: 5432"],
+        id="with-changed",
+    ),
+    pytest.param(
+        AppInfo("pg", "dev", "postgresql", "14/stable", 363),
+        [AppConfigEntry("port", "5432", "5432", "int", "Port", "default")],
+        ["(none)"],
+        id="no-changed",
+    ),
+    pytest.param(
+        AppInfo("pg", "dev", "postgresql", "14/stable", 363),
+        [AppConfigEntry("log-level", "DEBUG", "INFO", "string", "Log level", "user")],
+        ["default: INFO"],
+        id="changed-with-default-diff",
+    ),
+])
+def test_format_plain_text_app_config(ai, entries, expected_fragments):
     from jujumate.widgets.app_config_view import _format_plain_text
 
-    ai = AppInfo("pg", "dev", "postgresql", "14/stable", 363)
-    entries = [
-        AppConfigEntry("log-level", "DEBUG", "INFO", "string", "Log level", "user"),
-        AppConfigEntry("port", "5432", "5432", "int", "Port", "default"),
-    ]
     result = _format_plain_text(ai, entries)
-    assert "pg" in result
-    assert "log-level: DEBUG" in result
-    assert "port: 5432" in result
-
-
-def test_format_plain_text_app_config_no_changed():
-    from jujumate.widgets.app_config_view import _format_plain_text
-
-    ai = AppInfo("pg", "dev", "postgresql", "14/stable", 363)
-    result = _format_plain_text(ai, [AppConfigEntry("port", "5432", "5432", "int", "Port", "default")])
-    assert "(none)" in result
-
-
-def test_format_plain_text_app_config_changed_with_default_diff():
-    from jujumate.widgets.app_config_view import _format_plain_text
-
-    ai = AppInfo("pg", "dev", "postgresql", "14/stable", 363)
-    entries = [AppConfigEntry("log-level", "DEBUG", "INFO", "string", "Log level", "user")]
-    assert "default: INFO" in _format_plain_text(ai, entries)
+    for fragment in expected_fragments:
+        assert fragment in result
 
 
 @pytest.mark.asyncio
@@ -1012,26 +1019,27 @@ async def test_app_config_view_update(pilot):
 
 
 @pytest.mark.asyncio
-async def test_app_config_view_show_loading(pilot):
+@pytest.mark.parametrize("view_id,method_name,method_args", [
+    pytest.param(
+        "test-ac-load",
+        "show_loading",
+        [AppInfo("pg", "dev", "pg", "", 1)],
+        id="loading",
+    ),
+    pytest.param(
+        "test-ac-err",
+        "show_error",
+        [AppInfo("pg", "dev", "pg", "", 1), "connection refused"],
+        id="error",
+    ),
+])
+async def test_app_config_view_visibility_states(pilot, view_id, method_name, method_args):
     from jujumate.widgets.app_config_view import AppConfigView
 
-    view = AppConfigView(id="test-ac-load")
+    view = AppConfigView(id=view_id)
     await pilot.app.screen.mount(view)
     await pilot.pause()
-    view.show_loading(AppInfo("pg", "dev", "pg", "", 1))
-    await pilot.pause()
-    assert view.query_one("#ac-empty").display is True
-    assert view.query_one("#ac-scroll").display is False
-
-
-@pytest.mark.asyncio
-async def test_app_config_view_show_error(pilot):
-    from jujumate.widgets.app_config_view import AppConfigView
-
-    view = AppConfigView(id="test-ac-err")
-    await pilot.app.screen.mount(view)
-    await pilot.pause()
-    view.show_error(AppInfo("pg", "dev", "pg", "", 1), "connection refused")
+    getattr(view, method_name)(*method_args)
     await pilot.pause()
     assert view.query_one("#ac-empty").display is True
     assert view.query_one("#ac-scroll").display is False
@@ -1070,54 +1078,58 @@ def test_unit_panel_non_leader():
     assert isinstance(_unit_panel("pg/1", {}, is_leader=False, color="#E95420"), Panel)
 
 
-def test_build_relation_renderable_regular():
+@pytest.mark.parametrize("rel,entries", [
+    pytest.param(
+        RelationInfo("dev", "postgresql:db", "wordpress:db", "pgsql", "regular", relation_id=5),
+        [
+            RelationDataEntry("provider", "postgresql", "host", "10.0.0.1", "app"),
+            RelationDataEntry("requirer", "wordpress/0", "port", "5432", "unit"),
+        ],
+        id="regular",
+    ),
+    pytest.param(
+        RelationInfo("dev", "etcd:cluster", "etcd:cluster", "etcd", "peer", relation_id=3),
+        [RelationDataEntry("peer", "etcd", "h", "v", "app")],
+        id="peer",
+    ),
+])
+def test_build_relation_renderable(rel, entries):
     from rich.table import Table
 
     from jujumate.widgets.relation_data_view import _build_relation_renderable
 
-    rel = RelationInfo("dev", "postgresql:db", "wordpress:db", "pgsql", "regular", relation_id=5)
-    entries = [
-        RelationDataEntry("provider", "postgresql", "host", "10.0.0.1", "app"),
-        RelationDataEntry("requirer", "wordpress/0", "port", "5432", "unit"),
-    ]
     assert isinstance(_build_relation_renderable(rel, entries), Table)
 
 
-def test_build_relation_renderable_peer():
-    from rich.table import Table
-
-    from jujumate.widgets.relation_data_view import _build_relation_renderable
-
-    rel = RelationInfo("dev", "etcd:cluster", "etcd:cluster", "etcd", "peer", relation_id=3)
-    assert isinstance(_build_relation_renderable(rel, [RelationDataEntry("peer", "etcd", "h", "v", "app")]), Table)
-
-
-def test_format_plain_text_relation_regular():
+@pytest.mark.parametrize("rel,entries,expected_fragments", [
+    pytest.param(
+        RelationInfo("dev", "postgresql:db", "wordpress:db", "pgsql", "regular", relation_id=5),
+        [
+            RelationDataEntry("provider", "postgresql", "host", "10.0.0.1", "app"),
+            RelationDataEntry("provider", "postgresql/0", "key", "val", "unit"),
+        ],
+        ["relation-id: 5", "host"],
+        id="regular",
+    ),
+    pytest.param(
+        RelationInfo("dev", "etcd:cluster", "etcd:cluster", "etcd", "peer", relation_id=3),
+        [],
+        ["peer", "<empty>"],
+        id="peer",
+    ),
+    pytest.param(
+        RelationInfo("dev", "pg:db", "wp:db", "pgsql", "regular", relation_id=1),
+        [],
+        ["<empty>"],
+        id="empty-entries",
+    ),
+])
+def test_format_plain_text_relation(rel, entries, expected_fragments):
     from jujumate.widgets.relation_data_view import _format_plain_text
 
-    rel = RelationInfo("dev", "postgresql:db", "wordpress:db", "pgsql", "regular", relation_id=5)
-    result = _format_plain_text(rel, [
-        RelationDataEntry("provider", "postgresql", "host", "10.0.0.1", "app"),
-        RelationDataEntry("provider", "postgresql/0", "key", "val", "unit"),
-    ])
-    assert "relation-id: 5" in result
-    assert "host" in result
-
-
-def test_format_plain_text_relation_peer():
-    from jujumate.widgets.relation_data_view import _format_plain_text
-
-    rel = RelationInfo("dev", "etcd:cluster", "etcd:cluster", "etcd", "peer", relation_id=3)
-    result = _format_plain_text(rel, [])
-    assert "peer" in result
-    assert "<empty>" in result
-
-
-def test_format_plain_text_relation_empty_entries():
-    from jujumate.widgets.relation_data_view import _format_plain_text
-
-    rel = RelationInfo("dev", "pg:db", "wp:db", "pgsql", "regular", relation_id=1)
-    assert "<empty>" in _format_plain_text(rel, [])
+    result = _format_plain_text(rel, entries)
+    for fragment in expected_fragments:
+        assert fragment in result
 
 
 @pytest.mark.asyncio
@@ -1135,26 +1147,154 @@ async def test_relation_data_view_update(pilot):
 
 
 @pytest.mark.asyncio
-async def test_relation_data_view_show_loading(pilot):
+@pytest.mark.parametrize("view_id,method_name,method_args", [
+    pytest.param(
+        "test-rd-load",
+        "show_loading",
+        [RelationInfo("dev", "pg:db", "wp:db", "pgsql", "regular")],
+        id="loading",
+    ),
+    pytest.param(
+        "test-rd-err",
+        "show_error",
+        [RelationInfo("dev", "pg:db", "wp:db", "pgsql", "regular"), "timeout"],
+        id="error",
+    ),
+])
+async def test_relation_data_view_visibility_states(pilot, view_id, method_name, method_args):
     from jujumate.widgets.relation_data_view import RelationDataView
 
-    view = RelationDataView(id="test-rd-load")
+    view = RelationDataView(id=view_id)
     await pilot.app.screen.mount(view)
     await pilot.pause()
-    view.show_loading(RelationInfo("dev", "pg:db", "wp:db", "pgsql", "regular"))
+    getattr(view, method_name)(*method_args)
     await pilot.pause()
     assert view.query_one("#rd-empty").display is True
     assert view.query_one("#rd-scroll").display is False
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# StatusView — coverage of previously uncovered branches
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 @pytest.mark.asyncio
-async def test_relation_data_view_show_error(pilot):
-    from jujumate.widgets.relation_data_view import RelationDataView
+async def test_status_view_row_highlighted_has_focus_sets_active_table(pilot):
+    """Line 454: has_focus=True branch sets _last_active_table."""
+    from jujumate.widgets.status_view import StatusView
 
-    view = RelationDataView(id="test-rd-err")
-    await pilot.app.screen.mount(view)
+    view = pilot.app.screen.query_one("#status-view", StatusView)
+    view.update_apps([AppInfo("pg", "dev", "pg", "14/stable", 1)])
     await pilot.pause()
-    view.show_error(RelationInfo("dev", "pg:db", "wp:db", "pgsql", "regular"), "timeout")
+
+    mock_event = MagicMock()
+    mock_event.data_table.has_focus = True
+    mock_event.data_table.parent.id = "status-apps-table"
+    mock_event.cursor_row = 0
+    view.on_data_table_row_highlighted(mock_event)
+
+    assert view._last_active_table == "status-apps-table"
+
+
+@pytest.mark.asyncio
+async def test_status_view_resource_table_focused_exception_safe(pilot):
+    """Lines 480-481: exception in on_resource_table_table_focused is silently swallowed."""
+    from jujumate.widgets.status_view import StatusView
+
+    view = pilot.app.screen.query_one("#status-view", StatusView)
+
+    broken_event = MagicMock()
+    broken_event.resource_table.id = "status-apps-table"
+    broken_event.resource_table.query_one = MagicMock(side_effect=RuntimeError("broken"))
+    view.on_resource_table_table_focused(broken_event)  # must not raise
+
+
+@pytest.mark.asyncio
+async def test_status_view_row_selected_exception_safe(pilot):
+    """Lines 530-531: exception in on_data_table_row_selected is silently swallowed."""
+    from jujumate.widgets.status_view import StatusView
+
+    view = pilot.app.screen.query_one("#status-view", StatusView)
+
+    class _BadEvent:
+        @property
+        def data_table(self):
+            raise RuntimeError("bad table")
+
+    view.on_data_table_row_selected(_BadEvent())  # must not raise
+
+
+@pytest.mark.asyncio
+async def test_status_view_rerender_all_exception_safe(pilot):
+    """Lines 537-558: all six render methods raise — _rerender_all swallows each."""
+    from jujumate.widgets.status_view import StatusView
+
+    view = pilot.app.screen.query_one("#status-view", StatusView)
+
+    with (
+        patch.object(view, "_render_apps", side_effect=Exception),
+        patch.object(view, "_render_saas", side_effect=Exception),
+        patch.object(view, "_render_units", side_effect=Exception),
+        patch.object(view, "_render_offers", side_effect=Exception),
+        patch.object(view, "_render_machines", side_effect=Exception),
+        patch.object(view, "_render_relations", side_effect=Exception),
+    ):
+        view._rerender_all()  # must not raise
+
+
+@pytest.mark.asyncio
+async def test_status_view_check_action_close_filter_exception_safe(pilot):
+    """Lines 565-566: query_one raises in check_action → returns False."""
+    from jujumate.widgets.status_view import StatusView
+
+    view = pilot.app.screen.query_one("#status-view", StatusView)
+
+    with patch.object(view, "query_one", side_effect=Exception("no widget")):
+        result = view.check_action("close_filter", ())
+
+    assert result is False
+
+
+@pytest.mark.asyncio
+async def test_status_view_filter_changed_updates_filter(pilot):
+    """Lines 583-584: Input.Changed on #filter-input sets _filter and rerenders."""
+    from textual.widgets import Input
+
+    from jujumate.widgets.status_view import StatusView
+
+    view = pilot.app.screen.query_one("#status-view", StatusView)
+    view.update_apps([
+        AppInfo("postgresql", "dev", "postgresql", "14/stable", 1),
+        AppInfo("wordpress", "dev", "wordpress", "stable", 1),
+    ])
     await pilot.pause()
-    assert view.query_one("#rd-empty").display is True
-    assert view.query_one("#rd-scroll").display is False
+
+    view.action_activate_filter()
+    await pilot.pause()
+
+    fi = view.query_one("#filter-input", Input)
+    view._on_filter_changed(Input.Changed(input=fi, value="postgres"))
+    await pilot.pause()
+
+    assert view._filter == "postgres"
+    assert view.query_one("#status-apps-table DataTable", DataTable).row_count == 1
+
+
+@pytest.mark.asyncio
+async def test_status_view_filter_submitted_hides_input(pilot):
+    """Lines 588-593: Input.Submitted on #filter-input hides the input."""
+    from textual.widgets import Input
+
+    from jujumate.widgets.status_view import StatusView
+
+    view = pilot.app.screen.query_one("#status-view", StatusView)
+    view.action_activate_filter()
+    await pilot.pause()
+
+    fi = view.query_one("#filter-input", Input)
+    assert fi.display is True
+
+    view._on_filter_submitted(Input.Submitted(input=fi, value="pg"))
+    await pilot.pause()
+
+    assert fi.display is False

@@ -48,15 +48,13 @@ async def test_default_tab_is_clouds(pilot):
 
 
 @pytest.mark.asyncio
-async def test_keybinding_m_switches_to_models(pilot):
-    await pilot.press("m")
-    assert pilot.app.screen.query_one(TabbedContent).active == "tab-models"
-
-
-@pytest.mark.asyncio
-async def test_keybinding_s_switches_to_status(pilot):
-    await pilot.press("s")
-    assert pilot.app.screen.query_one(TabbedContent).active == "tab-status"
+@pytest.mark.parametrize("key,expected_tab_id", [
+    pytest.param("m", "tab-models", id="m-to-models"),
+    pytest.param("s", "tab-status", id="s-to-status"),
+])
+async def test_keybinding_switches_tab(pilot, key, expected_tab_id):
+    await pilot.press(key)
+    assert pilot.app.screen.query_one(TabbedContent).active == expected_tab_id
 
 
 @pytest.mark.asyncio
@@ -270,49 +268,23 @@ async def test_clear_filter_resets_all_selections(pilot):
     assert len(ctrl_view.query_one(NavigableTable)._rows) == 2
 
 
-def test_asyncio_exception_handler_suppresses_closed_errors():
-    from unittest.mock import MagicMock
-
+@pytest.mark.parametrize("context,should_suppress", [
+    pytest.param({"exception": RuntimeError("Event loop is closed")}, True, id="closed-loop"),
+    pytest.param({"exception": OSError("Bad file descriptor")}, True, id="bad-fd"),
+    pytest.param({"exception": RuntimeError("cannot reuse already awaited coroutine")}, True, id="cannot-reuse"),
+    pytest.param({"message": "Task was destroyed but it is pending!"}, True, id="task-destroyed"),
+    pytest.param({"exception": ValueError("something unexpected")}, False, id="value-error"),
+    pytest.param({"message": "some asyncio message"}, False, id="asyncio-message"),
+])
+def test_asyncio_exception_handler(context, should_suppress):
     from jujumate.app import _asyncio_exception_handler
 
     loop = MagicMock()
-    # Should suppress RuntimeError("Event loop is closed")
-    _asyncio_exception_handler(loop, {"exception": RuntimeError("Event loop is closed")})
-    loop.default_exception_handler.assert_not_called()
-
-    # Should suppress OSError("Bad file descriptor")
-    _asyncio_exception_handler(loop, {"exception": OSError("Bad file descriptor")})
-    loop.default_exception_handler.assert_not_called()
-
-    # Should suppress RuntimeError("cannot reuse already awaited coroutine")
-    _asyncio_exception_handler(loop, {"exception": RuntimeError("cannot reuse already awaited coroutine")})
-    loop.default_exception_handler.assert_not_called()
-
-    # Should suppress "task was destroyed but it is pending" message
-    _asyncio_exception_handler(loop, {"message": "Task was destroyed but it is pending!"})
-    loop.default_exception_handler.assert_not_called()
-
-
-def test_asyncio_exception_handler_forwards_other_errors():
-    from unittest.mock import MagicMock
-
-    from jujumate.app import _asyncio_exception_handler
-
-    loop = MagicMock()
-    ctx = {"exception": ValueError("something unexpected")}
-    _asyncio_exception_handler(loop, ctx)
-    loop.default_exception_handler.assert_called_once_with(ctx)
-
-
-def test_asyncio_exception_handler_forwards_non_exception_context():
-    from unittest.mock import MagicMock
-
-    from jujumate.app import _asyncio_exception_handler
-
-    loop = MagicMock()
-    ctx = {"message": "some asyncio message"}
-    _asyncio_exception_handler(loop, ctx)
-    loop.default_exception_handler.assert_called_once_with(ctx)
+    _asyncio_exception_handler(loop, context)
+    if should_suppress:
+        loop.default_exception_handler.assert_not_called()
+    else:
+        loop.default_exception_handler.assert_called_once_with(context)
 
 
 @pytest.mark.asyncio
