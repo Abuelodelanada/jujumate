@@ -17,6 +17,7 @@ from jujumate.client.watcher import (
     ModelsUpdated,
     OffersUpdated,
     RelationsUpdated,
+    SaasUpdated,
     UnitsUpdated,
 )
 from jujumate.config import JujuConfig, JujuConfigError
@@ -30,6 +31,7 @@ from jujumate.models.entities import (
     OfferInfo,
     RelationDataEntry,
     RelationInfo,
+    SAASInfo,
     SecretInfo,
     UnitInfo,
 )
@@ -635,3 +637,94 @@ async def test_relation_data_screen_fetch_error(pilot):
         await pilot.pause()
     view = screen.query_one(RelationDataView)
     assert view.query_one("#rd-empty").display is True
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Model deletion — stale data cleanup
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_models_updated_prunes_stale_relations(pilot):
+    """Stale relations for a deleted model are removed on next ModelsUpdated."""
+    screen = pilot.app.screen
+
+    screen.on_relations_updated(RelationsUpdated(
+        model="deleted-model",
+        relations=[RelationInfo("deleted-model", "pg:db", "wp:db", "pgsql", "regular")],
+    ))
+    screen.on_relations_updated(RelationsUpdated(
+        model="surviving-model",
+        relations=[RelationInfo("surviving-model", "mysql:db", "wp:db", "mysql", "regular")],
+    ))
+    assert any(r.model == "deleted-model" for r in screen._all_relations)
+
+    # ModelsUpdated without "deleted-model" → stale data must be pruned
+    screen.on_models_updated(ModelsUpdated(models=[
+        ModelInfo("surviving-model", "ctrl", "aws", "", "active"),
+    ]))
+
+    assert not any(r.model == "deleted-model" for r in screen._all_relations)
+    assert any(r.model == "surviving-model" for r in screen._all_relations)
+
+
+@pytest.mark.asyncio
+async def test_models_updated_prunes_stale_offers_and_saas(pilot):
+    """Stale offers and SAAS for a deleted model are removed on next ModelsUpdated."""
+    screen = pilot.app.screen
+
+    screen.on_offers_updated(OffersUpdated(
+        model="gone-model",
+        offers=[OfferInfo("gone-model", "my-offer", "pg", "pg-k8s", 1, "0/0", "db", "pgsql", "provider")],
+    ))
+    screen.on_saas_updated(SaasUpdated(
+        model="gone-model",
+        saas=[SAASInfo("gone-model", "remote-pg", "active", "mystore", "mystore:admin/pg")],
+    ))
+    assert any(o.model == "gone-model" for o in screen._all_offers)
+    assert any(s.model == "gone-model" for s in screen._all_saas)
+
+    screen.on_models_updated(ModelsUpdated(models=[
+        ModelInfo("other-model", "ctrl", "aws", "", "active"),
+    ]))
+
+    assert not any(o.model == "gone-model" for o in screen._all_offers)
+    assert not any(s.model == "gone-model" for s in screen._all_saas)
+
+
+@pytest.mark.asyncio
+async def test_models_updated_deselects_deleted_model(pilot):
+    """When the selected model is deleted, _selected_model is reset and tab switches to Models."""
+    screen = pilot.app.screen
+    screen._selected_model = "doomed-model"
+    screen._all_relations = [
+        RelationInfo("doomed-model", "pg:db", "wp:db", "pgsql", "regular"),
+    ]
+    # Start on Status tab to verify we switch away from it.
+    pilot.app.screen.query_one(TabbedContent).active = "tab-status"
+
+    screen.on_models_updated(ModelsUpdated(models=[
+        ModelInfo("other-model", "ctrl", "aws", "", "active"),
+    ]))
+
+    assert screen._selected_model is None
+    assert screen._all_relations == []
+    assert pilot.app.screen.query_one(TabbedContent).active == "tab-models"
+
+
+@pytest.mark.asyncio
+async def test_models_updated_keeps_selected_model_when_still_exists(pilot):
+    """When the selected model still exists, it stays selected and data is kept."""
+    screen = pilot.app.screen
+    screen._selected_model = "my-model"
+    screen._all_relations = [
+        RelationInfo("my-model", "pg:db", "wp:db", "pgsql", "regular"),
+    ]
+
+    screen.on_models_updated(ModelsUpdated(models=[
+        ModelInfo("my-model", "ctrl", "aws", "", "active"),
+        ModelInfo("other-model", "ctrl", "aws", "", "active"),
+    ]))
+
+    assert screen._selected_model == "my-model"
+    assert any(r.model == "my-model" for r in screen._all_relations)

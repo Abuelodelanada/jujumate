@@ -279,8 +279,26 @@ class MainScreen(Screen):
         self._refresh_header()
 
     def on_models_updated(self, message: ModelsUpdated) -> None:
+        existing = {m.name for m in message.models}
+
+        # If the currently selected model was deleted, notify and switch to Models tab.
+        if self._selected_model and self._selected_model not in existing:
+            self.app.notify(
+                f"Model '{self._selected_model}' no longer exists.",
+                title="Model removed",
+                severity="warning",
+            )
+            self._selected_model = None
+            self.action_switch_tab("tab-models")
+
+        # Prune stale relations / offers / SAAS for models that no longer exist.
+        self._all_relations = [r for r in self._all_relations if r.model in existing]
+        self._all_offers = [o for o in self._all_offers if o.model in existing]
+        self._all_saas = [s for s in self._all_saas if s.model in existing]
+
         self._all_models = message.models
         self._refresh_models_view()
+        self._refresh_status_view()
         self._refresh_header()
 
     def on_apps_updated(self, message: AppsUpdated) -> None:
