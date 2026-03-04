@@ -7,8 +7,10 @@ from jujumate.models.entities import (
     AppInfo,
     CloudInfo,
     ControllerInfo,
+    ControllerOfferInfo,
     MachineInfo,
     ModelInfo,
+    OfferEndpoint,
     OfferInfo,
     RelationDataEntry,
     RelationInfo,
@@ -391,6 +393,11 @@ class JujuClient:
         relations, _, _ = await self.get_status_details(model_name)
         return relations
 
+    async def get_saas(self, model_name: str) -> list[SAASInfo]:
+        """Fetch SAAS (consumed remote offers) entries for a model."""
+        _, _, saas = await self.get_status_details(model_name)
+        return saas
+
     async def get_relation_data(
         self,
         model_name: str,
@@ -479,3 +486,57 @@ class JujuClient:
             "Relation data for relation %d: %d entries", relation_id, len(entries)
         )
         return entries
+
+    async def get_controller_offers(self) -> list[ControllerOfferInfo]:
+        """Fetch all offers across every model in the controller."""
+        model_names = await self._controller.list_models()
+        result: list[ControllerOfferInfo] = []
+        for model_name in model_names:
+            try:
+                raw = await self._controller.list_offers(model_name)
+                # Get reliable connection counts from model status (same source as `juju status`).
+                status_counts: dict[str, tuple[int, int]] = {}
+                model = await self._controller.get_model(model_name)
+                try:
+                    status = await model.get_status()
+                    for offer_name, offer_st in (status.offers or {}).items():
+                        status_counts[offer_name] = (
+                            offer_st.active_connected_count or 0,
+                            offer_st.total_connected_count or 0,
+                        )
+                finally:
+                    await model.disconnect()
+                for offer in (raw.results or []):
+                    endpoints = [
+                        OfferEndpoint(
+                            name=ep.name or "",
+                            interface=ep.interface or "",
+                            role=ep.role or "",
+                        )
+                        for ep in (offer.endpoints or [])
+                    ]
+                    active, total = status_counts.get(offer.offer_name or "", (0, 0))
+                    # Determine access level: pick the highest from the users list.
+                    _access_rank = {"admin": 3, "consume": 2, "read": 1}
+                    users = offer.users or []
+                    access = max(
+                        (getattr(u, "access", "") or "" for u in users),
+                        key=lambda a: _access_rank.get(a, 0),
+                        default="",
+                    )
+                    result.append(ControllerOfferInfo(
+                        model=model_name,
+                        name=offer.offer_name or "",
+                        offer_url=offer.offer_url or "",
+                        application=offer.application_name or "",
+                        charm=offer.charm_url or "",
+                        description=offer.application_description or "",
+                        access=access,
+                        endpoints=endpoints,
+                        active_connections=active,
+                        total_connections=total,
+                    ))
+            except Exception:
+                logger.warning("Could not list offers for model '%s'", model_name)
+        logger.debug("Controller offers: %d total", len(result))
+        return result

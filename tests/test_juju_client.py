@@ -882,3 +882,52 @@ async def test_get_relation_data_includes_unit_level_data(mock_controller):
     keys = {e.key for e in unit_entries}
     assert keys == {"ingress-address", "private-address"}
     assert all(e.unit == "wordpress/0" for e in unit_entries)
+
+
+@pytest.mark.asyncio
+async def test_get_controller_offers_uses_status_counts(mock_controller):
+    """active/total connection counts come from model status, not list_offers.connections."""
+    from jujumate.models.entities import ControllerOfferInfo
+
+    # list_offers returns offer with empty connections (non-admin scenario)
+    ep = MagicMock()
+    ep.name = "metrics-endpoint"
+    ep.interface = "prometheus_scrape"
+    ep.role = "provider"
+
+    offer = MagicMock()
+    offer.offer_name = "prometheus-scrape"
+    offer.offer_url = "admin/cos.prometheus-scrape"
+    offer.application_name = "prometheus"
+    offer.charm_url = "ch:prometheus-k8s-1"
+    offer.application_description = "Scrape endpoint"
+    offer.endpoints = [ep]
+    offer.connections = []  # empty — non-admin user
+    offer.users = []
+
+    list_offers_result = MagicMock()
+    list_offers_result.results = [offer]
+    mock_controller.list_models = AsyncMock(return_value=["cos"])
+    mock_controller.list_offers = AsyncMock(return_value=list_offers_result)
+
+    # model.get_status() returns reliable counts
+    offer_st = MagicMock()
+    offer_st.active_connected_count = 1
+    offer_st.total_connected_count = 1
+
+    status = MagicMock()
+    status.offers = {"prometheus-scrape": offer_st}
+
+    model = AsyncMock()
+    model.get_status = AsyncMock(return_value=status)
+    model.disconnect = AsyncMock()
+    mock_controller.get_model = AsyncMock(return_value=model)
+
+    client = JujuClient()
+    await client.connect()
+    results = await client.get_controller_offers()
+
+    assert len(results) == 1
+    info: ControllerOfferInfo = results[0]
+    assert info.active_connections == 1
+    assert info.total_connections == 1

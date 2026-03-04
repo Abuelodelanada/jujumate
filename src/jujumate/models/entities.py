@@ -55,6 +55,31 @@ class SAASInfo:
 
 
 @dataclass
+class OfferEndpoint:
+    """An endpoint exposed by a controller-level offer."""
+
+    name: str
+    interface: str
+    role: str
+
+
+@dataclass
+class ControllerOfferInfo:
+    """Rich offer info fetched controller-wide (all models)."""
+
+    model: str
+    name: str
+    offer_url: str
+    application: str
+    charm: str
+    description: str
+    access: str = ""
+    endpoints: list[OfferEndpoint] = field(default_factory=list)
+    active_connections: int = 0
+    total_connections: int = 0
+
+
+@dataclass
 class OfferInfo:
     model: str
     name: str

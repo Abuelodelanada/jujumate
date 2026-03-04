@@ -728,3 +728,213 @@ async def test_models_updated_keeps_selected_model_when_still_exists(pilot):
 
     assert screen._selected_model == "my-model"
     assert any(r.model == "my-model" for r in screen._all_relations)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# OffersScreen & OfferDetailScreen
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_offers_screen_populate_with_offers(pilot):
+    from jujumate.models.entities import ControllerOfferInfo, OfferEndpoint
+    from jujumate.screens.offers_screen import OffersScreen
+
+    offers = [
+        ControllerOfferInfo(
+            model="cos", name="prometheus-scrape", offer_url="admin/cos.prometheus-scrape",
+            application="prometheus", charm="ch:prometheus-k8s-1", description="Scrape endpoint",
+            endpoints=[OfferEndpoint("metrics-endpoint", "prometheus_scrape", "provider")],
+            active_connections=1, total_connections=2,
+        ),
+        ControllerOfferInfo(
+            model="cos", name="alertmanager-karma", offer_url="admin/cos.alertmanager-karma",
+            application="alertmanager", charm="ch:alertmanager-k8s-1", description="",
+            endpoints=[],
+            active_connections=0, total_connections=0,
+        ),
+    ]
+    with patch.object(OffersScreen, "_fetch"):
+        screen = OffersScreen("my-ctrl")
+        await pilot.app.push_screen(screen)
+        await pilot.pause()
+        screen._populate(offers)
+        await pilot.pause()
+    dt = screen.query_one(DataTable)
+    assert dt.row_count == 2
+
+
+@pytest.mark.asyncio
+async def test_offers_screen_populate_empty(pilot):
+    from jujumate.screens.offers_screen import OffersScreen
+
+    with patch.object(OffersScreen, "_fetch"):
+        screen = OffersScreen("my-ctrl")
+        await pilot.app.push_screen(screen)
+        await pilot.pause()
+        screen._populate([])
+        await pilot.pause()
+    dt = screen.query_one(DataTable)
+    assert dt.row_count == 0
+
+
+@pytest.mark.asyncio
+async def test_offers_screen_show_error(pilot):
+    from jujumate.screens.offers_screen import OffersScreen
+
+    with patch.object(OffersScreen, "_fetch"):
+        screen = OffersScreen("my-ctrl")
+        await pilot.app.push_screen(screen)
+        await pilot.pause()
+        screen._show_error("connection refused")
+        await pilot.pause()
+    loading = screen.query_one("#offers-loading")
+    assert loading.display is True
+
+
+@pytest.mark.asyncio
+async def test_offers_screen_row_selected_pushes_detail(pilot):
+    from jujumate.models.entities import ControllerOfferInfo, OfferEndpoint
+    from jujumate.screens.offers_screen import OfferDetailScreen, OffersScreen
+
+    offers = [
+        ControllerOfferInfo(
+            model="cos", name="prom", offer_url="admin/cos.prom",
+            application="prometheus", charm="ch:prometheus-k8s-1", description="",
+            endpoints=[OfferEndpoint("metrics-endpoint", "prometheus_scrape", "provider")],
+            active_connections=0, total_connections=1,
+        )
+    ]
+    with patch.object(OffersScreen, "_fetch"):
+        screen = OffersScreen("my-ctrl")
+        await pilot.app.push_screen(screen)
+        await pilot.pause()
+        screen._populate(offers)
+        await pilot.pause()
+    dt = screen.query_one(DataTable)
+    screen.on_data_table_row_selected(
+        DataTable.RowSelected(data_table=dt, cursor_row=0, row_key=RowKey("0"))
+    )
+    await pilot.pause()
+    assert isinstance(pilot.app.screen, OfferDetailScreen)
+
+
+@pytest.mark.asyncio
+async def test_offer_detail_screen_shows_fields(pilot):
+    from textual.widgets import Label
+
+    from jujumate.models.entities import ControllerOfferInfo, OfferEndpoint
+    from jujumate.screens.offers_screen import OfferDetailScreen
+
+    offer = ControllerOfferInfo(
+        model="cos", name="prom-scrape", offer_url="admin/cos.prom-scrape",
+        application="prometheus", charm="ch:prometheus-k8s-1", description="Scrape metrics",
+        endpoints=[OfferEndpoint("metrics-endpoint", "prometheus_scrape", "provider")],
+        active_connections=2, total_connections=3,
+    )
+    with patch.object(OfferDetailScreen, "_fetch_consumers"):
+        screen = OfferDetailScreen(offer, "my-ctrl")
+        await pilot.app.push_screen(screen)
+        await pilot.pause()
+    labels = screen.query(Label)
+    all_text = "\n".join(str(lbl.render()) for lbl in labels)
+    assert "prom-scrape" in all_text
+    assert "prometheus" in all_text
+    assert "Scrape metrics" in all_text
+
+
+@pytest.mark.asyncio
+async def test_action_show_offers_no_controller(pilot):
+    """Shift+O without a controller notifies the user."""
+    screen = pilot.app.screen
+    screen._selected_controller = None
+    screen.action_show_offers()
+    await pilot.pause()
+
+
+@pytest.mark.asyncio
+async def test_action_show_offers_pushes_screen(pilot):
+    """Shift+O with a controller opens OffersScreen."""
+    from jujumate.screens.offers_screen import OffersScreen
+
+    screen = pilot.app.screen
+    screen._selected_controller = "my-ctrl"
+    with patch.object(OffersScreen, "_fetch"):
+        screen.action_show_offers()
+        await pilot.pause()
+    assert isinstance(pilot.app.screen, OffersScreen)
+
+
+@pytest.mark.asyncio
+async def test_offer_detail_screen_populate_consumers(pilot):
+    """_populate_consumers fills the connections table with SAASInfo rows."""
+    from jujumate.models.entities import ControllerOfferInfo, OfferEndpoint
+    from jujumate.screens.offers_screen import OfferDetailScreen
+
+    offer = ControllerOfferInfo(
+        model="cos", name="prom", offer_url="admin/cos.prom",
+        application="prometheus", charm="ch:prometheus-k8s-1", description="",
+        endpoints=[OfferEndpoint("metrics-endpoint", "prometheus_scrape", "provider")],
+    )
+    with patch.object(OfferDetailScreen, "_fetch_consumers"):
+        screen = OfferDetailScreen(offer, "my-ctrl")
+        await pilot.app.push_screen(screen)
+        await pilot.pause()
+
+    consumers = [
+        SAASInfo("monitoring", "prometheus-scrape", "active", "local", "admin/cos.prom"),
+        SAASInfo("prod", "metrics", "active", "local", "admin/cos.prom"),
+    ]
+    screen._populate_consumers(consumers)
+    await pilot.pause()
+
+    conn_dt = screen.query_one("#connections-table", DataTable)
+    assert conn_dt.row_count == 2
+
+
+@pytest.mark.asyncio
+async def test_offer_detail_fetch_consumers_scans_all_controllers(pilot):
+    """_fetch_consumers scans models across all known controllers."""
+    from jujumate.config import JujuConfig
+    from jujumate.models.entities import ControllerOfferInfo, OfferEndpoint
+    from jujumate.screens.offers_screen import OfferDetailScreen
+
+    offer = ControllerOfferInfo(
+        model="cos", name="prom", offer_url="admin/cos.prom",
+        application="prometheus", charm="ch:prometheus-k8s-1", description="",
+        endpoints=[OfferEndpoint("metrics-endpoint", "prometheus_scrape", "provider")],
+    )
+
+    consumer = SAASInfo("monitoring", "prom-scrape", "active", "local", "admin/cos.prom")
+
+    with patch.object(OfferDetailScreen, "_fetch_consumers"):
+        screen = OfferDetailScreen(offer, "ctrl-a")
+        await pilot.app.push_screen(screen)
+        await pilot.pause()
+
+    mock_client_a = AsyncMock()
+    mock_client_a.list_model_names = AsyncMock(return_value=["cos"])
+    mock_client_a.get_saas = AsyncMock(return_value=[])
+    mock_client_a.__aenter__ = AsyncMock(return_value=mock_client_a)
+    mock_client_a.__aexit__ = AsyncMock(return_value=False)
+
+    mock_client_b = AsyncMock()
+    mock_client_b.list_model_names = AsyncMock(return_value=["monitoring"])
+    mock_client_b.get_saas = AsyncMock(return_value=[consumer])
+    mock_client_b.__aenter__ = AsyncMock(return_value=mock_client_b)
+    mock_client_b.__aexit__ = AsyncMock(return_value=False)
+
+    def _make_client(controller_name: str) -> AsyncMock:
+        return mock_client_a if controller_name == "ctrl-a" else mock_client_b
+
+    with (
+        patch("jujumate.screens.offers_screen.load_config",
+              return_value=JujuConfig(current_controller="ctrl-a", controllers=["ctrl-a", "ctrl-b"])),
+        patch("jujumate.screens.offers_screen.JujuClient", side_effect=_make_client),
+    ):
+        screen._fetch_consumers(screen._controller_name, screen._offer)
+        await pilot.pause()
+        await pilot.pause()
+
+    conn_dt = screen.query_one("#connections-table", DataTable)
+    assert conn_dt.row_count == 1
