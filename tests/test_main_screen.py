@@ -251,12 +251,13 @@ async def test_model_selected_switches_to_status_and_filters(pilot):
 
 
 @pytest.mark.asyncio
-async def test_clear_filter_resets_all_selections(pilot):
+async def test_clear_filter_resets_cloud_and_controller(pilot):
     from jujumate.widgets.controllers_view import ControllersView
 
     screen = pilot.app.screen
     screen._selected_cloud = "aws"
     screen._selected_controller = "prod"
+    screen._selected_model = None  # no model — filter clears normally
     screen._all_controllers = [
         ControllerInfo("prod", "aws", "", "3.4.0", 1),
         ControllerInfo("dev", "lxd", "", "3.4.0", 1),
@@ -268,6 +269,20 @@ async def test_clear_filter_resets_all_selections(pilot):
     # Both controllers should show now
     ctrl_view = screen.query_one("#controllers-view", ControllersView)
     assert len(ctrl_view.query_one(NavigableTable)._rows) == 2
+
+
+@pytest.mark.asyncio
+async def test_clear_filter_noop_when_model_selected(pilot):
+    """Esc does nothing when a model is selected — preserves the full nav state."""
+    screen = pilot.app.screen
+    screen._selected_cloud = "aws"
+    screen._selected_controller = "prod"
+    screen._selected_model = "mymodel"
+    screen.action_clear_filter()
+    await pilot.pause()
+    assert screen._selected_cloud == "aws"
+    assert screen._selected_controller == "prod"
+    assert screen._selected_model == "mymodel"
 
 
 @pytest.mark.parametrize("context,should_suppress", [

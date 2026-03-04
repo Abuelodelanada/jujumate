@@ -147,14 +147,16 @@ class MainScreen(Screen):
         logger.info("Manual refresh triggered")
 
     def action_clear_filter(self) -> None:
+        # When a model is selected the cloud/controller/model form a coherent navigation
+        # state driven by the Status tab. Esc should not disrupt that state.
+        if self._selected_model is not None:
+            return
         self._selected_cloud = None
         self._selected_controller = None
-        self._selected_model = None
         self._refresh_controllers_view()
         self._refresh_models_view()
-        self._refresh_status_view()
         self._refresh_header()
-        self.notify("Filter cleared — showing all resources")
+        self.notify("Filter cleared")
 
     def action_quit(self) -> None:
         self.app.exit()
