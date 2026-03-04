@@ -5,15 +5,6 @@ import pytest
 from jujumate.client.juju_client import JujuClient, JujuClientError
 
 
-@pytest.fixture
-def mock_controller():
-    with patch("jujumate.client.juju_client.Controller") as MockController:
-        ctrl = AsyncMock()
-        ctrl.controller_name = "test-controller"
-        MockController.return_value = ctrl
-        yield ctrl
-
-
 @pytest.mark.asyncio
 async def test_connect_current(mock_controller):
     client = JujuClient()
@@ -429,3 +420,253 @@ async def test_get_status_details_returns_offers(mock_controller):
     assert o.endpoint == "karma-dashboard"
     assert o.interface == "karma_dashboard"
     assert o.role == "provider"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# get_secrets
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_get_secrets(mock_controller):
+    from jujumate.models.entities import SecretInfo
+
+    model = AsyncMock()
+    model.name = "dev"
+    mock_secret = MagicMock()
+    mock_secret.uri = "csec:abc123"
+    mock_secret.label = "my-secret"
+    mock_secret.owner_tag = "model-dev"
+    mock_secret.latest_revision = 2
+    mock_secret.create_time = "2024-01-01T00:00:00"
+    model.list_secrets = AsyncMock(return_value=[mock_secret])
+    mock_controller.get_model = AsyncMock(return_value=model)
+    mock_controller.disconnect = AsyncMock()
+    model.disconnect = AsyncMock()
+
+    client = JujuClient()
+    await client.connect()
+    result = await client.get_secrets("dev")
+
+    assert len(result) == 1
+    assert isinstance(result[0], SecretInfo)
+    assert result[0].uri == "csec:abc123"
+    assert result[0].label == "my-secret"
+    assert result[0].owner == "dev"
+    assert result[0].revision == 2
+
+
+@pytest.mark.asyncio
+async def test_get_secrets_empty(mock_controller):
+    model = AsyncMock()
+    model.name = "dev"
+    model.list_secrets = AsyncMock(return_value=[])
+    mock_controller.get_model = AsyncMock(return_value=model)
+    mock_controller.disconnect = AsyncMock()
+    model.disconnect = AsyncMock()
+
+    client = JujuClient()
+    await client.connect()
+    result = await client.get_secrets("dev")
+    assert result == []
+
+
+@pytest.mark.asyncio
+async def test_get_secrets_owner_without_dash(mock_controller):
+    from jujumate.models.entities import SecretInfo
+
+    model = AsyncMock()
+    model.name = "dev"
+    mock_secret = MagicMock()
+    mock_secret.uri = "csec:xyz"
+    mock_secret.label = "no-label"
+    mock_secret.owner_tag = "modelonly"
+    mock_secret.latest_revision = 1
+    mock_secret.create_time = "2024-01-01"
+    model.list_secrets = AsyncMock(return_value=[mock_secret])
+    mock_controller.get_model = AsyncMock(return_value=model)
+    mock_controller.disconnect = AsyncMock()
+    model.disconnect = AsyncMock()
+
+    client = JujuClient()
+    await client.connect()
+    result = await client.get_secrets("dev")
+    assert result[0].owner == "modelonly"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# get_app_config
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_get_app_config(mock_controller):
+    from jujumate.models.entities import AppConfigEntry
+
+    model = AsyncMock()
+    app_obj = AsyncMock()
+    app_obj.get_config = AsyncMock(return_value={
+        "log-level": {"value": "DEBUG", "default": "INFO", "type": "string", "description": "Level", "source": "user"},
+        "port": {"value": 5432, "default": 5432, "type": "int", "description": "Port", "source": "default"},
+    })
+    model.applications = {"pg": app_obj}
+    mock_controller.get_model = AsyncMock(return_value=model)
+    mock_controller.disconnect = AsyncMock()
+    model.disconnect = AsyncMock()
+
+    client = JujuClient()
+    await client.connect()
+    result = await client.get_app_config("dev", "pg")
+
+    assert len(result) == 2
+    assert all(isinstance(e, AppConfigEntry) for e in result)
+    keys = {e.key for e in result}
+    assert keys == {"log-level", "port"}
+
+
+@pytest.mark.asyncio
+async def test_get_app_config_non_dict_values_skipped(mock_controller):
+    model = AsyncMock()
+    app_obj = AsyncMock()
+    app_obj.get_config = AsyncMock(return_value={
+        "good": {"value": "v", "default": "d", "type": "string", "description": "desc", "source": "user"},
+        "bad": "not-a-dict",
+    })
+    model.applications = {"pg": app_obj}
+    mock_controller.get_model = AsyncMock(return_value=model)
+    mock_controller.disconnect = AsyncMock()
+    model.disconnect = AsyncMock()
+
+    client = JujuClient()
+    await client.connect()
+    result = await client.get_app_config("dev", "pg")
+    assert len(result) == 1
+
+
+@pytest.mark.asyncio
+async def test_get_app_config_app_not_found(mock_controller):
+    model = AsyncMock()
+    model.applications = {}
+    mock_controller.get_model = AsyncMock(return_value=model)
+    mock_controller.disconnect = AsyncMock()
+    model.disconnect = AsyncMock()
+
+    client = JujuClient()
+    await client.connect()
+    result = await client.get_app_config("dev", "missing")
+    assert result == []
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# get_relation_data
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_get_relation_data_provider_side(mock_controller):
+    from jujumate.models.entities import RelationDataEntry
+
+    model = AsyncMock()
+    model.connection = MagicMock(return_value=MagicMock())
+
+    unit_mock = MagicMock()
+    unit_mock.name = "pg/0"
+    app_mock = MagicMock()
+    app_mock.units = [unit_mock]
+    wp_mock = MagicMock()
+    wp_mock.units = []
+    model.applications = {"postgresql": app_mock, "wordpress": wp_mock}
+
+    with patch("juju.client.client.ApplicationFacade") as MockFacade:
+        facade_inst = AsyncMock()
+        MockFacade.from_connection = MagicMock(return_value=facade_inst)
+
+        ep_data = MagicMock()
+        ep_data.relation_id = 5
+        ep_data.endpoint = "db"
+        ep_data.applicationdata = {"host": "10.0.0.1", "port": "5432"}
+        ep_data.unit_relation_data = {}
+
+        unit_result = MagicMock()
+        unit_result.error = None
+        unit_result.result = MagicMock()
+        unit_result.result.relation_data = [ep_data]
+
+        units_info_result = MagicMock()
+        units_info_result.results = [unit_result]
+        facade_inst.UnitsInfo = AsyncMock(return_value=units_info_result)
+
+        mock_controller.get_model = AsyncMock(return_value=model)
+        mock_controller.disconnect = AsyncMock()
+        model.disconnect = AsyncMock()
+
+        client = JujuClient()
+        await client.connect()
+        result = await client.get_relation_data("dev", 5, "postgresql", "wordpress")
+
+    assert len(result) > 0
+    assert all(isinstance(e, RelationDataEntry) for e in result)
+
+
+@pytest.mark.asyncio
+async def test_get_relation_data_no_units(mock_controller):
+    model = AsyncMock()
+    model.connection = MagicMock(return_value=MagicMock())
+
+    app_mock = MagicMock()
+    app_mock.units = []
+    model.applications = {"postgresql": app_mock, "wordpress": MagicMock(units=[])}
+
+    with patch("juju.client.client.ApplicationFacade") as MockFacade:
+        facade_inst = AsyncMock()
+        MockFacade.from_connection = MagicMock(return_value=facade_inst)
+        facade_inst.UnitsInfo = AsyncMock(return_value=MagicMock(results=[]))
+        mock_controller.get_model = AsyncMock(return_value=model)
+        mock_controller.disconnect = AsyncMock()
+        model.disconnect = AsyncMock()
+
+        client = JujuClient()
+        await client.connect()
+        result = await client.get_relation_data("dev", 5, "postgresql", "wordpress")
+
+    assert result == []
+
+
+@pytest.mark.asyncio
+async def test_get_relation_data_skips_wrong_relation_id(mock_controller):
+    model = AsyncMock()
+    model.connection = MagicMock(return_value=MagicMock())
+
+    unit_mock = MagicMock()
+    unit_mock.name = "pg/0"
+    app_mock = MagicMock()
+    app_mock.units = [unit_mock]
+    model.applications = {"postgresql": app_mock}
+
+    with patch("juju.client.client.ApplicationFacade") as MockFacade:
+        facade_inst = AsyncMock()
+        MockFacade.from_connection = MagicMock(return_value=facade_inst)
+
+        ep_data = MagicMock()
+        ep_data.relation_id = 99  # wrong — should be skipped
+        ep_data.applicationdata = {"key": "val"}
+        ep_data.unit_relation_data = {}
+
+        unit_result = MagicMock()
+        unit_result.error = None
+        unit_result.result = MagicMock()
+        unit_result.result.relation_data = [ep_data]
+
+        units_info_result = MagicMock()
+        units_info_result.results = [unit_result]
+        facade_inst.UnitsInfo = AsyncMock(return_value=units_info_result)
+
+        mock_controller.get_model = AsyncMock(return_value=model)
+        mock_controller.disconnect = AsyncMock()
+        model.disconnect = AsyncMock()
+
+        client = JujuClient()
+        await client.connect()
+        result = await client.get_relation_data("dev", 5, "postgresql", "wordpress")
+
+    assert result == []
