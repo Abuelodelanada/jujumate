@@ -192,7 +192,10 @@ class MainScreen(Screen):
             for m in self._all_models
             if self._selected_controller is None or m.controller == self._selected_controller
         ]
-        self.query_one("#models-view", ModelsView).update(filtered)
+        models_view = self.query_one("#models-view", ModelsView)
+        models_view.update(filtered)
+        if self._selected_model and self._selected_controller:
+            models_view.select_model(self._selected_controller, self._selected_model)
 
     def _refresh_status_view(self) -> None:
         if self._selected_model is None:
@@ -368,6 +371,7 @@ class MainScreen(Screen):
             return
         self._selected_controller = model_info.controller
         self._selected_model = model_name
+        self._refresh_models_view()
         self._refresh_status_view()
         self._fetch_relations(self._selected_controller, self._selected_model)
         self._refresh_header()
@@ -412,8 +416,13 @@ class MainScreen(Screen):
         self.action_switch_tab("tab-models")
 
     def on_models_view_model_selected(self, message: ModelsView.ModelSelected) -> None:
-        # message.name is "controller/modelname" — extract just the model name
-        self._selected_model = message.name.split("/", 1)[-1]
+        # message.name is "controller/modelname"
+        parts = message.name.split("/", 1)
+        if len(parts) == 2:
+            self._selected_controller = parts[0]
+            self._selected_model = parts[1]
+        else:
+            self._selected_model = message.name
         self._refresh_status_view()
         if self._selected_controller:
             self._fetch_relations(self._selected_controller, self._selected_model)

@@ -106,6 +106,12 @@ class NavigableTable(Widget, can_focus=True):
         self.query_one("#nt-content", Static).update(t)
         logger.debug("NavigableTable refreshed: %d rows, cursor=%d", len(self._rows), self._cursor)
 
+    def move_cursor_to_key(self, key: str) -> None:
+        """Move the cursor to the row with the given key (no-op if not found)."""
+        if key in self._keys:
+            self._cursor = self._keys.index(key)
+            self._refresh_content()
+
     def action_cursor_up(self) -> None:
         if self._cursor > 0:
             self._cursor -= 1

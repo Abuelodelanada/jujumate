@@ -51,6 +51,10 @@ class ModelsView(Widget):
         self.query_one(NavigableTable).update_rows(rows, keys=keys)
         logger.debug("ModelsView updated with %d models", len(models))
 
+    def select_model(self, controller: str, model: str) -> None:
+        """Position the cursor on the given controller/model row."""
+        self.query_one(NavigableTable).move_cursor_to_key(f"{controller}/{model}")
+
     def on_navigable_table_row_selected(self, message: NavigableTable.RowSelected) -> None:
         message.stop()
         self.post_message(self.ModelSelected(name=message.key))
