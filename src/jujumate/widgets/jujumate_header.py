@@ -59,6 +59,14 @@ class JujuMateHeader(Widget):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self._header_ctx = HeaderContext()
+        self._pulse_on = True
+
+    def on_mount(self) -> None:
+        self.set_interval(0.8, self._tick_pulse)
+
+    def _tick_pulse(self) -> None:
+        self._pulse_on = not self._pulse_on
+        self.update_context(self._header_ctx)
 
     def compose(self) -> ComposeResult:
         yield Static("", id="header-left")
@@ -129,8 +137,10 @@ class JujuMateHeader(Widget):
         return ""
 
     def _build_status(self, ctx: HeaderContext) -> str:
+        pulse_on = getattr(self, "_pulse_on", True)
+        dot = "[bold #26A269]●[/bold #26A269]" if pulse_on else "[#004d26]●[/#004d26]"
         if ctx.is_connected and ctx.timestamp:
-            return f"[green]⣾ Live · {ctx.timestamp}[/green]"
+            return f"{dot} [green]Live · {ctx.timestamp}[/green]"
         if ctx.is_connected:
-            return "[green]⣾ Live[/green]"
+            return f"{dot} [green]Live[/green]"
         return "[red]⚠ Disconnected[/red]"
