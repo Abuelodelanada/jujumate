@@ -1,10 +1,14 @@
 import logging
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
 
-CONFIG_DIR = Path.home() / ".config" / "jujumate"
+_snap_real_home = os.environ.get("SNAP_REAL_HOME")
+_real_home = Path(_snap_real_home) if _snap_real_home else Path.home()
+
+CONFIG_DIR = _real_home / ".config" / "jujumate"
 CONFIG_FILE = CONFIG_DIR / "config.yaml"
 
 LOG_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
@@ -14,8 +18,8 @@ LOG_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
 class AppSettings:
     refresh_interval: int = 5
     default_controller: str | None = None
-    juju_data_dir: Path = Path.home() / ".local" / "share" / "juju"
-    log_file: Path = Path.home() / ".local" / "state" / "jujumate" / "jujumate.log"
+    juju_data_dir: Path = _real_home / ".local" / "share" / "juju"
+    log_file: Path = _real_home / ".local" / "state" / "jujumate" / "jujumate.log"
     log_level: int = logging.WARNING
     theme: str = "ubuntu"
 

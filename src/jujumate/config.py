@@ -1,9 +1,12 @@
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
 
-JUJU_DATA_DIR = Path.home() / ".local" / "share" / "juju"
+_snap_real_home = os.environ.get("SNAP_REAL_HOME")
+_real_home = Path(_snap_real_home) if _snap_real_home else Path.home()
+JUJU_DATA_DIR = Path(os.environ.get("JUJU_DATA", _real_home / ".local" / "share" / "juju"))
 
 
 @dataclass

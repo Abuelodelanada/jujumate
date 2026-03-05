@@ -1,0 +1,74 @@
+name: jujumate
+base: core24
+
+platforms:
+  amd64:
+  arm64:
+  ppc64el:
+  s390x:
+
+adopt-info: jujumate
+title: JujuMate
+summary: Terminal UI for Juju infrastructure orchestration.
+
+description: |
+  JujuMate is a TUI (Terminal User Interface) for Juju, Canonical's
+  infrastructure orchestration engine. It provides a single interactive
+  screen showing all Juju resources — clouds, controllers, models,
+  applications, and units — with real-time updates.
+
+  Inspired by K9s and KDash, JujuMate reads your existing Juju
+  configuration from ~/.local/share/juju so no extra setup is needed
+  if you already use the juju CLI.
+
+  This snap requires read access to ~/.local/share/juju via the
+  dot-local-share-juju interface so that the Juju client configuration
+  can be used to connect to your clouds, controllers and models.
+
+license: GPL-3.0
+contact: jose.masson@canonical.com
+source-code: https://github.com/Abuelodelanada/jujumate
+issues: https://github.com/Abuelodelanada/jujumate/issues
+website: https://github.com/Abuelodelanada/jujumate
+
+grade: stable
+confinement: strict
+
+parts:
+  jujumate:
+    plugin: python
+    source: .
+    override-build: |
+      snapcraftctl build
+      VERSION="$(grep -m 1 -Po 'version = "\K[^"]*' ./pyproject.toml)"
+      snapcraftctl set-version "$VERSION"
+
+apps:
+  jujumate:
+    command: bin/jujumate
+    environment:
+      JUJU_DATA: $SNAP_REAL_HOME/.local/share/juju
+    plugs:
+      - network
+      - dot-local-share-juju
+      - dot-config-jujumate
+      - dot-local-state-jujumate
+
+plugs:
+  # read access to ~/.local/share/juju (JUJU_DATA)
+  dot-local-share-juju:
+    interface: personal-files
+    read:
+      - $HOME/.local/share/juju
+
+  # read-write access to ~/.config/jujumate (user settings)
+  dot-config-jujumate:
+    interface: personal-files
+    write:
+      - $HOME/.config/jujumate
+
+  # read-write access to ~/.local/state/jujumate (log files)
+  dot-local-state-jujumate:
+    interface: personal-files
+    write:
+      - $HOME/.local/state/jujumate
