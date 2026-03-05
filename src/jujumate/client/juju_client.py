@@ -574,6 +574,62 @@ class JujuClient:
         logger.debug("Relation data for relation %d: %d entries", relation_id, len(entries))
         return entries
 
+    async def get_offer_detail(
+        self, model_name: str, offer_name: str
+    ) -> ControllerOfferInfo | None:
+        """Fetch detail for a single named offer in a model."""
+        try:
+            raw = await self._controller.list_offers(model_name)
+            model = await self._controller.get_model(model_name)
+            status_counts: dict[str, tuple[int, int]] = {}
+            try:
+                status = await model.get_status()
+                for name, offer_st in (status.offers or {}).items():
+                    if offer_st is None:
+                        continue
+                    status_counts[name] = (
+                        offer_st.active_connected_count or 0,
+                        offer_st.total_connected_count or 0,
+                    )
+            finally:
+                await model.disconnect()
+            _access_rank = {"admin": 3, "consume": 2, "read": 1}
+            for offer in raw.results or []:
+                if (offer.offer_name or "") != offer_name:
+                    continue
+                endpoints = [
+                    OfferEndpoint(
+                        name=ep.name or "",
+                        interface=ep.interface or "",
+                        role=ep.role or "",
+                    )
+                    for ep in (offer.endpoints or [])
+                ]
+                active, total = status_counts.get(offer_name, (0, 0))
+                users = offer.users or []
+                access = max(
+                    (getattr(u, "access", "") or "" for u in users),
+                    key=lambda a: _access_rank.get(a, 0),
+                    default="",
+                )
+                return ControllerOfferInfo(
+                    model=model_name,
+                    name=offer_name,
+                    offer_url=offer.offer_url or "",
+                    application=offer.application_name or "",
+                    charm=offer.charm_url or "",
+                    description=offer.application_description or "",
+                    access=access,
+                    endpoints=endpoints,
+                    active_connections=active,
+                    total_connections=total,
+                )
+        except Exception:
+            logger.warning(
+                "Could not fetch offer detail for '%s' in model '%s'", offer_name, model_name
+            )
+        return None
+
     async def get_controller_offers(self) -> list[ControllerOfferInfo]:
         """Fetch all offers across every model in the controller."""
         model_names = await self._controller.list_models()

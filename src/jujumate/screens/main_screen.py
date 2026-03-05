@@ -37,7 +37,7 @@ from jujumate.models.entities import (
 )
 from jujumate.screens.app_config_screen import AppConfigScreen
 from jujumate.screens.help_screen import HelpScreen
-from jujumate.screens.offers_screen import OffersScreen
+from jujumate.screens.offers_screen import OfferDetailScreen, OffersScreen
 from jujumate.screens.relation_data_screen import RelationDataScreen
 from jujumate.screens.secrets_screen import SecretsScreen
 from jujumate.settings import AppSettings, load_settings
@@ -486,3 +486,18 @@ class MainScreen(Screen):
                 relation,
             )
         )
+
+    def on_status_view_offer_selected(self, message: StatusView.OfferSelected) -> None:
+        offer = message.offer
+        if not self._selected_controller:
+            return
+        self._open_offer_detail(self._selected_controller, offer.model, offer.name)
+
+    @work
+    async def _open_offer_detail(
+        self, controller_name: str, model_name: str, offer_name: str
+    ) -> None:
+        async with JujuClient(controller_name=controller_name) as client:
+            detail = await client.get_offer_detail(model_name, offer_name)
+        if detail:
+            self.app.push_screen(OfferDetailScreen(detail, controller_name))

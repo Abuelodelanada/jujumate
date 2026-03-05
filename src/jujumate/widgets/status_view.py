@@ -193,6 +193,13 @@ class StatusView(Widget):
             super().__init__()
             self.app = app
 
+    class OfferSelected(Message):
+        """Posted when the user presses Enter on an offer row."""
+
+        def __init__(self, offer: OfferInfo) -> None:
+            super().__init__()
+            self.offer = offer
+
     DEFAULT_CSS = """
     StatusView {
         height: 1fr;
@@ -261,6 +268,7 @@ class StatusView(Widget):
         self._all_relations: list[RelationInfo] = []
         self._displayed_apps: list[AppInfo] = []
         self._displayed_relations: list[RelationInfo] = []
+        self._displayed_offers: list[OfferInfo] = []
         self._is_kubernetes: bool = False
 
     def compose(self) -> ComposeResult:
@@ -435,6 +443,7 @@ class StatusView(Widget):
             )
         ]
         has_offers = bool(filtered)
+        self._displayed_offers = filtered
         self.query_one("#status-offers-table").display = has_offers
         rows = [
             (
@@ -575,6 +584,9 @@ class StatusView(Widget):
             elif table_id == "status-apps-table":
                 if 0 <= idx < len(self._displayed_apps):
                     self.post_message(StatusView.AppSelected(self._displayed_apps[idx]))
+            elif table_id == "status-offers-table":
+                if 0 <= idx < len(self._displayed_offers):
+                    self.post_message(StatusView.OfferSelected(self._displayed_offers[idx]))
         except Exception:
             pass
 
