@@ -40,7 +40,7 @@ from jujumate.models.entities import (
 )
 from jujumate.screens.app_config_screen import AppConfigScreen
 from jujumate.screens.main_screen import MainScreen
-from jujumate.screens.offers_screen import OfferDetailScreen, OffersScreen
+from jujumate.screens.offers_screen import OfferDetailScreen, OffersScreen, _ConsumerEntry
 from jujumate.screens.relation_data_screen import RelationDataScreen
 from jujumate.screens.secrets_screen import SecretDetailScreen, SecretsScreen
 from jujumate.settings import AppSettings
@@ -969,8 +969,11 @@ async def test_offer_detail_screen_populate_consumers(pilot):
         await pilot.pause()
 
     consumers = [
-        SAASInfo("monitoring", "prometheus-scrape", "active", "local", "admin/cos.prom"),
-        SAASInfo("prod", "metrics", "active", "local", "admin/cos.prom"),
+        _ConsumerEntry(
+            "ctrl-a",
+            SAASInfo("monitoring", "prometheus-scrape", "active", "local", "admin/cos.prom"),
+        ),
+        _ConsumerEntry("ctrl-b", SAASInfo("prod", "metrics", "active", "local", "admin/cos.prom")),
     ]
     screen._populate_consumers(consumers)
     await pilot.pause()

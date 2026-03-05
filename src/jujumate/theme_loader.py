@@ -1,4 +1,5 @@
 import logging
+import os
 from pathlib import Path
 
 import yaml
@@ -7,7 +8,9 @@ from textual.theme import Theme
 logger = logging.getLogger(__name__)
 
 BUILTIN_THEMES_DIR = Path(__file__).parent / "themes"
-USER_THEMES_DIR = Path.home() / ".config" / "jujumate" / "themes"
+_snap_real_home = os.environ.get("SNAP_REAL_HOME")
+_real_home = Path(_snap_real_home) if _snap_real_home else Path.home()
+USER_THEMES_DIR = _real_home / ".config" / "jujumate" / "themes"
 
 _THEME_FIELDS = {
     "primary",

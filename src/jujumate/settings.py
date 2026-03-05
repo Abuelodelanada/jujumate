@@ -28,6 +28,18 @@ class AppSettingsError(Exception):
     pass
 
 
+def save_theme(theme_name: str, config_file: Path = CONFIG_FILE) -> None:
+    """Persist the selected theme to the config file, preserving other settings."""
+    data: dict = {}
+    if config_file.exists():
+        with config_file.open() as f:
+            data = yaml.safe_load(f) or {}
+    data["theme"] = theme_name
+    config_file.parent.mkdir(parents=True, exist_ok=True)
+    with config_file.open("w") as f:
+        yaml.safe_dump(data, f, default_flow_style=False)
+
+
 def load_settings(config_file: Path = CONFIG_FILE) -> AppSettings:
     if not config_file.exists():
         return AppSettings()

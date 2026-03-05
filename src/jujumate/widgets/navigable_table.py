@@ -9,6 +9,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import VerticalScroll
 from textual.message import Message
+from textual.theme import Theme
 from textual.widget import Widget
 from textual.widgets import Label, Static
 
@@ -71,6 +72,11 @@ class NavigableTable(Widget, can_focus=True):
 
     def on_mount(self) -> None:
         self.query_one("#nt-scroll").display = False
+        self.app.theme_changed_signal.subscribe(self, self._on_theme_changed)
+
+    def _on_theme_changed(self, theme: Theme) -> None:
+        """Re-render with new palette colors when the theme is switched."""
+        self._refresh_content()
 
     def update_rows(self, rows: list[tuple], keys: list[str] | None = None) -> None:
         self._rows = rows

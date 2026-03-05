@@ -40,6 +40,7 @@ from jujumate.screens.help_screen import HelpScreen
 from jujumate.screens.offers_screen import OfferDetailScreen, OffersScreen
 from jujumate.screens.relation_data_screen import RelationDataScreen
 from jujumate.screens.secrets_screen import SecretsScreen
+from jujumate.screens.theme_screen import ThemeScreen
 from jujumate.settings import AppSettings, load_settings
 from jujumate.widgets.clouds_view import CloudsView
 from jujumate.widgets.controllers_view import ControllersView
@@ -58,6 +59,7 @@ class MainScreen(Screen):
         Binding("s", "switch_tab('tab-status')", "Status"),
         Binding("S", "show_secrets", "Secrets", show=False),
         Binding("O", "show_offers", "Offers", show=False),
+        Binding("T", "show_themes", "Theme", show=False),
         Binding("r", "refresh_data", "Refresh"),
         Binding("escape", "clear_filter", "Clear filter", show=False),
         Binding("question_mark", "show_help", "Help"),
@@ -125,6 +127,8 @@ class MainScreen(Screen):
         active_tab = self.query_one(TabbedContent).active
         if active_tab == "tab-status":
             await self._poller.poll_once()
+            if self._selected_controller and self._selected_model:
+                self._fetch_relations(self._selected_controller, self._selected_model)
 
     async def on_unmount(self) -> None:
         if self._poll_timer is not None:
@@ -142,6 +146,8 @@ class MainScreen(Screen):
         self.notify("Refreshing…")
         if self._poller:
             await self._poller.poll_once()
+        if self._selected_controller and self._selected_model:
+            self._fetch_relations(self._selected_controller, self._selected_model)
         logger.info("Manual refresh triggered")
 
     def action_clear_filter(self) -> None:
@@ -173,6 +179,9 @@ class MainScreen(Screen):
             self.notify("Select a controller first", severity="warning")
             return
         self.app.push_screen(OffersScreen(self._selected_controller))
+
+    def action_show_themes(self) -> None:
+        self.app.push_screen(ThemeScreen())
 
     # ── Filter helpers ────────────────────────────────────────────────────────
 

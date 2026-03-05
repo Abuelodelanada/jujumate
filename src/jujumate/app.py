@@ -37,7 +37,12 @@ class JujuMateApp(App):
         background: ansi_default;
     }
     Underline > .underline--bar {
+        color: $accent;
         background: ansi_default;
+    }
+    Tab.-active {
+        color: $accent;
+        text-style: bold;
     }
     DataTable {
         background: ansi_default;
@@ -97,3 +102,13 @@ class JujuMateApp(App):
             self.theme = theme_name
             palette_mod.init(themes[theme_name])
             logger.info("Applied theme '%s'", theme_name)
+
+    def switch_theme(self, theme_name: str) -> None:
+        """Apply a theme at runtime, updating both Textual CSS and the palette globals."""
+        themes = load_all_themes()
+        if theme_name not in themes:
+            logger.warning("Cannot switch to unknown theme '%s'", theme_name)
+            return
+        self.theme = theme_name
+        palette_mod.init(themes[theme_name])
+        logger.info("Switched theme to '%s'", theme_name)

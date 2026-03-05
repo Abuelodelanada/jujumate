@@ -1,6 +1,7 @@
 """Modal screens for controller offers list and offer detail."""
 
 import logging
+from dataclasses import dataclass
 
 from rich.text import Text
 from textual import work
@@ -17,6 +18,13 @@ from jujumate.models.entities import ControllerOfferInfo, SAASInfo
 from jujumate.widgets.status_view import _colored_status
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class _ConsumerEntry:
+    controller: str
+    saas: SAASInfo
+
 
 _ACCESS_COLORS: dict[str, str] = {
     "admin": palette.SUCCESS,
@@ -141,14 +149,14 @@ class OfferDetailScreen(ModalScreen):
             ep_dt.add_row("—", "—", "—")
 
         conn_dt = self.query_one("#connections-table", DataTable)
-        conn_dt.add_columns("Model", "Application", "Status")
+        conn_dt.add_columns("Controller", "Model", "Application", "Status")
         conn_dt.display = False
         self._fetch_consumers(self._controller_name, self._offer)
 
     @work
     async def _fetch_consumers(self, controller_name: str, offer: ControllerOfferInfo) -> None:
         """Scan all models across all known controllers for SAAS entries that consume this offer."""
-        consumers: list[SAASInfo] = []
+        consumers: list[_ConsumerEntry] = []
         target_url = _normalize_url(offer.offer_url)
         try:
             all_controllers = load_config().controllers
@@ -164,7 +172,7 @@ class OfferDetailScreen(ModalScreen):
                             saas_list = await client.get_saas(model_name)
                             for s in saas_list:
                                 if _normalize_url(s.url) == target_url:
-                                    consumers.append(s)
+                                    consumers.append(_ConsumerEntry(controller=ctrl_name, saas=s))
                         except Exception as exc:
                             logger.debug(
                                 "Could not fetch SAAS for model '%s' on '%s': %s",
@@ -177,14 +185,16 @@ class OfferDetailScreen(ModalScreen):
 
         self._populate_consumers(consumers)
 
-    def _populate_consumers(self, consumers: list[SAASInfo]) -> None:
+    def _populate_consumers(self, consumers: list[_ConsumerEntry]) -> None:
         loading = self.query_one("#consumers-loading", Static)
         loading.display = False
         conn_dt = self.query_one("#connections-table", DataTable)
         if consumers:
-            for s in consumers:
+            for entry in consumers:
+                s = entry.saas
                 app_name = Text.from_markup(f"[{palette.LINK}]{s.name}[/]")
-                conn_dt.add_row(s.model, app_name, _colored_status(s.status))
+                ctrl_name = Text.from_markup(f"[{palette.MUTED}]{entry.controller}[/]")
+                conn_dt.add_row(ctrl_name, s.model, app_name, _colored_status(s.status))
             conn_dt.display = True
         else:
             loading.update("No known consumers.")
