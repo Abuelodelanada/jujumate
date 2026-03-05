@@ -148,6 +148,7 @@ class JujuClient:
                             version=_s(app_st.workload_version),
                             address=_s(app_st.public_address),
                             exposed=bool(app_st.exposed),
+                            can_upgrade_to=_s(app_st.can_upgrade_to),
                         )
                     )
                     for unit_name, unit_st in (app_st.units or {}).items():

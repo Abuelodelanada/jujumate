@@ -43,6 +43,7 @@ class AppInfo:
     version: str = ""
     address: str = ""
     exposed: bool = False
+    can_upgrade_to: str = ""
 
 
 @dataclass

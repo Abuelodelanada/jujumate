@@ -341,7 +341,9 @@ class StatusView(Widget):
                     str(a.unit_count),
                     a.charm,
                     a.channel,
-                    str(a.revision),
+                    Text(str(a.revision), style=f"bold {palette.WARNING}")
+                    if a.can_upgrade_to
+                    else str(a.revision),
                     _colored_ip(a.address),
                     "yes" if a.exposed else "no",
                     _trunc_msg(a.message),

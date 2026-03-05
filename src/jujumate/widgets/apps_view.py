@@ -1,11 +1,13 @@
 import logging
 from typing import Any
 
+from rich.text import Text
 from textual.app import ComposeResult
 from textual.message import Message
 from textual.widget import Widget
 from textual.widgets import DataTable
 
+from jujumate import palette
 from jujumate.models.entities import AppInfo
 from jujumate.widgets.resource_table import Column, ResourceTable
 
@@ -44,7 +46,9 @@ class AppsView(Widget):
                 a.model,
                 a.charm,
                 a.channel,
-                str(a.revision),
+                Text(str(a.revision), style=f"bold {palette.WARNING}")
+                if a.can_upgrade_to
+                else str(a.revision),
                 str(a.unit_count),
                 a.status,
                 a.message,
