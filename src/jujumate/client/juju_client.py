@@ -291,8 +291,12 @@ class JujuClient:
                 if rel is None:
                     continue
                 endpoints: list = list(rel.endpoints or [])
-                provider = next((e for e in endpoints if e is not None and e.role == "provider"), None)
-                requirer = next((e for e in endpoints if e is not None and e.role == "requirer"), None)
+                provider = next(
+                    (e for e in endpoints if e is not None and e.role == "provider"), None
+                )
+                requirer = next(
+                    (e for e in endpoints if e is not None and e.role == "requirer"), None
+                )
                 peer = next((e for e in endpoints if e is not None and e.role == "peer"), None)
                 if peer:
                     relations.append(

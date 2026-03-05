@@ -15,7 +15,6 @@ Usage in Python / Rich markup::
 
 from __future__ import annotations
 
-import sys
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -45,23 +44,23 @@ def init(theme: Theme) -> None:
     Reads top-level Theme fields (primary, secondary, success, warning, error)
     and ``variables:`` entries (link, muted, pulse-off) from the theme YAML.
     """
-    mod = sys.modules[__name__]
+    g = globals()
 
     if theme.primary:
-        setattr(mod, "PRIMARY", theme.primary)
+        g["PRIMARY"] = theme.primary
     if theme.secondary:
-        setattr(mod, "SECONDARY", theme.secondary)
+        g["SECONDARY"] = theme.secondary
     if theme.success:
-        setattr(mod, "SUCCESS", theme.success)
+        g["SUCCESS"] = theme.success
     if theme.warning:
-        setattr(mod, "WARNING", theme.warning)
+        g["WARNING"] = theme.warning
     if theme.error:
-        setattr(mod, "ERROR", theme.error)
+        g["ERROR"] = theme.error
 
     variables = theme.variables or {}
     if "link" in variables:
-        setattr(mod, "LINK", variables["link"])
+        g["LINK"] = variables["link"]
     if "muted" in variables:
-        setattr(mod, "MUTED", variables["muted"])
+        g["MUTED"] = variables["muted"]
     if "pulse-off" in variables:
-        setattr(mod, "PULSE_OFF", variables["pulse-off"])
+        g["PULSE_OFF"] = variables["pulse-off"]
