@@ -1,4 +1,5 @@
 import logging
+from typing import Any
 
 from juju.client import client as juju_client
 from juju.controller import Controller
@@ -21,6 +22,13 @@ from jujumate.models.entities import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _s(v: Any) -> str:
+    """Coerce python-libjuju bytes|str|None to str."""
+    if v is None:
+        return ""
+    return v.decode() if isinstance(v, bytes) else str(v)
 
 
 class JujuClientError(Exception):
@@ -120,69 +128,74 @@ class JujuClient:
                 apps = []
                 units = []
                 for app_name, app_st in app_statuses.items():
+                    if app_st is None:
+                        continue
                     charm_name = (
                         model.applications[app_name].charm_name
                         if app_name in model.applications
-                        else (app_st.charm or "").split("/")[-1].rsplit("-", 1)[0]
+                        else _s(app_st.charm).split("/")[-1].rsplit("-", 1)[0]
                     )
                     apps.append(
                         AppInfo(
                             name=app_name,
                             model=model_name,
-                            charm=charm_name,
-                            channel=app_st.charm_channel or "",
+                            charm=_s(charm_name),
+                            channel=_s(app_st.charm_channel),
                             revision=app_st.charm_rev or 0,
                             unit_count=len(app_st.units or {}),
-                            status=app_st.status.status if app_st.status else "",
-                            message=app_st.status.info if app_st.status else "",
-                            version=app_st.workload_version or "",
-                            address=app_st.public_address or "",
+                            status=_s(app_st.status.status) if app_st.status else "",
+                            message=_s(app_st.status.info) if app_st.status else "",
+                            version=_s(app_st.workload_version),
+                            address=_s(app_st.public_address),
                             exposed=bool(app_st.exposed),
                         )
                     )
                     for unit_name, unit_st in (app_st.units or {}).items():
-                        opened_ports = unit_st.opened_ports or []
-                        ports_str = ", ".join(opened_ports) if opened_ports else ""
+                        if unit_st is None:
+                            continue
+                        ports_list: list[str] = [_s(p) for p in (unit_st.opened_ports or [])]
+                        ports_str = ", ".join(ports_list) if ports_list else ""
                         units.append(
                             UnitInfo(
                                 name=unit_name,
                                 app=app_name,
                                 model=model_name,
-                                machine=unit_st.machine or "",
-                                workload_status=unit_st.workload_status.status
+                                machine=_s(unit_st.machine),
+                                workload_status=_s(unit_st.workload_status.status)
                                 if unit_st.workload_status
                                 else "",
-                                agent_status=unit_st.agent_status.status
+                                agent_status=_s(unit_st.agent_status.status)
                                 if unit_st.agent_status
                                 else "",
-                                address=unit_st.address or "",
-                                public_address=unit_st.public_address or "",
+                                address=_s(unit_st.address),
+                                public_address=_s(unit_st.public_address),
                                 ports=ports_str,
-                                message=unit_st.workload_status.info
+                                message=_s(unit_st.workload_status.info)
                                 if unit_st.workload_status
                                 else "",
                             )
                         )
                         for sub_name, sub_st in (unit_st.subordinates or {}).items():
+                            if sub_st is None:
+                                continue
                             sub_app = sub_name.split("/")[0]
                             units.append(
                                 UnitInfo(
                                     name=sub_name,
                                     app=sub_app,
                                     model=model_name,
-                                    machine=unit_st.machine or "",
-                                    workload_status=sub_st.workload_status.status
+                                    machine=_s(unit_st.machine),
+                                    workload_status=_s(sub_st.workload_status.status)
                                     if sub_st.workload_status
                                     else "",
-                                    agent_status=sub_st.agent_status.status
+                                    agent_status=_s(sub_st.agent_status.status)
                                     if sub_st.agent_status
                                     else "",
-                                    address=sub_st.address or unit_st.address or "",
-                                    public_address=sub_st.public_address
-                                    or unit_st.public_address
-                                    or "",
-                                    ports=", ".join(sub_st.opened_ports or []),
-                                    message=sub_st.workload_status.info
+                                    address=_s(sub_st.address) or _s(unit_st.address),
+                                    public_address=_s(sub_st.public_address)
+                                    or _s(unit_st.public_address),
+                                    ports=", ".join([_s(p) for p in (sub_st.opened_ports or [])]),
+                                    message=_s(sub_st.workload_status.info)
                                     if sub_st.workload_status
                                     else "",
                                     subordinate_of=unit_name,
@@ -190,12 +203,18 @@ class JujuClient:
                             )
                 machines = []
                 for m_id, m_st in (full_status.machines or {}).items():
+                    if m_st is None:
+                        continue
                     base_str = ""
                     if m_st.base:
-                        base_str = f"{m_st.base.name}@{m_st.base.channel}" if m_st.base.name else ""
+                        base_str = (
+                            f"{_s(m_st.base.name)}@{_s(m_st.base.channel)}"
+                            if m_st.base.name
+                            else ""
+                        )
                     az = ""
                     if m_st.hardware:
-                        for part in m_st.hardware.split():
+                        for part in _s(m_st.hardware).split():
                             if part.startswith("availability-zone="):
                                 az = part.split("=", 1)[1]
                                 break
@@ -203,12 +222,12 @@ class JujuClient:
                         MachineInfo(
                             model=model_name,
                             id=m_id,
-                            state=m_st.agent_status.status if m_st.agent_status else "",
-                            address=m_st.dns_name or "",
-                            instance_id=m_st.instance_id or "",
+                            state=_s(m_st.agent_status.status) if m_st.agent_status else "",
+                            address=_s(m_st.dns_name),
+                            instance_id=_s(m_st.instance_id),
                             base=base_str,
                             az=az,
-                            message=m_st.instance_status.info if m_st.instance_status else "",
+                            message=_s(m_st.instance_status.info) if m_st.instance_status else "",
                         )
                     )
             finally:
@@ -269,19 +288,21 @@ class JujuClient:
             status = await model.get_status()
             app_statuses = status.applications or {}
             for rel in status.relations or []:
-                endpoints = rel.endpoints or []
-                provider = next((e for e in endpoints if e.role == "provider"), None)
-                requirer = next((e for e in endpoints if e.role == "requirer"), None)
-                peer = next((e for e in endpoints if e.role == "peer"), None)
+                if rel is None:
+                    continue
+                endpoints: list = list(rel.endpoints or [])
+                provider = next((e for e in endpoints if e is not None and e.role == "provider"), None)
+                requirer = next((e for e in endpoints if e is not None and e.role == "requirer"), None)
+                peer = next((e for e in endpoints if e is not None and e.role == "peer"), None)
                 if peer:
                     relations.append(
                         RelationInfo(
                             model=model_name,
                             provider=f"{peer.application}:{peer.name}",
                             requirer=f"{peer.application}:{peer.name}",
-                            interface=rel.interface or "",
+                            interface=_s(rel.interface),
                             type="peer",
-                            relation_id=rel.id_ or 0,
+                            relation_id=int(rel.id_ or 0),
                         )
                     )
                 elif provider and requirer:
@@ -290,13 +311,15 @@ class JujuClient:
                             model=model_name,
                             provider=f"{provider.application}:{provider.name}",
                             requirer=f"{requirer.application}:{requirer.name}",
-                            interface=rel.interface or "",
+                            interface=_s(rel.interface),
                             type="regular",
-                            relation_id=rel.id_ or 0,
+                            relation_id=int(rel.id_ or 0),
                         )
                     )
             for offer_name, offer_st in (status.offers or {}).items():
-                app_name = offer_st.application_name or ""
+                if offer_st is None:
+                    continue
+                app_name = _s(offer_st.application_name)
                 app_st = app_statuses.get(app_name)
                 rev = app_st.charm_rev if app_st else 0
                 charm_name = (
@@ -308,17 +331,19 @@ class JujuClient:
                 total = offer_st.total_connected_count or 0
                 connected = f"{active}/{total}"
                 for ep_name, ep in (offer_st.endpoints or {}).items():
+                    if ep is None:
+                        continue
                     offers.append(
                         OfferInfo(
                             model=model_name,
                             name=offer_name,
                             application=app_name,
-                            charm=charm_name,
+                            charm=_s(charm_name),
                             rev=rev or 0,
                             connected=connected,
                             endpoint=ep_name,
-                            interface=ep.interface or "",
-                            role=ep.role or "",
+                            interface=_s(ep.interface),
+                            role=_s(ep.role),
                         )
                     )
             # Juju 3.6+ renamed "remote-applications" to "application-endpoints".
@@ -558,6 +583,8 @@ class JujuClient:
                 try:
                     status = await model.get_status()
                     for offer_name, offer_st in (status.offers or {}).items():
+                        if offer_st is None:
+                            continue
                         status_counts[offer_name] = (
                             offer_st.active_connected_count or 0,
                             offer_st.total_connected_count or 0,

@@ -8,7 +8,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
-from textual.widgets import DataTable, Label, Rule
+from textual.widgets import DataTable, Label, Rule, Static
 
 from jujumate import palette
 from jujumate.client.juju_client import JujuClient
@@ -178,7 +178,7 @@ class OfferDetailScreen(ModalScreen):
         self._populate_consumers(consumers)
 
     def _populate_consumers(self, consumers: list[SAASInfo]) -> None:
-        loading = self.query_one("#consumers-loading")
+        loading = self.query_one("#consumers-loading", Static)
         loading.display = False
         conn_dt = self.query_one("#connections-table", DataTable)
         if consumers:
@@ -249,7 +249,7 @@ class OffersScreen(ModalScreen):
 
     def _populate(self, offers: list[ControllerOfferInfo]) -> None:
         self._offers = offers
-        loading = self.query_one("#offers-loading")
+        loading = self.query_one("#offers-loading", Static)
         loading.display = False
         dt = self.query_one("#offers-table", DataTable)
         if not offers:
@@ -280,6 +280,6 @@ class OffersScreen(ModalScreen):
             self.app.push_screen(OfferDetailScreen(self._offers[idx], self._controller_name))
 
     def _show_error(self, error: str) -> None:
-        loading = self.query_one("#offers-loading")
+        loading = self.query_one("#offers-loading", Static)
         loading.update(Text(f"Error: {error}", style="bold red"))
         loading.display = True

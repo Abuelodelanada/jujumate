@@ -8,7 +8,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
-from textual.widgets import DataTable, Label, ListItem, ListView, Rule
+from textual.widgets import DataTable, Label, ListItem, ListView, Rule, Static
 
 from jujumate import palette
 from jujumate.client.juju_client import JujuClient
@@ -218,7 +218,7 @@ class SecretsScreen(ModalScreen):
 
     def _populate(self, secrets: list[SecretInfo]) -> None:
         self._secrets = secrets
-        loading = self.query_one("#secrets-loading")
+        loading = self.query_one("#secrets-loading", Static)
         loading.display = False
         dt = self.query_one("#secrets-table", DataTable)
         if not secrets:
@@ -245,6 +245,6 @@ class SecretsScreen(ModalScreen):
             )
 
     def _show_error(self, error: str) -> None:
-        loading = self.query_one("#secrets-loading")
+        loading = self.query_one("#secrets-loading", Static)
         loading.update(Text(f"Error: {error}", style="bold red"))
         loading.display = True

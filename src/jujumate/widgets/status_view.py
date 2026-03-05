@@ -166,7 +166,7 @@ def _group_units(units: list) -> list:
 class _TrackedScroll(VerticalScroll, can_focus=False):
     """VerticalScroll that notifies its parent when scroll_y changes."""
 
-    def watch_scroll_y(self, value: float) -> None:
+    def watch_scroll_y(self, value: float) -> None:  # type: ignore[override]
         if isinstance(self.parent, StatusView):
             self.parent._update_scroll_indicator()
 
@@ -493,7 +493,7 @@ class StatusView(Widget):
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
         try:
-            table_id = event.data_table.parent.id or ""
+            table_id = event.data_table.parent.id or "" if event.data_table.parent else ""
             self._last_cursor[table_id] = event.cursor_row
             # Only set the active table when the user is actually navigating it (has focus).
             # Programmatic events from refresh (clear + move_cursor) arrive without focus.

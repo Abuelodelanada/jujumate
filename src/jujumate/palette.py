@@ -48,20 +48,20 @@ def init(theme: Theme) -> None:
     mod = sys.modules[__name__]
 
     if theme.primary:
-        mod.PRIMARY = theme.primary
+        setattr(mod, "PRIMARY", theme.primary)
     if theme.secondary:
-        mod.SECONDARY = theme.secondary
+        setattr(mod, "SECONDARY", theme.secondary)
     if theme.success:
-        mod.SUCCESS = theme.success
+        setattr(mod, "SUCCESS", theme.success)
     if theme.warning:
-        mod.WARNING = theme.warning
+        setattr(mod, "WARNING", theme.warning)
     if theme.error:
-        mod.ERROR = theme.error
+        setattr(mod, "ERROR", theme.error)
 
     variables = theme.variables or {}
     if "link" in variables:
-        mod.LINK = variables["link"]
+        setattr(mod, "LINK", variables["link"])
     if "muted" in variables:
-        mod.MUTED = variables["muted"]
+        setattr(mod, "MUTED", variables["muted"])
     if "pulse-off" in variables:
-        mod.PULSE_OFF = variables["pulse-off"]
+        setattr(mod, "PULSE_OFF", variables["pulse-off"])

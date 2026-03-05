@@ -74,7 +74,7 @@ class NavigableTable(Widget, can_focus=True):
 
     def update_rows(self, rows: list[tuple], keys: list[str] | None = None) -> None:
         self._rows = rows
-        self._keys = keys or [None] * len(rows)
+        self._keys: list[str | None] = keys or [None] * len(rows)  # type: ignore[assignment]
         if self._cursor >= len(rows):
             self._cursor = max(0, len(rows) - 1)
         self._refresh_content()
