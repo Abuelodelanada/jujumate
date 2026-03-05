@@ -48,4 +48,6 @@ def load_config(juju_data_dir: Path = JUJU_DATA_DIR) -> JujuConfig:
             # Strip user prefix (e.g. "admin/mymodel" → "mymodel")
             current_model = raw.split("/", 1)[-1] if "/" in raw else raw
 
-    return JujuConfig(current_controller=current, controllers=controllers, current_model=current_model)
+    return JujuConfig(
+        current_controller=current, controllers=controllers, current_model=current_model
+    )

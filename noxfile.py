@@ -11,6 +11,13 @@ def tests(session: nox.Session) -> None:
 
 
 @nox.session
+def fmt(session: nox.Session) -> None:
+    session.install("ruff")
+    session.run("ruff", "check", "--fix", "--unsafe-fixes", "src", "tests", success_codes=[0, 1])
+    session.run("ruff", "format", "src", "tests")
+
+
+@nox.session
 def lint(session: nox.Session) -> None:
     session.install("ruff")
     session.run("ruff", "check", "src", "tests")

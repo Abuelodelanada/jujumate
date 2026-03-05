@@ -120,7 +120,11 @@ class JujuClient:
                 apps = []
                 units = []
                 for app_name, app_st in app_statuses.items():
-                    charm_name = model.applications[app_name].charm_name if app_name in model.applications else (app_st.charm or "").split("/")[-1].rsplit("-", 1)[0]
+                    charm_name = (
+                        model.applications[app_name].charm_name
+                        if app_name in model.applications
+                        else (app_st.charm or "").split("/")[-1].rsplit("-", 1)[0]
+                    )
                     apps.append(
                         AppInfo(
                             name=app_name,
@@ -145,12 +149,18 @@ class JujuClient:
                                 app=app_name,
                                 model=model_name,
                                 machine=unit_st.machine or "",
-                                workload_status=unit_st.workload_status.status if unit_st.workload_status else "",
-                                agent_status=unit_st.agent_status.status if unit_st.agent_status else "",
+                                workload_status=unit_st.workload_status.status
+                                if unit_st.workload_status
+                                else "",
+                                agent_status=unit_st.agent_status.status
+                                if unit_st.agent_status
+                                else "",
                                 address=unit_st.address or "",
                                 public_address=unit_st.public_address or "",
                                 ports=ports_str,
-                                message=unit_st.workload_status.info if unit_st.workload_status else "",
+                                message=unit_st.workload_status.info
+                                if unit_st.workload_status
+                                else "",
                             )
                         )
                         for sub_name, sub_st in (unit_st.subordinates or {}).items():
@@ -161,12 +171,20 @@ class JujuClient:
                                     app=sub_app,
                                     model=model_name,
                                     machine=unit_st.machine or "",
-                                    workload_status=sub_st.workload_status.status if sub_st.workload_status else "",
-                                    agent_status=sub_st.agent_status.status if sub_st.agent_status else "",
+                                    workload_status=sub_st.workload_status.status
+                                    if sub_st.workload_status
+                                    else "",
+                                    agent_status=sub_st.agent_status.status
+                                    if sub_st.agent_status
+                                    else "",
                                     address=sub_st.address or unit_st.address or "",
-                                    public_address=sub_st.public_address or unit_st.public_address or "",
+                                    public_address=sub_st.public_address
+                                    or unit_st.public_address
+                                    or "",
                                     ports=", ".join(sub_st.opened_ports or []),
-                                    message=sub_st.workload_status.info if sub_st.workload_status else "",
+                                    message=sub_st.workload_status.info
+                                    if sub_st.workload_status
+                                    else "",
                                     subordinate_of=unit_name,
                                 )
                             )
@@ -196,7 +214,9 @@ class JujuClient:
             finally:
                 await model.disconnect()
         except Exception:
-            logger.exception("Failed to get snapshot for model '%s', using minimal info", model_name)
+            logger.exception(
+                "Failed to get snapshot for model '%s', using minimal info", model_name
+            )
             model_info = ModelInfo(
                 name=model_name,
                 controller=controller_name,
@@ -209,7 +229,10 @@ class JujuClient:
             machines = []
         logger.debug(
             "Snapshot for model '%s': %d apps, %d units, %d machines",
-            model_name, len(apps), len(units), len(machines),
+            model_name,
+            len(apps),
+            len(units),
+            len(machines),
         )
         return model_info, apps, units, machines
 
@@ -310,7 +333,9 @@ class JujuClient:
                     SAASInfo(
                         model=model_name,
                         name=remote_name,
-                        status=app_status.get("current", "") if isinstance(app_status, dict) else "",
+                        status=app_status.get("current", "")
+                        if isinstance(app_status, dict)
+                        else "",
                         store=store,
                         url=offer_url,
                     )
@@ -331,7 +356,10 @@ class JujuClient:
             await model.disconnect()
         logger.debug(
             "Status details for model '%s': %d relations, %d offers, %d saas",
-            model_name, len(relations), len(offers), len(saas),
+            model_name,
+            len(relations),
+            len(offers),
+            len(saas),
         )
         return relations, offers, saas
 
@@ -341,25 +369,43 @@ class JujuClient:
         model = await self._controller.get_model(model_name)
         try:
             results = await model.list_secrets()
-            for s in (results or []):
+            for s in results or []:
                 owner = getattr(s, "owner_tag", "") or ""
                 # Strip "application-" / "model-" prefix from owner tag
                 if "-" in owner:
                     owner = owner.split("-", 1)[1]
-                secrets.append(SecretInfo(
-                    uri=getattr(s, "uri", "") or "",
-                    label=getattr(s, "label", "") or "",
-                    owner=owner,
-                    description=getattr(s, "description", "") or "",
-                    revision=getattr(s, "latest_revision", 0) or 0,
-                    rotate_policy=getattr(s, "rotate_policy", "") or "",
-                    created=getattr(s, "create_time", "") or "",
-                    updated=getattr(s, "update_time", "") or "",
-                ))
+                secrets.append(
+                    SecretInfo(
+                        uri=getattr(s, "uri", "") or "",
+                        label=getattr(s, "label", "") or "",
+                        owner=owner,
+                        description=getattr(s, "description", "") or "",
+                        revision=getattr(s, "latest_revision", 0) or 0,
+                        rotate_policy=getattr(s, "rotate_policy", "") or "",
+                        created=getattr(s, "create_time", "") or "",
+                        updated=getattr(s, "update_time", "") or "",
+                    )
+                )
         finally:
             await model.disconnect()
         logger.debug("Secrets for '%s': %d entries", model_name, len(secrets))
         return secrets
+
+    async def get_secret_content(self, model_name: str, secret_uri: str) -> dict[str, str]:
+        """Fetch the key-value content of a secret by URI (requires show_secrets=True)."""
+        model = await self._controller.get_model(model_name)
+        try:
+            results = await model.list_secrets(show_secrets=True)
+            for s in results or []:
+                if getattr(s, "uri", "") == secret_uri:
+                    value = getattr(s, "value", None)
+                    if value is not None:
+                        data = getattr(value, "data", None)
+                        if data:
+                            return dict(data)
+            return {}
+        finally:
+            await model.disconnect()
 
     async def get_app_config(self, model_name: str, app_name: str) -> list[AppConfigEntry]:
         """Fetch configuration entries for an application."""
@@ -368,7 +414,9 @@ class JujuClient:
         try:
             app = model.applications.get(app_name)
             if not app:
-                logger.warning("get_app_config: app '%s' not found in model '%s'", app_name, model_name)
+                logger.warning(
+                    "get_app_config: app '%s' not found in model '%s'", app_name, model_name
+                )
                 return entries
             config = await app.get_config()
             for key, data in sorted(config.items()):
@@ -377,14 +425,16 @@ class JujuClient:
                 source = str(data.get("source", "default"))
                 value = str(data.get("value", ""))
                 default = str(data.get("default", value if source == "default" else ""))
-                entries.append(AppConfigEntry(
-                    key=key,
-                    value=value,
-                    default=default,
-                    type=str(data.get("type", "")),
-                    description=str(data.get("description", "")),
-                    source=source,
-                ))
+                entries.append(
+                    AppConfigEntry(
+                        key=key,
+                        value=value,
+                        default=default,
+                        type=str(data.get("type", "")),
+                        description=str(data.get("description", "")),
+                        source=source,
+                    )
+                )
         finally:
             await model.disconnect()
         logger.debug("App config for '%s/%s': %d entries", model_name, app_name, len(entries))
@@ -433,7 +483,9 @@ class JujuClient:
                     continue
                 unit_obj = next(iter(app.units))
                 unit_tag = "unit-" + unit_obj.name.replace("/", "-")
-                logger.debug("get_relation_data: querying unit %s (tag=%s)", unit_obj.name, unit_tag)
+                logger.debug(
+                    "get_relation_data: querying unit %s (tag=%s)", unit_obj.name, unit_tag
+                )
                 result = await facade.UnitsInfo(entities=[juju_client.Entity(unit_tag)])
                 logger.debug("get_relation_data: raw result type=%s value=%r", type(result), result)
                 if not result.results:
@@ -441,18 +493,23 @@ class JujuClient:
                 unit_result = result.results[0]
                 logger.debug(
                     "get_relation_data: unit_result type=%s error=%r result=%r",
-                    type(unit_result), unit_result.error, unit_result.result,
+                    type(unit_result),
+                    unit_result.error,
+                    unit_result.result,
                 )
                 if unit_result.error or not unit_result.result:
                     continue
                 logger.debug(
                     "get_relation_data: relation_data count=%d, looking for relation_id=%d",
-                    len(unit_result.result.relation_data or []), relation_id,
+                    len(unit_result.result.relation_data or []),
+                    relation_id,
                 )
                 for ep_data in unit_result.result.relation_data or []:
                     logger.debug(
-                        "get_relation_data: ep_data relation_id=%r endpoint=%r applicationdata=%r unit_relation_data keys=%r",
-                        ep_data.relation_id, ep_data.endpoint,
+                        "get_relation_data: ep_data relation_id=%r endpoint=%r"
+                        " applicationdata=%r unit_relation_data keys=%r",
+                        ep_data.relation_id,
+                        ep_data.endpoint,
                         ep_data.applicationdata,
                         list((ep_data.unit_relation_data or {}).keys()),
                     )
@@ -461,29 +518,31 @@ class JujuClient:
                     # Application-level data bag (remote side's app data)
                     if ep_data.applicationdata:
                         for k, v in sorted(ep_data.applicationdata.items()):
-                            entries.append(RelationDataEntry(
-                                side=other_side,
-                                unit=other_app_name,
-                                key=k,
-                                value=str(v),
-                                scope="app",
-                            ))
+                            entries.append(
+                                RelationDataEntry(
+                                    side=other_side,
+                                    unit=other_app_name,
+                                    key=k,
+                                    value=str(v),
+                                    scope="app",
+                                )
+                            )
                     # Unit-level data bags from the OTHER side's units
                     for unit_n, rel_data in (ep_data.unit_relation_data or {}).items():
                         if rel_data and rel_data.unitdata:
                             for k, v in sorted(rel_data.unitdata.items()):
-                                entries.append(RelationDataEntry(
-                                    side=other_side,
-                                    unit=unit_n,
-                                    key=k,
-                                    value=str(v),
-                                    scope="unit",
-                                ))
+                                entries.append(
+                                    RelationDataEntry(
+                                        side=other_side,
+                                        unit=unit_n,
+                                        key=k,
+                                        value=str(v),
+                                        scope="unit",
+                                    )
+                                )
         finally:
             await model.disconnect()
-        logger.debug(
-            "Relation data for relation %d: %d entries", relation_id, len(entries)
-        )
+        logger.debug("Relation data for relation %d: %d entries", relation_id, len(entries))
         return entries
 
     async def get_controller_offers(self) -> list[ControllerOfferInfo]:
@@ -505,7 +564,7 @@ class JujuClient:
                         )
                 finally:
                     await model.disconnect()
-                for offer in (raw.results or []):
+                for offer in raw.results or []:
                     endpoints = [
                         OfferEndpoint(
                             name=ep.name or "",
@@ -523,18 +582,20 @@ class JujuClient:
                         key=lambda a: _access_rank.get(a, 0),
                         default="",
                     )
-                    result.append(ControllerOfferInfo(
-                        model=model_name,
-                        name=offer.offer_name or "",
-                        offer_url=offer.offer_url or "",
-                        application=offer.application_name or "",
-                        charm=offer.charm_url or "",
-                        description=offer.application_description or "",
-                        access=access,
-                        endpoints=endpoints,
-                        active_connections=active,
-                        total_connections=total,
-                    ))
+                    result.append(
+                        ControllerOfferInfo(
+                            model=model_name,
+                            name=offer.offer_name or "",
+                            offer_url=offer.offer_url or "",
+                            application=offer.application_name or "",
+                            charm=offer.charm_url or "",
+                            description=offer.application_description or "",
+                            access=access,
+                            endpoints=endpoints,
+                            active_connections=active,
+                            total_connections=total,
+                        )
+                    )
             except Exception:
                 logger.warning("Could not list offers for model '%s'", model_name)
         logger.debug("Controller offers: %d total", len(result))

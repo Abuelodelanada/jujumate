@@ -2,15 +2,13 @@ import logging
 from typing import Any
 
 from rich import box as rich_box
-from rich.console import Group
-from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import VerticalScroll
+from textual.containers import Vertical, VerticalScroll
 from textual.widget import Widget
-from textual.widgets import Label, Static
+from textual.widgets import Label, Rule, Static
 
 from jujumate import palette
 from jujumate.models.entities import AppConfigEntry, AppInfo
@@ -20,35 +18,38 @@ logger = logging.getLogger(__name__)
 _C_KEY = "bold white"
 _C_META = "dim"
 
+_STATUS_COLORS: dict[str, str] = {
+    "active": palette.SUCCESS,
+    "blocked": palette.ERROR,
+    "error": palette.ERROR,
+    "waiting": palette.WARNING,
+    "maintenance": palette.WARNING,
+}
 
-def _colored_status(status: str) -> Text:
-    colors = {
-        "active": palette.SUCCESS, "blocked": palette.ERROR,
-        "error": palette.ERROR, "waiting": palette.WARNING, "maintenance": palette.WARNING,
-    }
-    color = colors.get(status.strip().lower(), "")
-    return Text(status, style=color) if color else Text(status)
+
+def _meta_markup(app: AppInfo) -> str:
+    """Build Rich markup for the metadata header (charm, channel, rev, status)."""
+    fields = [
+        ("Charm", app.charm),
+        ("Channel", app.channel or "—"),
+        ("Rev", str(app.revision)),
+        ("Status", app.status),
+    ]
+    col_width = max(len(f) for f, _ in fields) + 2
+    lines = []
+    for field, value in fields:
+        label = f"{field}:".ljust(col_width)
+        if field == "Status":
+            color = _STATUS_COLORS.get(value.strip().lower(), "")
+            styled = f"[{color}]{value}[/]" if color else value
+        else:
+            styled = value
+        lines.append(f"[bold]{label}[/bold]{styled}")
+    return "\n".join(lines)
 
 
-def _build_config_renderable(app: AppInfo, entries: list[AppConfigEntry]) -> Group:
-    """Build a Rich Group showing app config with header panel + config table."""
-    # ── Header panel ─────────────────────────────────────────────────────────
-    meta = Table(box=None, show_header=False, padding=(0, 1), expand=False)
-    meta.add_column("k", style=_C_META, no_wrap=True)
-    meta.add_column("v")
-    meta.add_row("charm", app.charm)
-    meta.add_row("channel", app.channel)
-    meta.add_row("rev", str(app.revision))
-    meta.add_row("status", _colored_status(app.status))
-    header = Panel(
-        meta,
-        title=Text(app.name, style=f"bold {palette.PRIMARY}"),
-        border_style=palette.PRIMARY,
-        expand=True,
-        padding=(0, 1),
-    )
-
-    # ── Config table ──────────────────────────────────────────────────────────
+def _build_config_renderable(entries: list[AppConfigEntry]) -> Table:
+    """Build the config key/value table."""
     changed = sorted([e for e in entries if not e.is_default], key=lambda x: x.key)
     defaults = sorted([e for e in entries if e.is_default], key=lambda x: x.key)
 
@@ -84,7 +85,7 @@ def _build_config_renderable(app: AppInfo, entries: list[AppConfigEntry]) -> Gro
     if not entries:
         t.add_row(Text("<no config>", style=_C_META), "", "", "")
 
-    return Group(header, t)
+    return t
 
 
 def _format_plain_text(app: AppInfo, entries: list[AppConfigEntry]) -> str:
@@ -119,6 +120,17 @@ class AppConfigView(Widget):
     AppConfigView {
         height: 1fr;
     }
+    AppConfigView #ac-panel {
+        height: 1fr;
+    }
+    AppConfigView #ac-meta-content {
+        height: auto;
+        padding: 0 1;
+    }
+    AppConfigView Rule {
+        height: 1;
+        color: $panel-lighten-2;
+    }
     AppConfigView #ac-scroll {
         height: 1fr;
         scrollbar-size-vertical: 0;
@@ -145,27 +157,31 @@ class AppConfigView(Widget):
             "No app selected — press Enter on an application to see its config.",
             id="ac-empty",
         )
-        with VerticalScroll(id="ac-scroll"):
-            yield Static("", id="ac-content")
+        with Vertical(id="ac-panel"):
+            yield Static("", id="ac-meta-content")
+            yield Rule()
+            with VerticalScroll(id="ac-scroll"):
+                yield Static("", id="ac-content")
 
     def on_mount(self) -> None:
-        self.query_one("#ac-scroll").display = False
+        self.query_one("#ac-panel").display = False
 
     def update(self, app: AppInfo, entries: list[AppConfigEntry]) -> None:
         """Populate the view with app config."""
         self._current_app = app
         self._current_entries = entries
-        renderable = _build_config_renderable(app, entries)
+        self.query_one("#ac-meta-content", Static).update(_meta_markup(app))
+        renderable = _build_config_renderable(entries)
         self.query_one("#ac-content", Static).update(renderable)
         self.query_one("#ac-empty").display = False
-        self.query_one("#ac-scroll").display = True
+        self.query_one("#ac-panel").display = True
         logger.debug("AppConfigView updated: app '%s', %d entries", app.name, len(entries))
 
     def show_loading(self, app: AppInfo) -> None:
         """Show a loading state while config is being fetched."""
         self.query_one("#ac-empty").display = True
         self.query_one("#ac-empty", Label).update(f"Fetching config for {app.name}…")
-        self.query_one("#ac-scroll").display = False
+        self.query_one("#ac-panel").display = False
 
     def show_error(self, app: AppInfo, error: str) -> None:
         """Show an error state when the fetch failed."""
@@ -173,7 +189,7 @@ class AppConfigView(Widget):
         self.query_one("#ac-empty", Label).update(
             f"[red]Error fetching config for {app.name}:\n{error}[/red]"
         )
-        self.query_one("#ac-scroll").display = False
+        self.query_one("#ac-panel").display = False
 
     def action_copy_to_clipboard(self) -> None:
         if not self._current_app:

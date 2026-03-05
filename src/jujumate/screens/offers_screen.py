@@ -19,9 +19,9 @@ from jujumate.widgets.status_view import _colored_status
 logger = logging.getLogger(__name__)
 
 _ACCESS_COLORS: dict[str, str] = {
-    "admin":   palette.SUCCESS,
+    "admin": palette.SUCCESS,
     "consume": palette.LINK,
-    "read":    palette.MUTED,
+    "read": palette.MUTED,
 }
 
 
@@ -127,7 +127,11 @@ class OfferDetailScreen(ModalScreen):
 
     def on_mount(self) -> None:
         o = self._offer
-        active_info = f"  ({o.active_connections}/{o.total_connections} active)" if o.total_connections else ""
+        active_info = (
+            f"  ({o.active_connections}/{o.total_connections} active)"
+            if o.total_connections
+            else ""
+        )
         self.query_one("#detail-panel").border_title = f"Offer — {o.name}{active_info}"
         ep_dt = self.query_one("#endpoints-table", DataTable)
         ep_dt.add_columns("Name", "Interface", "Role")
@@ -164,7 +168,9 @@ class OfferDetailScreen(ModalScreen):
                         except Exception as exc:
                             logger.debug(
                                 "Could not fetch SAAS for model '%s' on '%s': %s",
-                                model_name, ctrl_name, exc,
+                                model_name,
+                                ctrl_name,
+                                exc,
                             )
             except Exception as exc:
                 logger.debug("Could not connect to controller '%s': %s", ctrl_name, exc)

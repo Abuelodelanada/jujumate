@@ -19,10 +19,13 @@ class AppConfigScreen(ModalScreen):
         align: center middle;
     }
     AppConfigScreen AppConfigView {
-        width: 90%;
+        width: 88%;
         height: 85%;
         background: $surface;
         border: round $accent;
+        border-title-color: $accent;
+        border-title-style: bold;
+        padding: 1 2;
     }
     """
 
@@ -36,7 +39,9 @@ class AppConfigScreen(ModalScreen):
         yield AppConfigView(id="app-config-view")
 
     def on_mount(self) -> None:
-        self.query_one(AppConfigView).show_loading(self._app)
+        view = self.query_one(AppConfigView)
+        view.border_title = f"Config — {self._app.name}"
+        view.show_loading(self._app)
         self._fetch(self._controller_name, self._model_name, self._app)
 
     @work

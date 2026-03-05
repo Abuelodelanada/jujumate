@@ -81,9 +81,15 @@ async def test_list_model_names(mock_controller):
     assert result == ["dev", "prod"]
 
 
-def _make_model_mock(app_name="postgresql", charm_name="postgresql", channel="14/stable",
-                     revision=363, unit_name="postgresql/0", unit_address="10.0.0.1",
-                     is_kubernetes=False):
+def _make_model_mock(
+    app_name="postgresql",
+    charm_name="postgresql",
+    channel="14/stable",
+    revision=363,
+    unit_name="postgresql/0",
+    unit_address="10.0.0.1",
+    is_kubernetes=False,
+):
     """Build a model mock that works with get_model_snapshot (uses get_status)."""
     app_st = MagicMock()
     app_st.charm_channel = channel
@@ -267,10 +273,13 @@ async def test_get_models_falls_back_on_failed_model(mock_controller):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("method_name", [
-    pytest.param("get_applications", id="get_applications"),
-    pytest.param("get_units", id="get_units"),
-])
+@pytest.mark.parametrize(
+    "method_name",
+    [
+        pytest.param("get_applications", id="get_applications"),
+        pytest.param("get_units", id="get_units"),
+    ],
+)
 async def test_get_returns_empty_on_failure(mock_controller, method_name):
     mock_controller.get_model.side_effect = Exception("boom")
 
@@ -426,10 +435,13 @@ async def test_get_status_details_returns_offers(mock_controller):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("owner_tag,expected_owner", [
-    pytest.param("model-dev", "dev", id="with-dash"),
-    pytest.param("modelonly", "modelonly", id="without-dash"),
-])
+@pytest.mark.parametrize(
+    "owner_tag,expected_owner",
+    [
+        pytest.param("model-dev", "dev", id="with-dash"),
+        pytest.param("modelonly", "modelonly", id="without-dash"),
+    ],
+)
 async def test_get_secrets_owner_tag_parsing(mock_controller, owner_tag, expected_owner):
 
     model = AsyncMock()
@@ -479,10 +491,24 @@ async def test_get_app_config(mock_controller):
 
     model = AsyncMock()
     app_obj = AsyncMock()
-    app_obj.get_config = AsyncMock(return_value={
-        "log-level": {"value": "DEBUG", "default": "INFO", "type": "string", "description": "Level", "source": "user"},
-        "port": {"value": 5432, "default": 5432, "type": "int", "description": "Port", "source": "default"},
-    })
+    app_obj.get_config = AsyncMock(
+        return_value={
+            "log-level": {
+                "value": "DEBUG",
+                "default": "INFO",
+                "type": "string",
+                "description": "Level",
+                "source": "user",
+            },
+            "port": {
+                "value": 5432,
+                "default": 5432,
+                "type": "int",
+                "description": "Port",
+                "source": "default",
+            },
+        }
+    )
     model.applications = {"pg": app_obj}
     mock_controller.get_model = AsyncMock(return_value=model)
     mock_controller.disconnect = AsyncMock()
@@ -502,10 +528,18 @@ async def test_get_app_config(mock_controller):
 async def test_get_app_config_non_dict_values_skipped(mock_controller):
     model = AsyncMock()
     app_obj = AsyncMock()
-    app_obj.get_config = AsyncMock(return_value={
-        "good": {"value": "v", "default": "d", "type": "string", "description": "desc", "source": "user"},
-        "bad": "not-a-dict",
-    })
+    app_obj.get_config = AsyncMock(
+        return_value={
+            "good": {
+                "value": "v",
+                "default": "d",
+                "type": "string",
+                "description": "desc",
+                "source": "user",
+            },
+            "bad": "not-a-dict",
+        }
+    )
     model.applications = {"pg": app_obj}
     mock_controller.get_model = AsyncMock(return_value=model)
     mock_controller.disconnect = AsyncMock()
@@ -652,7 +686,7 @@ async def test_get_relation_data_skips_wrong_relation_id(mock_controller):
 
 @pytest.mark.asyncio
 async def test_get_status_details_saas_from_unknown_fields(mock_controller):
-    """Lines 303-306: SAAS parsed from status.unknown_fields['application-endpoints'] (Juju 3.6+)."""
+    """Lines 303-306: SAAS parsed from status.unknown_fields['application-endpoints'] (Juju 3.6+)."""  # noqa: E501
 
     model = AsyncMock()
     status = MagicMock()

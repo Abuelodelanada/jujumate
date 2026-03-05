@@ -123,12 +123,18 @@ async def test_poll_once_aggregates_multiple_controllers(mock_target):
     client_a = make_mock_client()
     client_a.list_model_names.return_value = ["dev"]
     client_a.get_model_snapshot.return_value = (
-        ModelInfo("dev", "ctrl-a", "aws", "", "available"), [], [], []
+        ModelInfo("dev", "ctrl-a", "aws", "", "available"),
+        [],
+        [],
+        [],
     )
     client_b = make_mock_client()
     client_b.list_model_names.return_value = ["prod"]
     client_b.get_model_snapshot.return_value = (
-        ModelInfo("prod", "ctrl-b", "aws", "", "available"), [], [], []
+        ModelInfo("prod", "ctrl-b", "aws", "", "available"),
+        [],
+        [],
+        [],
     )
 
     clients = iter([client_a, client_b])
@@ -182,7 +188,17 @@ def test_relations_updated_stores_model_and_relations():
 
 
 def test_offers_updated_stores_model_and_offers():
-    offer = OfferInfo("cos", "alertmanager-karma-dashboard", "alertmanager", "alertmanager-k8s", 180, "0/0", "karma-dashboard", "karma_dashboard", "provider")
+    offer = OfferInfo(
+        "cos",
+        "alertmanager-karma-dashboard",
+        "alertmanager",
+        "alertmanager-k8s",
+        180,
+        "0/0",
+        "karma-dashboard",
+        "karma_dashboard",
+        "provider",
+    )
     msg = OffersUpdated(model="cos", offers=[offer])
     assert msg.model == "cos"
     assert len(msg.offers) == 1

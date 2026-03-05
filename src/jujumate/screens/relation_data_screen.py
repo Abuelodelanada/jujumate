@@ -19,10 +19,13 @@ class RelationDataScreen(ModalScreen):
         align: center middle;
     }
     RelationDataScreen RelationDataView {
-        width: 90%;
+        width: 88%;
         height: 85%;
         background: $surface;
         border: round $accent;
+        border-title-color: $accent;
+        border-title-style: bold;
+        padding: 1 2;
     }
     """
 
@@ -36,10 +39,12 @@ class RelationDataScreen(ModalScreen):
         yield RelationDataView(id="relation-data-view")
 
     def on_mount(self) -> None:
-        self.query_one(RelationDataView).show_loading(self._relation)
-        provider_app = self._relation.provider.split(":")[0]
-        requirer_app = self._relation.requirer.split(":")[0]
-        self._fetch(self._controller_name, self._model_name, self._relation, provider_app, requirer_app)
+        view = self.query_one(RelationDataView)
+        provider = self._relation.provider.split(":")[0]
+        requirer = self._relation.requirer.split(":")[0]
+        view.border_title = f"Relation #{self._relation.relation_id} — {provider} ↔ {requirer}"
+        view.show_loading(self._relation)
+        self._fetch(self._controller_name, self._model_name, self._relation, provider, requirer)
 
     @work
     async def _fetch(

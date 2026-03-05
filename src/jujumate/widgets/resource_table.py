@@ -38,7 +38,9 @@ class ResourceTable(Widget):
     }
     """
 
-    def __init__(self, columns: list[Column], *args: Any, cursor: bool = True, **kwargs: Any) -> None:
+    def __init__(
+        self, columns: list[Column], *args: Any, cursor: bool = True, **kwargs: Any
+    ) -> None:
         super().__init__(*args, **kwargs)
         self._columns = columns
         self._cursor = cursor

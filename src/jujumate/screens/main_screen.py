@@ -116,9 +116,7 @@ class MainScreen(Screen):
             self._auto_select_model = juju_config.current_model
             logger.info("Will auto-select model '%s' after first poll", juju_config.current_model)
         await self._poller.poll_once()
-        self._poll_timer = self.set_interval(
-            self._settings.refresh_interval, self._periodic_poll
-        )
+        self._poll_timer = self.set_interval(self._settings.refresh_interval, self._periodic_poll)
 
     async def _periodic_poll(self) -> None:
         """Timer callback: only poll if the Status tab is currently active."""
@@ -205,25 +203,26 @@ class MainScreen(Screen):
             is_kubernetes = False
         else:
             apps = [a for a in self._all_apps if a.model == self._selected_model]
-            app_names = {a.name for a in apps}
+            {a.name for a in apps}
             units = [u for u in self._all_units if u.model == self._selected_model]
-            machines = [
-                m for m in self._all_machines
-                if m.model == self._selected_model
-            ]
-            model_info = next(
-                (m for m in self._all_models if m.name == self._selected_model), None
-            )
+            machines = [m for m in self._all_machines if m.model == self._selected_model]
+            model_info = next((m for m in self._all_models if m.name == self._selected_model), None)
             is_kubernetes = model_info.is_kubernetes if model_info else False
-        relations = [
-            r for r in self._all_relations if r.model == self._selected_model
-        ] if self._selected_model else []
-        offers = [
-            o for o in self._all_offers if o.model == self._selected_model
-        ] if self._selected_model else []
-        saas = [
-            s for s in self._all_saas if s.model == self._selected_model
-        ] if self._selected_model else []
+        relations = (
+            [r for r in self._all_relations if r.model == self._selected_model]
+            if self._selected_model
+            else []
+        )
+        offers = (
+            [o for o in self._all_offers if o.model == self._selected_model]
+            if self._selected_model
+            else []
+        )
+        saas = (
+            [s for s in self._all_saas if s.model == self._selected_model]
+            if self._selected_model
+            else []
+        )
         status_view = self.query_one("#status-view", StatusView)
         status_view.update_apps(apps)
         status_view.update_units(units, is_kubernetes=is_kubernetes)
@@ -240,18 +239,40 @@ class MainScreen(Screen):
             return  # Not fully mounted yet
         # Filtered counts matching what each view displays
         filtered_controllers = [
-            c for c in self._all_controllers
+            c
+            for c in self._all_controllers
             if self._selected_cloud is None or c.cloud == self._selected_cloud
         ]
         filtered_models = [
-            m for m in self._all_models
+            m
+            for m in self._all_models
             if self._selected_controller is None or m.controller == self._selected_controller
         ]
-        status_offers = [o for o in self._all_offers if o.model == self._selected_model] if self._selected_model else []
-        status_relations = [r for r in self._all_relations if r.model == self._selected_model] if self._selected_model else []
-        status_saas = [s for s in self._all_saas if s.model == self._selected_model] if self._selected_model else []
-        status_machines = [m for m in self._all_machines if m.model == self._selected_model] if self._selected_model else []
-        status_apps = [a for a in self._all_apps if a.model == self._selected_model] if self._selected_model else []
+        status_offers = (
+            [o for o in self._all_offers if o.model == self._selected_model]
+            if self._selected_model
+            else []
+        )
+        status_relations = (
+            [r for r in self._all_relations if r.model == self._selected_model]
+            if self._selected_model
+            else []
+        )
+        status_saas = (
+            [s for s in self._all_saas if s.model == self._selected_model]
+            if self._selected_model
+            else []
+        )
+        status_machines = (
+            [m for m in self._all_machines if m.model == self._selected_model]
+            if self._selected_model
+            else []
+        )
+        status_apps = (
+            [a for a in self._all_apps if a.model == self._selected_model]
+            if self._selected_model
+            else []
+        )
         status_app_names = {a.name for a in status_apps}
         status_units = [u for u in self._all_units if u.app in status_app_names]
         # Derive cloud from selected model if not explicitly set
@@ -348,9 +369,7 @@ class MainScreen(Screen):
 
     def on_saas_updated(self, message: SaasUpdated) -> None:
         # Replace SAAS for this model (keep other models' SAAS intact)
-        self._all_saas = [
-            s for s in self._all_saas if s.model != message.model
-        ] + message.saas
+        self._all_saas = [s for s in self._all_saas if s.model != message.model] + message.saas
         self._refresh_status_view()
         logger.debug("SAAS updated for model '%s': %d", message.model, len(message.saas))
 
@@ -376,7 +395,9 @@ class MainScreen(Screen):
         self._fetch_relations(self._selected_controller, self._selected_model)
         self._refresh_header()
         self.action_switch_tab("tab-status")
-        logger.info("Auto-selected model '%s' on controller '%s'", model_name, model_info.controller)
+        logger.info(
+            "Auto-selected model '%s' on controller '%s'", model_name, model_info.controller
+        )
 
     def on_connection_failed(self, message: ConnectionFailed) -> None:
         self._is_connected = False
@@ -436,7 +457,10 @@ class MainScreen(Screen):
                 relations, offers, saas = await client.get_status_details(model_name)
             logger.debug(
                 "Fetched %d relations, %d offers, %d saas for model '%s'",
-                len(relations), len(offers), len(saas), model_name,
+                len(relations),
+                len(offers),
+                len(saas),
+                model_name,
             )
             self.post_message(RelationsUpdated(model=model_name, relations=relations))
             self.post_message(OffersUpdated(model=model_name, offers=offers))
@@ -447,14 +471,18 @@ class MainScreen(Screen):
     def on_status_view_app_selected(self, message: StatusView.AppSelected) -> None:
         if not self._selected_controller or not self._selected_model:
             return
-        self.app.push_screen(AppConfigScreen(self._selected_controller, self._selected_model, message.app))
+        self.app.push_screen(
+            AppConfigScreen(self._selected_controller, self._selected_model, message.app)
+        )
 
     def on_status_view_relation_selected(self, message: StatusView.RelationSelected) -> None:
         relation = message.relation
         if not self._selected_controller or not relation.relation_id:
             return
-        self.app.push_screen(RelationDataScreen(
-            self._selected_controller,
-            relation.model or self._selected_model or "",
-            relation,
-        ))
+        self.app.push_screen(
+            RelationDataScreen(
+                self._selected_controller,
+                relation.model or self._selected_model or "",
+                relation,
+            )
+        )

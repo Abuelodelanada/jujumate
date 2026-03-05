@@ -8,7 +8,7 @@ from rich.table import Table
 from rich.text import Text
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import VerticalScroll
+from textual.containers import Vertical, VerticalScroll
 from textual.widget import Widget
 from textual.widgets import Label, Static
 
@@ -17,7 +17,7 @@ from jujumate.models.entities import RelationDataEntry, RelationInfo
 
 logger = logging.getLogger(__name__)
 
-_C_KEY  = "bold white"
+_C_KEY = "bold white"
 _C_META = "dim"
 
 
@@ -55,8 +55,8 @@ def _build_relation_renderable(
     requirer_endpoint = relation.requirer.split(":")[1] if ":" in relation.requirer else ""
 
     sides = ["peer"] if is_peer else ["provider", "requirer"]
-    apps   = [provider_app] if is_peer else [provider_app, requirer_app]
-    eps    = [provider_endpoint] if is_peer else [provider_endpoint, requirer_endpoint]
+    apps = [provider_app] if is_peer else [provider_app, requirer_app]
+    eps = [provider_endpoint] if is_peer else [provider_endpoint, requirer_endpoint]
     colors = [palette.WARNING] if is_peer else [palette.SECONDARY, palette.PRIMARY]
 
     # Group entries
@@ -81,12 +81,12 @@ def _build_relation_renderable(
         border_style=palette.PRIMARY,
         header_style="bold",
     )
-    for app, color in zip(apps, colors):
+    for app, color in zip(apps, colors, strict=False):
         outer.add_column(Text(app, style=f"bold {color}"), ratio=1)
 
     # ── Metadata row ────────────────────────────────────────────────────────
     meta_cells = []
-    for side, ep, color in zip(sides, eps, colors):
+    for side, ep, color in zip(sides, eps, colors, strict=False):
         meta = Table(box=None, show_header=False, padding=(0, 1), expand=False)
         meta.add_column("k", style=_C_META, no_wrap=True)
         meta.add_column("v")
@@ -99,7 +99,7 @@ def _build_relation_renderable(
 
     # ── Application data row ─────────────────────────────────────────────────
     app_cells = []
-    for app, color in zip(apps, colors):
+    for app, color in zip(apps, colors, strict=False):
         label = Text("application data", style=f"bold {color}")
         bag_panel = Panel(
             _kv_table(app_bags[app]),
@@ -111,14 +111,16 @@ def _build_relation_renderable(
 
     # ── Unit data row ────────────────────────────────────────────────────────
     unit_cells = []
-    for app, color in zip(apps, colors):
+    for app, color in zip(apps, colors, strict=False):
         units = unit_bags[app]
         label = Text("unit data", style=f"bold {color}")
         if units:
             panels = [_unit_panel(u, d, False, color) for u, d in sorted(units.items())]
             unit_cells.append(Group(label, *panels))
         else:
-            unit_cells.append(Group(label, Panel(Text("<empty>", style=_C_META), border_style=color)))
+            unit_cells.append(
+                Group(label, Panel(Text("<empty>", style=_C_META), border_style=color))
+            )
     outer.add_row(*unit_cells)
 
     return outer
@@ -157,7 +159,7 @@ def _format_plain_text(
     lines.append(f"type: {relation.type}")
     lines.append("")
 
-    for side, app, ep in zip(sides, apps, eps):
+    for side, app, ep in zip(sides, apps, eps, strict=False):
         lines.append(f"--- {app} ({side}) endpoint: {ep} ---")
         lines.append("  application data:")
         bag = app_bags.get(app, {})
@@ -191,6 +193,9 @@ class RelationDataView(Widget):
     RelationDataView {
         height: 1fr;
     }
+    RelationDataView #rd-panel {
+        height: 1fr;
+    }
     RelationDataView #rd-scroll {
         height: 1fr;
         scrollbar-size-vertical: 0;
@@ -217,11 +222,12 @@ class RelationDataView(Widget):
             "No relation selected — press Enter on a relation to see its data bags.",
             id="rd-empty",
         )
-        with VerticalScroll(id="rd-scroll"):
-            yield Static("", id="rd-content")
+        with Vertical(id="rd-panel"):
+            with VerticalScroll(id="rd-scroll"):
+                yield Static("", id="rd-content")
 
     def on_mount(self) -> None:
-        self.query_one("#rd-scroll").display = False
+        self.query_one("#rd-panel").display = False
 
     def update(self, relation: RelationInfo, entries: list[RelationDataEntry]) -> None:
         """Populate the view with relation data in jhack style."""
@@ -230,10 +236,11 @@ class RelationDataView(Widget):
         renderable = _build_relation_renderable(relation, entries)
         self.query_one("#rd-content", Static).update(renderable)
         self.query_one("#rd-empty").display = False
-        self.query_one("#rd-scroll").display = True
+        self.query_one("#rd-panel").display = True
         logger.debug(
             "RelationDataView updated: relation %d, %d entries",
-            relation.relation_id, len(entries),
+            relation.relation_id,
+            len(entries),
         )
 
     def show_loading(self, relation: RelationInfo) -> None:
@@ -244,7 +251,7 @@ class RelationDataView(Widget):
         self.query_one("#rd-empty", Label).update(
             f"Fetching data bags for {provider_app} ↔ {requirer_app}…"
         )
-        self.query_one("#rd-scroll").display = False
+        self.query_one("#rd-panel").display = False
 
     def show_error(self, relation: RelationInfo, error: str) -> None:
         """Show an error state when the fetch failed."""
@@ -254,7 +261,7 @@ class RelationDataView(Widget):
         self.query_one("#rd-empty", Label).update(
             f"[red]Error fetching data bags for {provider_app} ↔ {requirer_app}:\n{error}[/red]"
         )
-        self.query_one("#rd-scroll").display = False
+        self.query_one("#rd-panel").display = False
 
     def action_copy_to_clipboard(self) -> None:
         if not self._current_relation or not self._current_entries:
@@ -263,4 +270,3 @@ class RelationDataView(Widget):
         text = _format_plain_text(self._current_relation, self._current_entries)
         self.app.copy_to_clipboard(text)
         self.notify("Relation data copied to clipboard")
-

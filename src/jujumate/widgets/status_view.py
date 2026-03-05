@@ -25,16 +25,16 @@ from jujumate.widgets.resource_table import Column, ResourceTable
 logger = logging.getLogger(__name__)
 
 _STATUS_COLORS: dict[str, str] = {
-    "active":      palette.SUCCESS,
-    "idle":        palette.SUCCESS,
-    "started":     palette.SUCCESS,
-    "blocked":     palette.ERROR,
-    "error":       palette.ERROR,
-    "terminated":  palette.ERROR,
+    "active": palette.SUCCESS,
+    "idle": palette.SUCCESS,
+    "started": palette.SUCCESS,
+    "blocked": palette.ERROR,
+    "error": palette.ERROR,
+    "terminated": palette.ERROR,
     "maintenance": palette.WARNING,
-    "waiting":     palette.WARNING,
-    "executing":   palette.WARNING,
-    "unknown":     palette.MUTED,
+    "waiting": palette.WARNING,
+    "executing": palette.WARNING,
+    "unknown": palette.MUTED,
 }
 
 
@@ -62,6 +62,7 @@ def _colored_relation(endpoint: str) -> Text:
         text.append(rel, style=palette.LINK)
         return text
     return Text(endpoint)
+
 
 _SAAS_COLUMNS = [
     Column("SAAS", "s-saas-name"),
@@ -316,25 +317,28 @@ class StatusView(Widget):
 
     def _render_apps(self) -> None:
         filtered = [
-            a for a in self._apps
+            a
+            for a in self._apps
             if _matches_filter(self._filter, a.name, a.charm, a.channel, a.status, a.message)
         ]
         self._displayed_apps = filtered
         rows = []
         full_msgs = []
         for a in filtered:
-            rows.append((
-                a.name,
-                a.version,
-                _colored_status(a.status),
-                str(a.unit_count),
-                a.charm,
-                a.channel,
-                str(a.revision),
-                _colored_ip(a.address),
-                "yes" if a.exposed else "no",
-                _trunc_msg(a.message),
-            ))
+            rows.append(
+                (
+                    a.name,
+                    a.version,
+                    _colored_status(a.status),
+                    str(a.unit_count),
+                    a.charm,
+                    a.channel,
+                    str(a.revision),
+                    _colored_ip(a.address),
+                    "yes" if a.exposed else "no",
+                    _trunc_msg(a.message),
+                )
+            )
             full_msgs.append(a.message)
         self._row_messages["status-apps-table"] = full_msgs
         self.query_one("#status-apps-table", ResourceTable).update_rows(rows)
@@ -347,7 +351,8 @@ class StatusView(Widget):
 
     def _render_saas(self) -> None:
         filtered = [
-            s for s in self._all_saas
+            s
+            for s in self._all_saas
             if _matches_filter(self._filter, s.name, s.status, s.store, s.url)
         ]
         rows = [(s.name, _colored_status(s.status), s.store, s.url) for s in filtered]
@@ -364,11 +369,17 @@ class StatusView(Widget):
     def _render_units(self) -> None:
         table = self.query_one("#status-units-table", ResourceTable)
         filtered = [
-            u for u in self._all_units
+            u
+            for u in self._all_units
             if _matches_filter(
                 self._filter,
-                u.name, u.workload_status, u.agent_status,
-                u.machine, u.public_address, u.address, u.message,
+                u.name,
+                u.workload_status,
+                u.agent_status,
+                u.machine,
+                u.public_address,
+                u.address,
+                u.message,
             )
         ]
         ordered = _group_units(filtered)
@@ -378,24 +389,33 @@ class StatusView(Widget):
             table.reset_columns(_UNIT_COLUMNS_K8S)
             for u in ordered:
                 name = f"  {u.name}" if u.subordinate_of else u.name
-                rows.append((
-                    name,
-                    _colored_status(u.workload_status),
-                    _colored_status(u.agent_status),
-                    _colored_ip(u.address), u.ports, _trunc_msg(u.message),
-                ))
+                rows.append(
+                    (
+                        name,
+                        _colored_status(u.workload_status),
+                        _colored_status(u.agent_status),
+                        _colored_ip(u.address),
+                        u.ports,
+                        _trunc_msg(u.message),
+                    )
+                )
                 full_msgs.append(u.message)
         else:
             table.reset_columns(_UNIT_COLUMNS_IAAS)
             for u in ordered:
                 name = f"  {u.name}" if u.subordinate_of else u.name
                 machine = "" if u.subordinate_of else u.machine
-                rows.append((
-                    name,
-                    _colored_status(u.workload_status),
-                    _colored_status(u.agent_status),
-                    machine, _colored_ip(u.public_address), u.ports, _trunc_msg(u.message),
-                ))
+                rows.append(
+                    (
+                        name,
+                        _colored_status(u.workload_status),
+                        _colored_status(u.agent_status),
+                        machine,
+                        _colored_ip(u.public_address),
+                        u.ports,
+                        _trunc_msg(u.message),
+                    )
+                )
                 full_msgs.append(u.message)
         self._row_messages["status-units-table"] = full_msgs
         table.update_rows(rows)
@@ -408,22 +428,32 @@ class StatusView(Widget):
 
     def _render_offers(self) -> None:
         filtered = [
-            o for o in self._all_offers
-            if _matches_filter(self._filter, o.name, o.application, o.charm, o.endpoint, o.interface)
+            o
+            for o in self._all_offers
+            if _matches_filter(
+                self._filter, o.name, o.application, o.charm, o.endpoint, o.interface
+            )
         ]
         has_offers = bool(filtered)
         self.query_one("#status-offers-table").display = has_offers
         rows = [
-            (o.name, o.application, o.charm, str(o.rev), o.connected, o.endpoint, o.interface, o.role)
+            (
+                o.name,
+                o.application,
+                o.charm,
+                str(o.rev),
+                o.connected,
+                o.endpoint,
+                o.interface,
+                o.role,
+            )
             for o in filtered
         ]
         self.query_one("#status-offers-table", ResourceTable).update_rows(rows)
         self._restore_cursor("status-offers-table", len(rows))
         logger.debug("StatusView offers updated: %d rows", len(rows))
 
-    def update_machines(
-        self, machines: list[MachineInfo], is_kubernetes: bool = False
-    ) -> None:
+    def update_machines(self, machines: list[MachineInfo], is_kubernetes: bool = False) -> None:
         self._all_machines = machines
         self._is_kubernetes = is_kubernetes
         self._render_machines()
@@ -435,7 +465,8 @@ class StatusView(Widget):
             self.query_one("#status-machines-table", ResourceTable).update_rows([])
             return
         filtered = [
-            m for m in self._all_machines
+            m
+            for m in self._all_machines
             if _matches_filter(
                 self._filter, m.id, m.state, m.address, m.instance_id, m.base, m.az, m.message
             )
@@ -443,10 +474,17 @@ class StatusView(Widget):
         rows = []
         full_msgs = []
         for m in filtered:
-            rows.append((
-                m.id, _colored_status(m.state), _colored_ip(m.address), m.instance_id, m.base, m.az,
-                _trunc_msg(m.message),
-            ))
+            rows.append(
+                (
+                    m.id,
+                    _colored_status(m.state),
+                    _colored_ip(m.address),
+                    m.instance_id,
+                    m.base,
+                    m.az,
+                    _trunc_msg(m.message),
+                )
+            )
             full_msgs.append(m.message)
         self._row_messages["status-machines-table"] = full_msgs
         self.query_one("#status-machines-table", ResourceTable).update_rows(rows)
@@ -491,7 +529,7 @@ class StatusView(Widget):
 
     def _restore_cursor(self, table_id: str, row_count: int) -> None:
         """Restore cursor to last-known position after a data update.
-        
+
         Enqueues a RowHighlighted(last_row) after clear()'s RowHighlighted(0),
         so Textual renders only the final (correct) state.
         """
@@ -509,7 +547,8 @@ class StatusView(Widget):
 
     def _render_relations(self) -> None:
         filtered = [
-            r for r in self._all_relations
+            r
+            for r in self._all_relations
             if _matches_filter(self._filter, r.provider, r.requirer, r.interface, r.type)
         ]
         self._displayed_relations = filtered

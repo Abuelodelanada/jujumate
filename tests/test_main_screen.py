@@ -64,10 +64,13 @@ async def test_default_tab_is_clouds(pilot):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("key,expected_tab_id", [
-    pytest.param("m", "tab-models", id="m-to-models"),
-    pytest.param("s", "tab-status", id="s-to-status"),
-])
+@pytest.mark.parametrize(
+    "key,expected_tab_id",
+    [
+        pytest.param("m", "tab-models", id="m-to-models"),
+        pytest.param("s", "tab-status", id="s-to-status"),
+    ],
+)
 async def test_keybinding_switches_tab(pilot, key, expected_tab_id):
     await pilot.press(key)
     assert pilot.app.screen.query_one(TabbedContent).active == expected_tab_id
@@ -103,13 +106,9 @@ async def test_message_handlers_update_views(pilot):
 
     screen.on_clouds_updated(CloudsUpdated(clouds=[CloudInfo("aws", "ec2")]))
     screen.on_controllers_updated(
-        ControllersUpdated(
-            controllers=[ControllerInfo("ctrl", "aws", "", "3.4.0", model_count=1)]
-        )
+        ControllersUpdated(controllers=[ControllerInfo("ctrl", "aws", "", "3.4.0", model_count=1)])
     )
-    screen.on_models_updated(
-        ModelsUpdated(models=[ModelInfo("dev", "ctrl", "aws", "", "active")])
-    )
+    screen.on_models_updated(ModelsUpdated(models=[ModelInfo("dev", "ctrl", "aws", "", "active")]))
     screen.on_apps_updated(AppsUpdated(apps=[AppInfo("pg", "dev", "pg", "14/stable", 1)]))
     screen.on_units_updated(UnitsUpdated(units=[UnitInfo("pg/0", "pg", "0", "active", "idle")]))
     screen.on_data_refreshed(DataRefreshed(timestamp=datetime(2024, 1, 1, 12, 0, 0)))
@@ -223,9 +222,7 @@ async def test_controller_selected_switches_to_models_and_filters(pilot):
         ModelInfo("dev", "prod", "aws", "", "available"),
         ModelInfo("staging", "other-ctrl", "aws", "", "available"),
     ]
-    screen.on_controllers_view_controller_selected(
-        ControllersView.ControllerSelected(name="prod")
-    )
+    screen.on_controllers_view_controller_selected(ControllersView.ControllerSelected(name="prod"))
     await pilot.pause()
     assert pilot.app.screen.query_one(TabbedContent).active == "tab-models"
     models_view = screen.query_one("#models-view", ModelsView)
@@ -289,14 +286,23 @@ async def test_clear_filter_noop_when_model_selected(pilot):
     assert screen._selected_model == "mymodel"
 
 
-@pytest.mark.parametrize("context,should_suppress", [
-    pytest.param({"exception": RuntimeError("Event loop is closed")}, True, id="closed-loop"),
-    pytest.param({"exception": OSError("Bad file descriptor")}, True, id="bad-fd"),
-    pytest.param({"exception": RuntimeError("cannot reuse already awaited coroutine")}, True, id="cannot-reuse"),
-    pytest.param({"message": "Task was destroyed but it is pending!"}, True, id="task-destroyed"),
-    pytest.param({"exception": ValueError("something unexpected")}, False, id="value-error"),
-    pytest.param({"message": "some asyncio message"}, False, id="asyncio-message"),
-])
+@pytest.mark.parametrize(
+    "context,should_suppress",
+    [
+        pytest.param({"exception": RuntimeError("Event loop is closed")}, True, id="closed-loop"),
+        pytest.param({"exception": OSError("Bad file descriptor")}, True, id="bad-fd"),
+        pytest.param(
+            {"exception": RuntimeError("cannot reuse already awaited coroutine")},
+            True,
+            id="cannot-reuse",
+        ),
+        pytest.param(
+            {"message": "Task was destroyed but it is pending!"}, True, id="task-destroyed"
+        ),
+        pytest.param({"exception": ValueError("something unexpected")}, False, id="value-error"),
+        pytest.param({"message": "some asyncio message"}, False, id="asyncio-message"),
+    ],
+)
 def test_asyncio_exception_handler(context, should_suppress):
 
     loop = MagicMock()
@@ -356,7 +362,17 @@ async def test_offers_updated_populates_status_view(pilot):
         OffersUpdated(
             model="cos",
             offers=[
-                OfferInfo("cos", "alertmanager-karma-dashboard", "alertmanager", "alertmanager-k8s", 180, "0/0", "karma-dashboard", "karma_dashboard", "provider"),
+                OfferInfo(
+                    "cos",
+                    "alertmanager-karma-dashboard",
+                    "alertmanager",
+                    "alertmanager-k8s",
+                    180,
+                    "0/0",
+                    "karma-dashboard",
+                    "karma_dashboard",
+                    "provider",
+                ),
             ],
         )
     )
@@ -374,7 +390,9 @@ async def test_machines_updated_populates_status_view(pilot):
     screen.on_machines_updated(
         MachinesUpdated(
             machines=[
-                MachineInfo("dev", "0", "started", "10.0.0.1", "i-1234", "ubuntu@22.04", "us-east-1a"),
+                MachineInfo(
+                    "dev", "0", "started", "10.0.0.1", "i-1234", "ubuntu@22.04", "us-east-1a"
+                ),
             ],
         )
     )
@@ -418,9 +436,7 @@ async def test_fetch_relations_worker_handles_exception(pilot):
 async def test_auto_select_navigates_to_status_on_first_refresh(pilot):
     screen = pilot.app.screen
     screen._auto_select_model = "dev"
-    screen.on_models_updated(
-        ModelsUpdated(models=[ModelInfo("dev", "ctrl", "aws", "", "active")])
-    )
+    screen.on_models_updated(ModelsUpdated(models=[ModelInfo("dev", "ctrl", "aws", "", "active")]))
     screen.on_apps_updated(AppsUpdated(apps=[AppInfo("pg", "dev", "pg", "14/stable", 1)]))
     screen.on_units_updated(UnitsUpdated(units=[UnitInfo("pg/0", "pg", "0", "active", "idle")]))
     screen.on_data_refreshed(DataRefreshed(timestamp=datetime(2024, 1, 1, 12, 0, 0)))
@@ -472,10 +488,26 @@ async def test_help_screen_closes_with_escape(pilot):
 async def test_secrets_screen_populate_with_secrets(pilot):
 
     secrets = [
-        SecretInfo(uri="csec:abc123", label="my-secret", owner="dev",
-                   description="", revision=1, rotate_policy="", created="2024-01-01", updated="2024-01-01"),
-        SecretInfo(uri="csec:def456", label="other", owner="dev",
-                   description="", revision=2, rotate_policy="", created="2024-01-02", updated="2024-01-02"),
+        SecretInfo(
+            uri="csec:abc123",
+            label="my-secret",
+            owner="dev",
+            description="",
+            revision=1,
+            rotate_policy="",
+            created="2024-01-01",
+            updated="2024-01-01",
+        ),
+        SecretInfo(
+            uri="csec:def456",
+            label="other",
+            owner="dev",
+            description="",
+            revision=2,
+            rotate_policy="",
+            created="2024-01-02",
+            updated="2024-01-02",
+        ),
     ]
     with patch.object(SecretsScreen, "_fetch"):
         screen = SecretsScreen("ctrl", "dev")
@@ -517,8 +549,18 @@ async def test_secrets_screen_show_error(pilot):
 @pytest.mark.asyncio
 async def test_secrets_screen_row_selected_pushes_detail(pilot):
 
-    secrets = [SecretInfo(uri="csec:abc", label="my-secret", owner="dev",
-                          description="", revision=1, rotate_policy="", created="2024-01-01", updated="2024-01-01")]
+    secrets = [
+        SecretInfo(
+            uri="csec:abc",
+            label="my-secret",
+            owner="dev",
+            description="",
+            revision=1,
+            rotate_policy="",
+            created="2024-01-01",
+            updated="2024-01-01",
+        )
+    ]
     with patch.object(SecretsScreen, "_fetch"):
         screen = SecretsScreen("ctrl", "dev")
         await pilot.app.push_screen(screen)
@@ -553,13 +595,20 @@ async def test_secrets_screen_row_selected_out_of_range_safe(pilot):
 @pytest.mark.asyncio
 async def test_secret_detail_screen_shows_fields(pilot):
 
-
-    secret = SecretInfo(uri="csec:abc123", label="my-secret", owner="dev",
-                        description="A test secret", revision=1, rotate_policy="",
-                        created="2024-01-01T00:00:00", updated="2024-01-01T00:00:00")
-    screen = SecretDetailScreen(secret)
-    await pilot.app.push_screen(screen)
-    await pilot.pause()
+    secret = SecretInfo(
+        uri="csec:abc123",
+        label="my-secret",
+        owner="dev",
+        description="A test secret",
+        revision=1,
+        rotate_policy="",
+        created="2024-01-01T00:00:00",
+        updated="2024-01-01T00:00:00",
+    )
+    with patch.object(SecretDetailScreen, "_fetch"):
+        screen = SecretDetailScreen("ctrl", "dev", secret)
+        await pilot.app.push_screen(screen)
+        await pilot.pause()
     labels = screen.query(Label)
     all_text = "\n".join(str(lbl.render()) for lbl in labels)
     assert "csec:abc123" in all_text
@@ -584,7 +633,7 @@ async def test_app_config_screen_success(pilot):
         screen.query_one(AppConfigView).update(ai, entries)
         await pilot.pause()
     view = screen.query_one(AppConfigView)
-    assert view.query_one("#ac-scroll").display is True
+    assert view.query_one("#ac-panel").display is True
 
 
 @pytest.mark.asyncio
@@ -620,7 +669,7 @@ async def test_relation_data_screen_success(pilot):
         screen.query_one(RelationDataView).update(rel, entries)
         await pilot.pause()
     view = screen.query_one(RelationDataView)
-    assert view.query_one("#rd-scroll").display is True
+    assert view.query_one("#rd-panel").display is True
 
 
 @pytest.mark.asyncio
@@ -648,20 +697,28 @@ async def test_models_updated_prunes_stale_relations(pilot):
     """Stale relations for a deleted model are removed on next ModelsUpdated."""
     screen = pilot.app.screen
 
-    screen.on_relations_updated(RelationsUpdated(
-        model="deleted-model",
-        relations=[RelationInfo("deleted-model", "pg:db", "wp:db", "pgsql", "regular")],
-    ))
-    screen.on_relations_updated(RelationsUpdated(
-        model="surviving-model",
-        relations=[RelationInfo("surviving-model", "mysql:db", "wp:db", "mysql", "regular")],
-    ))
+    screen.on_relations_updated(
+        RelationsUpdated(
+            model="deleted-model",
+            relations=[RelationInfo("deleted-model", "pg:db", "wp:db", "pgsql", "regular")],
+        )
+    )
+    screen.on_relations_updated(
+        RelationsUpdated(
+            model="surviving-model",
+            relations=[RelationInfo("surviving-model", "mysql:db", "wp:db", "mysql", "regular")],
+        )
+    )
     assert any(r.model == "deleted-model" for r in screen._all_relations)
 
     # ModelsUpdated without "deleted-model" → stale data must be pruned
-    screen.on_models_updated(ModelsUpdated(models=[
-        ModelInfo("surviving-model", "ctrl", "aws", "", "active"),
-    ]))
+    screen.on_models_updated(
+        ModelsUpdated(
+            models=[
+                ModelInfo("surviving-model", "ctrl", "aws", "", "active"),
+            ]
+        )
+    )
 
     assert not any(r.model == "deleted-model" for r in screen._all_relations)
     assert any(r.model == "surviving-model" for r in screen._all_relations)
@@ -672,20 +729,32 @@ async def test_models_updated_prunes_stale_offers_and_saas(pilot):
     """Stale offers and SAAS for a deleted model are removed on next ModelsUpdated."""
     screen = pilot.app.screen
 
-    screen.on_offers_updated(OffersUpdated(
-        model="gone-model",
-        offers=[OfferInfo("gone-model", "my-offer", "pg", "pg-k8s", 1, "0/0", "db", "pgsql", "provider")],
-    ))
-    screen.on_saas_updated(SaasUpdated(
-        model="gone-model",
-        saas=[SAASInfo("gone-model", "remote-pg", "active", "mystore", "mystore:admin/pg")],
-    ))
+    screen.on_offers_updated(
+        OffersUpdated(
+            model="gone-model",
+            offers=[
+                OfferInfo(
+                    "gone-model", "my-offer", "pg", "pg-k8s", 1, "0/0", "db", "pgsql", "provider"
+                )
+            ],
+        )
+    )
+    screen.on_saas_updated(
+        SaasUpdated(
+            model="gone-model",
+            saas=[SAASInfo("gone-model", "remote-pg", "active", "mystore", "mystore:admin/pg")],
+        )
+    )
     assert any(o.model == "gone-model" for o in screen._all_offers)
     assert any(s.model == "gone-model" for s in screen._all_saas)
 
-    screen.on_models_updated(ModelsUpdated(models=[
-        ModelInfo("other-model", "ctrl", "aws", "", "active"),
-    ]))
+    screen.on_models_updated(
+        ModelsUpdated(
+            models=[
+                ModelInfo("other-model", "ctrl", "aws", "", "active"),
+            ]
+        )
+    )
 
     assert not any(o.model == "gone-model" for o in screen._all_offers)
     assert not any(s.model == "gone-model" for s in screen._all_saas)
@@ -702,9 +771,13 @@ async def test_models_updated_deselects_deleted_model(pilot):
     # Start on Status tab to verify we switch away from it.
     pilot.app.screen.query_one(TabbedContent).active = "tab-status"
 
-    screen.on_models_updated(ModelsUpdated(models=[
-        ModelInfo("other-model", "ctrl", "aws", "", "active"),
-    ]))
+    screen.on_models_updated(
+        ModelsUpdated(
+            models=[
+                ModelInfo("other-model", "ctrl", "aws", "", "active"),
+            ]
+        )
+    )
 
     assert screen._selected_model is None
     assert screen._all_relations == []
@@ -720,10 +793,14 @@ async def test_models_updated_keeps_selected_model_when_still_exists(pilot):
         RelationInfo("my-model", "pg:db", "wp:db", "pgsql", "regular"),
     ]
 
-    screen.on_models_updated(ModelsUpdated(models=[
-        ModelInfo("my-model", "ctrl", "aws", "", "active"),
-        ModelInfo("other-model", "ctrl", "aws", "", "active"),
-    ]))
+    screen.on_models_updated(
+        ModelsUpdated(
+            models=[
+                ModelInfo("my-model", "ctrl", "aws", "", "active"),
+                ModelInfo("other-model", "ctrl", "aws", "", "active"),
+            ]
+        )
+    )
 
     assert screen._selected_model == "my-model"
     assert any(r.model == "my-model" for r in screen._all_relations)
@@ -739,16 +816,26 @@ async def test_offers_screen_populate_with_offers(pilot):
 
     offers = [
         ControllerOfferInfo(
-            model="cos", name="prometheus-scrape", offer_url="admin/cos.prometheus-scrape",
-            application="prometheus", charm="ch:prometheus-k8s-1", description="Scrape endpoint",
+            model="cos",
+            name="prometheus-scrape",
+            offer_url="admin/cos.prometheus-scrape",
+            application="prometheus",
+            charm="ch:prometheus-k8s-1",
+            description="Scrape endpoint",
             endpoints=[OfferEndpoint("metrics-endpoint", "prometheus_scrape", "provider")],
-            active_connections=1, total_connections=2,
+            active_connections=1,
+            total_connections=2,
         ),
         ControllerOfferInfo(
-            model="cos", name="alertmanager-karma", offer_url="admin/cos.alertmanager-karma",
-            application="alertmanager", charm="ch:alertmanager-k8s-1", description="",
+            model="cos",
+            name="alertmanager-karma",
+            offer_url="admin/cos.alertmanager-karma",
+            application="alertmanager",
+            charm="ch:alertmanager-k8s-1",
+            description="",
             endpoints=[],
-            active_connections=0, total_connections=0,
+            active_connections=0,
+            total_connections=0,
         ),
     ]
     with patch.object(OffersScreen, "_fetch"):
@@ -792,10 +879,15 @@ async def test_offers_screen_row_selected_pushes_detail(pilot):
 
     offers = [
         ControllerOfferInfo(
-            model="cos", name="prom", offer_url="admin/cos.prom",
-            application="prometheus", charm="ch:prometheus-k8s-1", description="",
+            model="cos",
+            name="prom",
+            offer_url="admin/cos.prom",
+            application="prometheus",
+            charm="ch:prometheus-k8s-1",
+            description="",
             endpoints=[OfferEndpoint("metrics-endpoint", "prometheus_scrape", "provider")],
-            active_connections=0, total_connections=1,
+            active_connections=0,
+            total_connections=1,
         )
     ]
     with patch.object(OffersScreen, "_fetch"):
@@ -815,12 +907,16 @@ async def test_offers_screen_row_selected_pushes_detail(pilot):
 @pytest.mark.asyncio
 async def test_offer_detail_screen_shows_fields(pilot):
 
-
     offer = ControllerOfferInfo(
-        model="cos", name="prom-scrape", offer_url="admin/cos.prom-scrape",
-        application="prometheus", charm="ch:prometheus-k8s-1", description="Scrape metrics",
+        model="cos",
+        name="prom-scrape",
+        offer_url="admin/cos.prom-scrape",
+        application="prometheus",
+        charm="ch:prometheus-k8s-1",
+        description="Scrape metrics",
         endpoints=[OfferEndpoint("metrics-endpoint", "prometheus_scrape", "provider")],
-        active_connections=2, total_connections=3,
+        active_connections=2,
+        total_connections=3,
     )
     with patch.object(OfferDetailScreen, "_fetch_consumers"):
         screen = OfferDetailScreen(offer, "my-ctrl")
@@ -859,8 +955,12 @@ async def test_offer_detail_screen_populate_consumers(pilot):
     """_populate_consumers fills the connections table with SAASInfo rows."""
 
     offer = ControllerOfferInfo(
-        model="cos", name="prom", offer_url="admin/cos.prom",
-        application="prometheus", charm="ch:prometheus-k8s-1", description="",
+        model="cos",
+        name="prom",
+        offer_url="admin/cos.prom",
+        application="prometheus",
+        charm="ch:prometheus-k8s-1",
+        description="",
         endpoints=[OfferEndpoint("metrics-endpoint", "prometheus_scrape", "provider")],
     )
     with patch.object(OfferDetailScreen, "_fetch_consumers"):
@@ -884,8 +984,12 @@ async def test_offer_detail_fetch_consumers_scans_all_controllers(pilot):
     """_fetch_consumers scans models across all known controllers."""
 
     offer = ControllerOfferInfo(
-        model="cos", name="prom", offer_url="admin/cos.prom",
-        application="prometheus", charm="ch:prometheus-k8s-1", description="",
+        model="cos",
+        name="prom",
+        offer_url="admin/cos.prom",
+        application="prometheus",
+        charm="ch:prometheus-k8s-1",
+        description="",
         endpoints=[OfferEndpoint("metrics-endpoint", "prometheus_scrape", "provider")],
     )
 
@@ -912,8 +1016,10 @@ async def test_offer_detail_fetch_consumers_scans_all_controllers(pilot):
         return mock_client_a if controller_name == "ctrl-a" else mock_client_b
 
     with (
-        patch("jujumate.screens.offers_screen.load_config",
-              return_value=JujuConfig(current_controller="ctrl-a", controllers=["ctrl-a", "ctrl-b"])),
+        patch(
+            "jujumate.screens.offers_screen.load_config",
+            return_value=JujuConfig(current_controller="ctrl-a", controllers=["ctrl-a", "ctrl-b"]),
+        ),
         patch("jujumate.screens.offers_screen.JujuClient", side_effect=_make_client),
     ):
         screen._fetch_consumers(screen._controller_name, screen._offer)

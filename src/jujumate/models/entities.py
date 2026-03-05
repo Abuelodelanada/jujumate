@@ -106,8 +106,8 @@ class RelationInfo:
 class RelationDataEntry:
     """A single key-value entry from a relation data bag."""
 
-    side: str   # "provider", "requirer", or "peer"
-    unit: str   # unit name or app name
+    side: str  # "provider", "requirer", or "peer"
+    unit: str  # unit name or app name
     key: str
     value: str
     scope: str = "unit"  # "app" or "unit"

@@ -1,7 +1,6 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-from rich.console import Group
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
@@ -63,29 +62,32 @@ async def _mount_view(pilot, view):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("view_id,view_class,entities,expected_rows", [
-    pytest.param(
-        "test-clouds-a",
-        CloudsView,
-        [CloudInfo("aws", "ec2", regions=["us-east-1"])],
-        1,
-        id="clouds",
-    ),
-    pytest.param(
-        "test-ctrl-a",
-        ControllersView,
-        [ControllerInfo("prod", "aws", "us-east-1", "3.6.0", model_count=3)],
-        1,
-        id="controllers",
-    ),
-    pytest.param(
-        "test-models-a",
-        ModelsView,
-        [ModelInfo("dev", "prod", "aws", "us-east-1", "available")],
-        1,
-        id="models-with-region",
-    ),
-])
+@pytest.mark.parametrize(
+    "view_id,view_class,entities,expected_rows",
+    [
+        pytest.param(
+            "test-clouds-a",
+            CloudsView,
+            [CloudInfo("aws", "ec2", regions=["us-east-1"])],
+            1,
+            id="clouds",
+        ),
+        pytest.param(
+            "test-ctrl-a",
+            ControllersView,
+            [ControllerInfo("prod", "aws", "us-east-1", "3.6.0", model_count=3)],
+            1,
+            id="controllers",
+        ),
+        pytest.param(
+            "test-models-a",
+            ModelsView,
+            [ModelInfo("dev", "prod", "aws", "us-east-1", "available")],
+            1,
+            id="models-with-region",
+        ),
+    ],
+)
 async def test_view_update_row_count(pilot, view_id, view_class, entities, expected_rows):
     view = view_class(id=view_id)
     await _mount_view(pilot, view)
@@ -138,40 +140,50 @@ async def test_models_view_emits_model_selected(pilot):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("view_id,view_class,entities,msg_class,expected_name_attr,expected_name_value,row_key", [
-    pytest.param(
-        "test-clouds-b",
-        CloudsView,
-        [CloudInfo("aws", "ec2")],
-        CloudsView.CloudSelected,
-        "name",
-        "aws",
-        "aws",
-        id="clouds",
-    ),
-    pytest.param(
-        "test-ctrl-b",
-        ControllersView,
-        [ControllerInfo("prod", "aws", "", "3.4.0", 1)],
-        ControllersView.ControllerSelected,
-        "name",
-        "prod",
-        "prod",
-        id="controllers",
-    ),
-    pytest.param(
-        "test-models-b",
-        ModelsView,
-        [ModelInfo("dev", "prod", "aws", "", "available")],
-        ModelsView.ModelSelected,
-        "name",
-        "prod/dev",
-        "prod/dev",
-        id="models",
-    ),
-])
+@pytest.mark.parametrize(
+    "view_id,view_class,entities,msg_class,expected_name_attr,expected_name_value,row_key",
+    [
+        pytest.param(
+            "test-clouds-b",
+            CloudsView,
+            [CloudInfo("aws", "ec2")],
+            CloudsView.CloudSelected,
+            "name",
+            "aws",
+            "aws",
+            id="clouds",
+        ),
+        pytest.param(
+            "test-ctrl-b",
+            ControllersView,
+            [ControllerInfo("prod", "aws", "", "3.4.0", 1)],
+            ControllersView.ControllerSelected,
+            "name",
+            "prod",
+            "prod",
+            id="controllers",
+        ),
+        pytest.param(
+            "test-models-b",
+            ModelsView,
+            [ModelInfo("dev", "prod", "aws", "", "available")],
+            ModelsView.ModelSelected,
+            "name",
+            "prod/dev",
+            "prod/dev",
+            id="models",
+        ),
+    ],
+)
 async def test_view_row_selection_posts_message(
-    pilot, view_id, view_class, entities, msg_class, expected_name_attr, expected_name_value, row_key
+    pilot,
+    view_id,
+    view_class,
+    entities,
+    msg_class,
+    expected_name_attr,
+    expected_name_value,
+    row_key,
 ):
     view = view_class(id=view_id)
     await _mount_view(pilot, view)
@@ -188,33 +200,38 @@ async def test_view_row_selection_posts_message(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("view_id,update_method_name,entities,extra_kwargs,table_id", [
-    pytest.param(
-        "test-sv-apps",
-        "update_apps",
-        [AppInfo("pg", "dev", "pg", "14/stable", 1, status="active")],
-        {},
-        "#status-apps-table",
-        id="apps",
-    ),
-    pytest.param(
-        "test-sv-units",
-        "update_units",
-        [UnitInfo("pg/0", "pg", "0", "active", "idle", "10.0.0.1")],
-        {"is_kubernetes": False},
-        "#status-units-table",
-        id="units",
-    ),
-    pytest.param(
-        "test-sv-rels",
-        "update_relations",
-        [RelationInfo("dev", "postgresql:db", "wordpress:db", "pgsql", "regular")],
-        {},
-        "#status-rels-table",
-        id="relations",
-    ),
-])
-async def test_status_view_update_tables(pilot, view_id, update_method_name, entities, extra_kwargs, table_id):
+@pytest.mark.parametrize(
+    "view_id,update_method_name,entities,extra_kwargs,table_id",
+    [
+        pytest.param(
+            "test-sv-apps",
+            "update_apps",
+            [AppInfo("pg", "dev", "pg", "14/stable", 1, status="active")],
+            {},
+            "#status-apps-table",
+            id="apps",
+        ),
+        pytest.param(
+            "test-sv-units",
+            "update_units",
+            [UnitInfo("pg/0", "pg", "0", "active", "idle", "10.0.0.1")],
+            {"is_kubernetes": False},
+            "#status-units-table",
+            id="units",
+        ),
+        pytest.param(
+            "test-sv-rels",
+            "update_relations",
+            [RelationInfo("dev", "postgresql:db", "wordpress:db", "pgsql", "regular")],
+            {},
+            "#status-rels-table",
+            id="relations",
+        ),
+    ],
+)
+async def test_status_view_update_tables(
+    pilot, view_id, update_method_name, entities, extra_kwargs, table_id
+):
 
     view = StatusView(id=view_id)
     await _mount_view(pilot, view)
@@ -229,7 +246,9 @@ async def test_status_view_update_units_kubernetes(pilot):
     view = StatusView(id="test-status-units-k8s")
     await _mount_view(pilot, view)
 
-    view.update_units([UnitInfo("pg/0", "pg", "", "active", "idle", address="10.1.2.3")], is_kubernetes=True)
+    view.update_units(
+        [UnitInfo("pg/0", "pg", "", "active", "idle", address="10.1.2.3")], is_kubernetes=True
+    )
     await pilot.pause()
     table = view.query_one("#status-units-table", ResourceTable).query_one("DataTable")
     assert table.row_count == 1
@@ -245,12 +264,26 @@ async def test_status_view_update_offers(pilot):
     await _mount_view(pilot, view)
     # Initially offers panel is hidden
     assert view.query_one("#status-offers-table").display is False
-    view.update_offers([
-        OfferInfo("cos", "alertmanager-karma-dashboard", "alertmanager", "alertmanager-k8s", 180, "0/0", "karma-dashboard", "karma_dashboard", "provider"),
-    ])
+    view.update_offers(
+        [
+            OfferInfo(
+                "cos",
+                "alertmanager-karma-dashboard",
+                "alertmanager",
+                "alertmanager-k8s",
+                180,
+                "0/0",
+                "karma-dashboard",
+                "karma_dashboard",
+                "provider",
+            ),
+        ]
+    )
     await pilot.pause()
     assert view.query_one("#status-offers-table").display is True
-    assert view.query_one("#status-offers-table", ResourceTable).query_one("DataTable").row_count == 1
+    assert (
+        view.query_one("#status-offers-table", ResourceTable).query_one("DataTable").row_count == 1
+    )
     # Clearing offers hides the panel again
     view.update_offers([])
     await pilot.pause()
@@ -329,11 +362,14 @@ def test_jujumate_header_connected_no_timestamp():
     assert "·" not in status
 
 
-@pytest.mark.parametrize("text,expected,check_truncated", [
-    pytest.param("", "", False, id="empty"),
-    pytest.param("short", "short", False, id="short"),
-    pytest.param("x" * (_MSG_TRUNC_WIDTH + 5), None, True, id="long"),
-])
+@pytest.mark.parametrize(
+    "text,expected,check_truncated",
+    [
+        pytest.param("", "", False, id="empty"),
+        pytest.param("short", "short", False, id="short"),
+        pytest.param("x" * (_MSG_TRUNC_WIDTH + 5), None, True, id="long"),
+    ],
+)
 def test_trunc_msg(text, expected, check_truncated):
 
     result = _trunc_msg(text)
@@ -368,8 +404,7 @@ async def test_status_view_scroll_indicator_shown_when_content_overflows():
         await pilot.pause()
         view = app.screen.query_one("#status-view", StatusView)
         many_apps = [
-            AppInfo(f"app-{i}", "dev", f"app-{i}", "stable", 1, status="active")
-            for i in range(20)
+            AppInfo(f"app-{i}", "dev", f"app-{i}", "stable", 1, status="active") for i in range(20)
         ]
         view.update_apps(many_apps)
         await pilot.pause()
@@ -389,8 +424,7 @@ async def test_tracked_scroll_notifies_parent():
         await pilot.pause()
         view = app.screen.query_one("#status-view", StatusView)
         many_apps = [
-            AppInfo(f"app-{i}", "dev", f"app-{i}", "stable", 1, status="active")
-            for i in range(20)
+            AppInfo(f"app-{i}", "dev", f"app-{i}", "stable", 1, status="active") for i in range(20)
         ]
         view.update_apps(many_apps)
         await pilot.pause()
@@ -453,7 +487,6 @@ async def test_status_view_update_machines_hidden_when_empty(pilot):
 
 def test_colored_relation_no_colon():
 
-
     result = _colored_relation("myapp")
     assert isinstance(result, Text)
     assert str(result) == "myapp"
@@ -492,13 +525,13 @@ async def test_status_view_msg_bar_handles_out_of_range(pilot):
 async def test_status_view_msg_bar_handles_bad_parent(pilot):
     """Cover except branch when data_table.parent has no id."""
 
-
-
     view = pilot.app.screen.query_one("#status-view", StatusView)
     bad_dt = MagicMock()
     bad_dt.parent = None  # triggers AttributeError on .id
     event = DataTable.RowHighlighted(
-        data_table=bad_dt, cursor_row=0, row_key=RowKey("k")  # type: ignore
+        data_table=bad_dt,
+        cursor_row=0,
+        row_key=RowKey("k"),  # type: ignore
     )
     view.on_data_table_row_highlighted(event)
 
@@ -508,7 +541,9 @@ async def test_status_view_msg_bar_handles_missing_label():
     """Cover except branch when #msg-bar is not yet mounted."""
 
     view = StatusView(id="detached-msg-bar")
-    dt_mock = type("FakeDT", (), {"parent": type("FakeParent", (), {"id": "status-apps-table"})()})()
+    dt_mock = type(
+        "FakeDT", (), {"parent": type("FakeParent", (), {"id": "status-apps-table"})()}
+    )()
     event = DataTable.RowHighlighted(data_table=dt_mock, cursor_row=0, row_key=None)  # type: ignore
     view.on_data_table_row_highlighted(event)
 
@@ -612,10 +647,12 @@ async def test_apps_view_update(pilot):
     view = AppsView(id="test-apps")
     await pilot.app.screen.mount(view)
     await pilot.pause()
-    view.update([
-        AppInfo("pg", "dev", "postgresql", "14/stable", 363, unit_count=1, status="active"),
-        AppInfo("mysql", "dev", "mysql", "8/stable", 100, unit_count=2, status="blocked"),
-    ])
+    view.update(
+        [
+            AppInfo("pg", "dev", "postgresql", "14/stable", 363, unit_count=1, status="active"),
+            AppInfo("mysql", "dev", "mysql", "8/stable", 100, unit_count=2, status="blocked"),
+        ]
+    )
     await pilot.pause()
     assert view.query_one(ResourceTable).query_one("DataTable").row_count == 2
 
@@ -678,10 +715,12 @@ async def test_units_view_update(pilot):
     view = UnitsView(id="test-units")
     await pilot.app.screen.mount(view)
     await pilot.pause()
-    view.update([
-        UnitInfo("pg/0", "pg", "0", "active", "idle", "10.0.0.1"),
-        UnitInfo("pg/1", "pg", "1", "active", "idle", "10.0.0.2"),
-    ])
+    view.update(
+        [
+            UnitInfo("pg/0", "pg", "0", "active", "idle", "10.0.0.1"),
+            UnitInfo("pg/1", "pg", "1", "active", "idle", "10.0.0.2"),
+        ]
+    )
     await pilot.pause()
     assert view.query_one(ResourceTable).query_one("DataTable").row_count == 2
 
@@ -705,7 +744,6 @@ async def test_units_view_empty(pilot):
 @pytest.mark.asyncio
 async def test_navigable_table_cursor_navigation(pilot):
 
-
     nt = NavigableTable(columns=[Column("Name", "name")], id="test-nt-nav")
     await pilot.app.screen.mount(nt)
     await pilot.pause()
@@ -717,19 +755,18 @@ async def test_navigable_table_cursor_navigation(pilot):
     assert nt._cursor == 1
     nt.action_cursor_down()
     assert nt._cursor == 2
-    nt.action_cursor_down()   # at end — stays
+    nt.action_cursor_down()  # at end — stays
     assert nt._cursor == 2
     nt.action_cursor_up()
     assert nt._cursor == 1
     nt.action_cursor_up()
     assert nt._cursor == 0
-    nt.action_cursor_up()     # at start — stays
+    nt.action_cursor_up()  # at start — stays
     assert nt._cursor == 0
 
 
 @pytest.mark.asyncio
 async def test_navigable_table_enter_posts_row_selected(pilot):
-
 
     nt = NavigableTable(columns=[Column("Name", "name")], id="test-nt-enter")
     await pilot.app.screen.mount(nt)
@@ -748,7 +785,6 @@ async def test_navigable_table_enter_posts_row_selected(pilot):
 
 @pytest.mark.asyncio
 async def test_navigable_table_enter_no_rows_does_nothing(pilot):
-
 
     nt = NavigableTable(columns=[Column("Name", "name")], id="test-nt-norow")
     await pilot.app.screen.mount(nt)
@@ -812,7 +848,6 @@ async def test_status_view_update_saas_hidden_when_empty(pilot):
 @pytest.mark.asyncio
 async def test_status_view_filter_activate_and_close(pilot):
 
-
     view = pilot.app.screen.query_one("#status-view", StatusView)
     fi = view.query_one("#filter-input", Input)
     assert fi.display is False
@@ -832,10 +867,12 @@ async def test_status_view_filter_activate_and_close(pilot):
 async def test_status_view_filter_filters_apps(pilot):
 
     view = pilot.app.screen.query_one("#status-view", StatusView)
-    view.update_apps([
-        AppInfo("postgresql", "dev", "postgresql", "14/stable", 1, status="active"),
-        AppInfo("wordpress", "dev", "wordpress", "stable", 1, status="active"),
-    ])
+    view.update_apps(
+        [
+            AppInfo("postgresql", "dev", "postgresql", "14/stable", 1, status="active"),
+            AppInfo("wordpress", "dev", "wordpress", "stable", 1, status="active"),
+        ]
+    )
     await pilot.pause()
     assert view.query_one("#status-apps-table DataTable").row_count == 2
     view._filter = "postgres"
@@ -852,10 +889,12 @@ async def test_status_view_filter_filters_apps(pilot):
 async def test_status_view_filter_filters_relations(pilot):
 
     view = pilot.app.screen.query_one("#status-view", StatusView)
-    view.update_relations([
-        RelationInfo("dev", "pg:db", "wp:db", "pgsql", "regular"),
-        RelationInfo("dev", "mysql:db", "wp:db", "mysql", "regular"),
-    ])
+    view.update_relations(
+        [
+            RelationInfo("dev", "pg:db", "wp:db", "pgsql", "regular"),
+            RelationInfo("dev", "mysql:db", "wp:db", "mysql", "regular"),
+        ]
+    )
     await pilot.pause()
     view._filter = "mysql"
     view._render_relations()
@@ -900,7 +939,6 @@ async def test_status_view_row_selected_posts_relation_selected(pilot):
 @pytest.mark.asyncio
 async def test_status_view_check_action_close_filter(pilot):
 
-
     view = pilot.app.screen.query_one("#status-view", StatusView)
     fi = view.query_one("#filter-input", Input)
 
@@ -923,50 +961,55 @@ async def test_status_view_check_action_close_filter(pilot):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-@pytest.mark.parametrize("ai,entries", [
-    pytest.param(
-        AppInfo("pg", "dev", "postgresql", "14/stable", 363, status="active"),
-        [
-            AppConfigEntry("log-level", "DEBUG", "INFO", "string", "Log level", "user"),
-            AppConfigEntry("port", "5432", "5432", "int", "Port", "default"),
-        ],
-        id="with-changed-values",
-    ),
-    pytest.param(
-        AppInfo("pg", "dev", "pg", "", 363),
-        [],
-        id="empty-entries",
-    ),
-])
+@pytest.mark.parametrize(
+    "ai,entries",
+    [
+        pytest.param(
+            AppInfo("pg", "dev", "postgresql", "14/stable", 363, status="active"),
+            [
+                AppConfigEntry("log-level", "DEBUG", "INFO", "string", "Log level", "user"),
+                AppConfigEntry("port", "5432", "5432", "int", "Port", "default"),
+            ],
+            id="with-changed-values",
+        ),
+        pytest.param(
+            AppInfo("pg", "dev", "pg", "", 363),
+            [],
+            id="empty-entries",
+        ),
+    ],
+)
 def test_build_config_renderable(ai, entries):
 
+    assert isinstance(_build_config_renderable(entries), Table)
 
-    assert isinstance(_build_config_renderable(ai, entries), Group)
 
-
-@pytest.mark.parametrize("ai,entries,expected_fragments", [
-    pytest.param(
-        AppInfo("pg", "dev", "postgresql", "14/stable", 363),
-        [
-            AppConfigEntry("log-level", "DEBUG", "INFO", "string", "Log level", "user"),
-            AppConfigEntry("port", "5432", "5432", "int", "Port", "default"),
-        ],
-        ["pg", "log-level: DEBUG", "port: 5432"],
-        id="with-changed",
-    ),
-    pytest.param(
-        AppInfo("pg", "dev", "postgresql", "14/stable", 363),
-        [AppConfigEntry("port", "5432", "5432", "int", "Port", "default")],
-        ["(none)"],
-        id="no-changed",
-    ),
-    pytest.param(
-        AppInfo("pg", "dev", "postgresql", "14/stable", 363),
-        [AppConfigEntry("log-level", "DEBUG", "INFO", "string", "Log level", "user")],
-        ["default: INFO"],
-        id="changed-with-default-diff",
-    ),
-])
+@pytest.mark.parametrize(
+    "ai,entries,expected_fragments",
+    [
+        pytest.param(
+            AppInfo("pg", "dev", "postgresql", "14/stable", 363),
+            [
+                AppConfigEntry("log-level", "DEBUG", "INFO", "string", "Log level", "user"),
+                AppConfigEntry("port", "5432", "5432", "int", "Port", "default"),
+            ],
+            ["pg", "log-level: DEBUG", "port: 5432"],
+            id="with-changed",
+        ),
+        pytest.param(
+            AppInfo("pg", "dev", "postgresql", "14/stable", 363),
+            [AppConfigEntry("port", "5432", "5432", "int", "Port", "default")],
+            ["(none)"],
+            id="no-changed",
+        ),
+        pytest.param(
+            AppInfo("pg", "dev", "postgresql", "14/stable", 363),
+            [AppConfigEntry("log-level", "DEBUG", "INFO", "string", "Log level", "user")],
+            ["default: INFO"],
+            id="changed-with-default-diff",
+        ),
+    ],
+)
 def test_format_plain_text_app_config(ai, entries, expected_fragments):
 
     result = _ac_format_plain_text(ai, entries)
@@ -984,25 +1027,28 @@ async def test_app_config_view_update(pilot):
     entries = [AppConfigEntry("port", "5432", "5432", "int", "Port", "default")]
     view.update(ai, entries)
     await pilot.pause()
-    assert view.query_one("#ac-scroll").display is True
+    assert view.query_one("#ac-panel").display is True
     assert view.query_one("#ac-empty").display is False
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("view_id,method_name,method_args", [
-    pytest.param(
-        "test-ac-load",
-        "show_loading",
-        [AppInfo("pg", "dev", "pg", "", 1)],
-        id="loading",
-    ),
-    pytest.param(
-        "test-ac-err",
-        "show_error",
-        [AppInfo("pg", "dev", "pg", "", 1), "connection refused"],
-        id="error",
-    ),
-])
+@pytest.mark.parametrize(
+    "view_id,method_name,method_args",
+    [
+        pytest.param(
+            "test-ac-load",
+            "show_loading",
+            [AppInfo("pg", "dev", "pg", "", 1)],
+            id="loading",
+        ),
+        pytest.param(
+            "test-ac-err",
+            "show_error",
+            [AppInfo("pg", "dev", "pg", "", 1), "connection refused"],
+            id="error",
+        ),
+    ],
+)
 async def test_app_config_view_visibility_states(pilot, view_id, method_name, method_args):
 
     view = AppConfigView(id=view_id)
@@ -1011,7 +1057,7 @@ async def test_app_config_view_visibility_states(pilot, view_id, method_name, me
     getattr(view, method_name)(*method_args)
     await pilot.pause()
     assert view.query_one("#ac-empty").display is True
-    assert view.query_one("#ac-scroll").display is False
+    assert view.query_one("#ac-panel").display is False
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1031,60 +1077,63 @@ def test_kv_table_empty():
 
 def test_unit_panel_with_leader():
 
-
     assert isinstance(_unit_panel("pg/0", {"key": "val"}, is_leader=True, color="#77216F"), Panel)
 
 
 def test_unit_panel_non_leader():
 
-
     assert isinstance(_unit_panel("pg/1", {}, is_leader=False, color="#E95420"), Panel)
 
 
-@pytest.mark.parametrize("rel,entries", [
-    pytest.param(
-        RelationInfo("dev", "postgresql:db", "wordpress:db", "pgsql", "regular", relation_id=5),
-        [
-            RelationDataEntry("provider", "postgresql", "host", "10.0.0.1", "app"),
-            RelationDataEntry("requirer", "wordpress/0", "port", "5432", "unit"),
-        ],
-        id="regular",
-    ),
-    pytest.param(
-        RelationInfo("dev", "etcd:cluster", "etcd:cluster", "etcd", "peer", relation_id=3),
-        [RelationDataEntry("peer", "etcd", "h", "v", "app")],
-        id="peer",
-    ),
-])
+@pytest.mark.parametrize(
+    "rel,entries",
+    [
+        pytest.param(
+            RelationInfo("dev", "postgresql:db", "wordpress:db", "pgsql", "regular", relation_id=5),
+            [
+                RelationDataEntry("provider", "postgresql", "host", "10.0.0.1", "app"),
+                RelationDataEntry("requirer", "wordpress/0", "port", "5432", "unit"),
+            ],
+            id="regular",
+        ),
+        pytest.param(
+            RelationInfo("dev", "etcd:cluster", "etcd:cluster", "etcd", "peer", relation_id=3),
+            [RelationDataEntry("peer", "etcd", "h", "v", "app")],
+            id="peer",
+        ),
+    ],
+)
 def test_build_relation_renderable(rel, entries):
-
 
     assert isinstance(_build_relation_renderable(rel, entries), Table)
 
 
-@pytest.mark.parametrize("rel,entries,expected_fragments", [
-    pytest.param(
-        RelationInfo("dev", "postgresql:db", "wordpress:db", "pgsql", "regular", relation_id=5),
-        [
-            RelationDataEntry("provider", "postgresql", "host", "10.0.0.1", "app"),
-            RelationDataEntry("provider", "postgresql/0", "key", "val", "unit"),
-        ],
-        ["relation-id: 5", "host"],
-        id="regular",
-    ),
-    pytest.param(
-        RelationInfo("dev", "etcd:cluster", "etcd:cluster", "etcd", "peer", relation_id=3),
-        [],
-        ["peer", "<empty>"],
-        id="peer",
-    ),
-    pytest.param(
-        RelationInfo("dev", "pg:db", "wp:db", "pgsql", "regular", relation_id=1),
-        [],
-        ["<empty>"],
-        id="empty-entries",
-    ),
-])
+@pytest.mark.parametrize(
+    "rel,entries,expected_fragments",
+    [
+        pytest.param(
+            RelationInfo("dev", "postgresql:db", "wordpress:db", "pgsql", "regular", relation_id=5),
+            [
+                RelationDataEntry("provider", "postgresql", "host", "10.0.0.1", "app"),
+                RelationDataEntry("provider", "postgresql/0", "key", "val", "unit"),
+            ],
+            ["relation-id: 5", "host"],
+            id="regular",
+        ),
+        pytest.param(
+            RelationInfo("dev", "etcd:cluster", "etcd:cluster", "etcd", "peer", relation_id=3),
+            [],
+            ["peer", "<empty>"],
+            id="peer",
+        ),
+        pytest.param(
+            RelationInfo("dev", "pg:db", "wp:db", "pgsql", "regular", relation_id=1),
+            [],
+            ["<empty>"],
+            id="empty-entries",
+        ),
+    ],
+)
 def test_format_plain_text_relation(rel, entries, expected_fragments):
 
     result = _rd_format_plain_text(rel, entries)
@@ -1101,25 +1150,28 @@ async def test_relation_data_view_update(pilot):
     rel = RelationInfo("dev", "pg:db", "wp:db", "pgsql", "regular", relation_id=1)
     view.update(rel, [RelationDataEntry("provider", "pg", "host", "10.0.0.1", "app")])
     await pilot.pause()
-    assert view.query_one("#rd-scroll").display is True
+    assert view.query_one("#rd-panel").display is True
     assert view.query_one("#rd-empty").display is False
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("view_id,method_name,method_args", [
-    pytest.param(
-        "test-rd-load",
-        "show_loading",
-        [RelationInfo("dev", "pg:db", "wp:db", "pgsql", "regular")],
-        id="loading",
-    ),
-    pytest.param(
-        "test-rd-err",
-        "show_error",
-        [RelationInfo("dev", "pg:db", "wp:db", "pgsql", "regular"), "timeout"],
-        id="error",
-    ),
-])
+@pytest.mark.parametrize(
+    "view_id,method_name,method_args",
+    [
+        pytest.param(
+            "test-rd-load",
+            "show_loading",
+            [RelationInfo("dev", "pg:db", "wp:db", "pgsql", "regular")],
+            id="loading",
+        ),
+        pytest.param(
+            "test-rd-err",
+            "show_error",
+            [RelationInfo("dev", "pg:db", "wp:db", "pgsql", "regular"), "timeout"],
+            id="error",
+        ),
+    ],
+)
 async def test_relation_data_view_visibility_states(pilot, view_id, method_name, method_args):
 
     view = RelationDataView(id=view_id)
@@ -1128,7 +1180,7 @@ async def test_relation_data_view_visibility_states(pilot, view_id, method_name,
     getattr(view, method_name)(*method_args)
     await pilot.pause()
     assert view.query_one("#rd-empty").display is True
-    assert view.query_one("#rd-scroll").display is False
+    assert view.query_one("#rd-panel").display is False
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1212,12 +1264,13 @@ async def test_status_view_check_action_close_filter_exception_safe(pilot):
 async def test_status_view_filter_changed_updates_filter(pilot):
     """Lines 583-584: Input.Changed on #filter-input sets _filter and rerenders."""
 
-
     view = pilot.app.screen.query_one("#status-view", StatusView)
-    view.update_apps([
-        AppInfo("postgresql", "dev", "postgresql", "14/stable", 1),
-        AppInfo("wordpress", "dev", "wordpress", "stable", 1),
-    ])
+    view.update_apps(
+        [
+            AppInfo("postgresql", "dev", "postgresql", "14/stable", 1),
+            AppInfo("wordpress", "dev", "wordpress", "stable", 1),
+        ]
+    )
     await pilot.pause()
 
     view.action_activate_filter()
@@ -1234,7 +1287,6 @@ async def test_status_view_filter_changed_updates_filter(pilot):
 @pytest.mark.asyncio
 async def test_status_view_filter_submitted_hides_input(pilot):
     """Lines 588-593: Input.Submitted on #filter-input hides the input."""
-
 
     view = pilot.app.screen.query_one("#status-view", StatusView)
     view.action_activate_filter()

@@ -12,6 +12,7 @@ Usage in Python / Rich markup::
     text = Text(value, style=palette.LINK)
     markup = f"[{palette.PRIMARY}]{label}[/]"
 """
+
 from __future__ import annotations
 
 import sys
@@ -21,20 +22,20 @@ if TYPE_CHECKING:
     from textual.theme import Theme
 
 # ── Brand colors ─────────────────────────────────────────────────────────────
-PRIMARY   = "#E95420"   # Brand primary   (Ubuntu Orange in ubuntu theme)
-SECONDARY = "#77216F"   # Brand secondary (Aubergine in ubuntu theme)
+PRIMARY = "#E95420"  # Brand primary   (Ubuntu Orange in ubuntu theme)
+SECONDARY = "#77216F"  # Brand secondary (Aubergine in ubuntu theme)
 
 # ── Semantic status colors ────────────────────────────────────────────────────
-SUCCESS = "#26A269"   # Active / healthy / admin access
-WARNING = "#EFB73E"   # Warning / maintenance / waiting / peer
-ERROR   = "#FF5555"   # Error / blocked / terminated
+SUCCESS = "#26A269"  # Active / healthy / admin access
+WARNING = "#EFB73E"  # Warning / maintenance / waiting / peer
+ERROR = "#FF5555"  # Error / blocked / terminated
 
 # ── UI accent colors ──────────────────────────────────────────────────────────
-LINK  = "#19B6EE"   # URLs, IP addresses, ports, consume access
-MUTED = "#888888"   # Unknown / inactive / read-only
+LINK = "#19B6EE"  # URLs, IP addresses, ports, consume access
+MUTED = "#888888"  # Unknown / inactive / read-only
 
 # ── Animation ─────────────────────────────────────────────────────────────────
-PULSE_OFF = "#004d26"   # Heartbeat indicator dim state (on state = SUCCESS)
+PULSE_OFF = "#004d26"  # Heartbeat indicator dim state (on state = SUCCESS)
 
 
 def init(theme: Theme) -> None:
