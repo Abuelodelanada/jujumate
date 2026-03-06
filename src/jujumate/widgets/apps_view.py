@@ -1,4 +1,3 @@
-import logging
 from typing import Any
 
 from rich.text import Text
@@ -11,8 +10,6 @@ from jujumate import palette
 from jujumate.models.entities import AppInfo
 from jujumate.widgets.resource_table import Column, ResourceTable
 
-logger = logging.getLogger(__name__)
-
 _COLUMNS = [
     Column("Name", "name"),
     Column("Model", "model", width=12),
@@ -23,7 +20,6 @@ _COLUMNS = [
     Column("Status", "status", width=12),
     Column("Message", "message"),
 ]
-
 
 class AppsView(Widget):
     DEFAULT_CSS = "AppsView { height: 1fr; }"
@@ -57,7 +53,6 @@ class AppsView(Widget):
         ]
         keys = [f"{a.model}/{a.name}" for a in apps]
         self.query_one(ResourceTable).update_rows(rows, keys=keys)
-        logger.debug("AppsView updated with %d apps", len(apps))
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         event.stop()

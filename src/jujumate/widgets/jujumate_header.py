@@ -1,4 +1,3 @@
-import logging
 from dataclasses import dataclass
 from typing import Any
 
@@ -10,10 +9,7 @@ from textual.widgets import Static
 
 from jujumate import palette
 
-logger = logging.getLogger(__name__)
-
 _SUBTITLE = "Juju infrastructure TUI"
-
 
 @dataclass
 class HeaderContext:
@@ -32,7 +28,6 @@ class HeaderContext:
     machine_count: int = 0
     is_connected: bool = False
     timestamp: str = ""
-
 
 class JujuMateHeader(Widget):
     """Header with logo+identity on the left and contextual info on the right."""

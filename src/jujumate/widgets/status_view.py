@@ -1,4 +1,3 @@
-import logging
 from typing import Any
 
 from rich.text import Text
@@ -22,8 +21,6 @@ from jujumate.models.entities import (
 )
 from jujumate.widgets.resource_table import Column, ResourceTable
 
-logger = logging.getLogger(__name__)
-
 _STATUS_COLORS: dict[str, str] = {
     "active": palette.SUCCESS,
     "idle": palette.SUCCESS,
@@ -37,7 +34,6 @@ _STATUS_COLORS: dict[str, str] = {
     "unknown": palette.MUTED,
 }
 
-
 def _colored_status(status: str) -> Text:
     """Return a Rich Text object with the status colored by severity."""
     color = _STATUS_COLORS.get(status.strip().lower(), "")
@@ -45,13 +41,11 @@ def _colored_status(status: str) -> Text:
         return Text.from_markup(f"[{color}]{status}[/]")
     return Text(status)
 
-
 def _colored_ip(address: str) -> Text:
     """Color an IP address."""
     if address:
         return Text(address, style=palette.LINK)
     return Text(address)
-
 
 def _colored_relation(endpoint: str) -> Text:
     """Color the :rel_name part of an APP:REL endpoint."""
@@ -62,7 +56,6 @@ def _colored_relation(endpoint: str) -> Text:
         text.append(rel, style=palette.LINK)
         return text
     return Text(endpoint)
-
 
 _SAAS_COLUMNS = [
     Column("SAAS", "s-saas-name"),
@@ -131,9 +124,7 @@ _MACHINE_COLUMNS = [
     Column("Message", "s-mach-msg"),
 ]
 
-
 _MSG_TRUNC_WIDTH = 60
-
 
 def _matches_filter(text: str, *fields: Any) -> bool:
     """Return True if *text* is a case-insensitive substring of any field, or text is empty."""
@@ -142,13 +133,11 @@ def _matches_filter(text: str, *fields: Any) -> bool:
     lf = text.lower()
     return any(lf in str(f).lower() for f in fields)
 
-
 def _trunc_msg(text: str) -> str:
     """Truncate a message to _MSG_TRUNC_WIDTH chars, appending … if needed."""
     if len(text) <= _MSG_TRUNC_WIDTH:
         return text
     return text[: _MSG_TRUNC_WIDTH - 1] + "…"
-
 
 def _group_units(units: list) -> list[tuple]:
     """Return (unit, tree_prefix) tuples with subordinates placed after their principal.
@@ -170,14 +159,12 @@ def _group_units(units: list) -> list[tuple]:
             result.append((u, "└─ "))
     return result
 
-
 class _TrackedScroll(VerticalScroll, can_focus=False):
     """VerticalScroll that notifies its parent when scroll_y changes."""
 
     def watch_scroll_y(self, value: float) -> None:  # type: ignore[override]
         if isinstance(self.parent, StatusView):
             self.parent._update_scroll_indicator()
-
 
 class StatusView(Widget):
     """Displays a juju-status–style overview for the selected model."""
@@ -361,7 +348,6 @@ class StatusView(Widget):
         self._row_messages["status-apps-table"] = full_msgs
         self.query_one("#status-apps-table", ResourceTable).update_rows(rows)
         self._restore_cursor("status-apps-table", len(full_msgs))
-        logger.debug("StatusView apps updated: %d rows", len(rows))
 
     def update_saas(self, saas: list[SAASInfo]) -> None:
         self._all_saas = saas
@@ -377,7 +363,6 @@ class StatusView(Widget):
         has_saas = bool(rows)
         self.query_one("#status-saas-table").display = has_saas
         self.query_one("#status-saas-table", ResourceTable).update_rows(rows)
-        logger.debug("StatusView SAAS updated: %d rows", len(rows))
 
     def update_units(self, units: list[UnitInfo], is_kubernetes: bool = False) -> None:
         self._all_units = units
@@ -448,7 +433,6 @@ class StatusView(Widget):
         self._row_messages["status-units-table"] = full_msgs
         table.update_rows(rows)
         self._restore_cursor("status-units-table", len(full_msgs))
-        logger.debug("StatusView units updated: %d rows (k8s=%s)", len(rows), self._is_kubernetes)
 
     def update_offers(self, offers: list[OfferInfo]) -> None:
         self._all_offers = offers
@@ -480,7 +464,6 @@ class StatusView(Widget):
         ]
         self.query_one("#status-offers-table", ResourceTable).update_rows(rows)
         self._restore_cursor("status-offers-table", len(rows))
-        logger.debug("StatusView offers updated: %d rows", len(rows))
 
     def update_machines(self, machines: list[MachineInfo], is_kubernetes: bool = False) -> None:
         self._all_machines = machines
@@ -518,7 +501,6 @@ class StatusView(Widget):
         self._row_messages["status-machines-table"] = full_msgs
         self.query_one("#status-machines-table", ResourceTable).update_rows(rows)
         self._restore_cursor("status-machines-table", len(full_msgs))
-        logger.debug("StatusView machines updated: %d rows", len(rows))
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
         try:
@@ -593,7 +575,6 @@ class StatusView(Widget):
         table.display = bool(rows)
         table.update_rows(rows)
         self._restore_cursor("status-rels-table", len(rows))
-        logger.debug("StatusView relations updated: %d rows", len(rows))
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Post RelationSelected or AppSelected when user presses Enter on a row."""

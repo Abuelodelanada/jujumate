@@ -20,7 +20,7 @@ class AppSettings:
     default_controller: str | None = None
     juju_data_dir: Path = _real_home / ".local" / "share" / "juju"
     log_file: Path = _real_home / ".local" / "state" / "jujumate" / "jujumate.log"
-    log_level: int = logging.WARNING
+    log_level: int = logging.INFO
     theme: str = "ubuntu"
 
 

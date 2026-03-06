@@ -1,4 +1,3 @@
-import logging
 from typing import Any
 
 from textual.app import ComposeResult
@@ -9,8 +8,6 @@ from jujumate.models.entities import ModelInfo
 from jujumate.widgets.navigable_table import NavigableTable
 from jujumate.widgets.resource_table import Column
 
-logger = logging.getLogger(__name__)
-
 _COLUMNS = [
     Column("Name", "name"),
     Column("Controller", "controller", width=16),
@@ -19,7 +16,6 @@ _COLUMNS = [
     Column("Machines", "machines", width=10),
     Column("Apps", "apps", width=6),
 ]
-
 
 class ModelsView(Widget):
     DEFAULT_CSS = "ModelsView { height: 1fr; }"
@@ -49,7 +45,6 @@ class ModelsView(Widget):
         ]
         keys = [f"{m.controller}/{m.name}" for m in models]
         self.query_one(NavigableTable).update_rows(rows, keys=keys)
-        logger.debug("ModelsView updated with %d models", len(models))
 
     def select_model(self, controller: str, model: str) -> None:
         """Position the cursor on the given controller/model row."""

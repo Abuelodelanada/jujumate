@@ -12,10 +12,12 @@ def setup_logging(settings: AppSettings) -> None:
     handler = logging.handlers.RotatingFileHandler(
         log_file, maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8"
     )
-    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)-8s %(name)s: %(message)s"))
+    handler.setFormatter(
+        logging.Formatter("%(asctime)s %(levelname)-8s %(module)s %(message)s")
+    )
 
     root = logging.getLogger()
     root.setLevel(settings.log_level)
     root.addHandler(handler)
 
-    logging.getLogger("juju").setLevel(logging.ERROR)
+    logging.getLogger("juju").setLevel(logging.WARNING)

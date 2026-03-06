@@ -459,7 +459,6 @@ class MainScreen(Screen):
             model_name = self._auto_select_model
             self._auto_select_model = None  # only once
             self._apply_auto_select(model_name)
-        logger.debug("Data refreshed at %s", self._last_refresh_ts)
 
     def _apply_auto_select(self, model_name: str) -> None:
         model_info = next((m for m in self._all_models if m.name == model_name), None)

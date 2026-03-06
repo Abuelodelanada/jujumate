@@ -1,4 +1,3 @@
-import logging
 from typing import Any
 
 from rich import box as rich_box
@@ -15,8 +14,6 @@ from textual.widgets import Label, Static
 
 from jujumate import palette
 from jujumate.widgets.resource_table import Column
-
-logger = logging.getLogger(__name__)
 
 
 class NavigableTable(Widget, can_focus=True):
@@ -109,7 +106,6 @@ class NavigableTable(Widget, can_focus=True):
             t.add_row(arrow, *row)
 
         self.query_one("#nt-content", Static).update(t)
-        logger.debug("NavigableTable refreshed: %d rows, cursor=%d", len(self._rows), self._cursor)
 
     def move_cursor_to_key(self, key: str) -> None:
         """Move the cursor to the row with the given key (no-op if not found)."""

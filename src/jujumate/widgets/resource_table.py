@@ -1,4 +1,3 @@
-import logging
 from dataclasses import dataclass
 from typing import Any
 
@@ -8,15 +7,11 @@ from textual.message import Message
 from textual.widget import Widget
 from textual.widgets import DataTable, Label
 
-logger = logging.getLogger(__name__)
-
-
 @dataclass
 class Column:
     label: str
     key: str
     width: int | None = None
-
 
 class ResourceTable(Widget):
     """Generic reusable DataTable for displaying Juju resources."""
@@ -92,10 +87,8 @@ class ResourceTable(Widget):
                 height = heights[i] if heights else 1
                 table.add_row(*row, key=key, height=height)
             self.query_one("#empty-label").display = False
-            logger.debug("ResourceTable updated with %d rows", len(rows))
         else:
             self.query_one("#empty-label").display = True
-            logger.debug("ResourceTable has no rows to display")
 
     def set_loading(self, loading: bool) -> None:
         """Show or hide a loading indicator."""

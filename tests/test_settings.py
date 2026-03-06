@@ -57,7 +57,7 @@ def test_empty_file_returns_defaults(tmp_path):
 
 def test_default_log_level_is_warning(tmp_path):
     settings = load_settings(tmp_path / "config.yaml")
-    assert settings.log_level == logging.WARNING
+    assert settings.log_level == logging.INFO
 
 
 def test_custom_log_level(tmp_path):

@@ -1,4 +1,3 @@
-import logging
 from typing import Any
 
 from rich import box as rich_box
@@ -13,8 +12,6 @@ from textual.widgets import Label, Rule, Static
 from jujumate import palette
 from jujumate.models.entities import AppConfigEntry, AppInfo
 
-logger = logging.getLogger(__name__)
-
 _C_KEY = "bold white"
 _C_META = "dim"
 
@@ -25,7 +22,6 @@ _STATUS_COLORS: dict[str, str] = {
     "waiting": palette.WARNING,
     "maintenance": palette.WARNING,
 }
-
 
 def _meta_markup(app: AppInfo) -> str:
     """Build Rich markup for the metadata header (charm, channel, rev, status)."""
@@ -46,7 +42,6 @@ def _meta_markup(app: AppInfo) -> str:
             styled = value
         lines.append(f"[bold]{label}[/bold]{styled}")
     return "\n".join(lines)
-
 
 def _build_config_renderable(entries: list[AppConfigEntry]) -> Table:
     """Build the config key/value table."""
@@ -87,7 +82,6 @@ def _build_config_renderable(entries: list[AppConfigEntry]) -> Table:
 
     return t
 
-
 def _format_plain_text(app: AppInfo, entries: list[AppConfigEntry]) -> str:
     """Format app config as plain text for clipboard."""
     lines = [
@@ -107,7 +101,6 @@ def _format_plain_text(app: AppInfo, entries: list[AppConfigEntry]) -> str:
     for e in defaults:
         lines.append(f"  {e.key}: {e.value}")
     return "\n".join(lines)
-
 
 class AppConfigView(Widget):
     """Shows the configuration for a selected application."""
@@ -175,7 +168,6 @@ class AppConfigView(Widget):
         self.query_one("#ac-content", Static).update(renderable)
         self.query_one("#ac-empty").display = False
         self.query_one("#ac-panel").display = True
-        logger.debug("AppConfigView updated: app '%s', %d entries", app.name, len(entries))
 
     def show_loading(self, app: AppInfo) -> None:
         """Show a loading state while config is being fetched."""

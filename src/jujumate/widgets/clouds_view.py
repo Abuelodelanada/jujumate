@@ -1,4 +1,3 @@
-import logging
 from typing import Any
 
 from textual.app import ComposeResult
@@ -9,15 +8,12 @@ from jujumate.models.entities import CloudInfo
 from jujumate.widgets.navigable_table import NavigableTable
 from jujumate.widgets.resource_table import Column
 
-logger = logging.getLogger(__name__)
-
 _COLUMNS = [
     Column("Name", "name"),
     Column("Type", "type", width=12),
     Column("Regions", "regions", width=20),
     Column("Credentials", "credentials", width=20),
 ]
-
 
 class CloudsView(Widget):
     DEFAULT_CSS = "CloudsView { height: 1fr; }"
@@ -45,7 +41,6 @@ class CloudsView(Widget):
         ]
         keys = [c.name for c in clouds]
         self.query_one(NavigableTable).update_rows(rows, keys=keys)
-        logger.debug("CloudsView updated with %d clouds", len(clouds))
 
     def on_navigable_table_row_selected(self, message: NavigableTable.RowSelected) -> None:
         message.stop()

@@ -56,7 +56,7 @@ class JujuClient:
         self._controller = Controller()
 
     async def connect(self) -> None:
-        logger.info("Connecting to controller: %s", self._controller_name or "current")
+        logger.debug("Connecting to controller: %s", self._controller_name or "current")
         try:
             if self._controller_name:
                 await self._controller.connect(self._controller_name)
@@ -64,10 +64,10 @@ class JujuClient:
                 await self._controller.connect_current()
         except Exception as e:
             raise JujuClientError(f"Failed to connect to controller: {e}") from e
-        logger.info("Connected to controller: %s", self._controller.controller_name)
+        logger.debug("Connected to controller: %s", self._controller.controller_name)
 
     async def disconnect(self) -> None:
-        logger.info("Disconnecting from controller")
+        logger.debug("Disconnecting from controller: %s", self._controller_name or "current")
         await self._controller.disconnect()
 
     async def __aenter__(self) -> "JujuClient":
@@ -97,7 +97,9 @@ class JujuClient:
                 )
             ]
         except Exception:
-            logger.exception("Failed to get controller info")
+            logger.exception(
+                "Failed to get controller info for '%s'", self._controller_name or "current"
+            )
             controllers = []
         logger.debug("Fetched %d controllers", len(controllers))
         return controllers
@@ -533,40 +535,16 @@ class JujuClient:
             for app_name, _own_side, other_side, other_app_name in sides:
                 app = model.applications.get(app_name)
                 if not app or not app.units:
-                    logger.debug("get_relation_data: no app or no units for %s", app_name)
                     continue
                 unit_obj = next(iter(app.units))
                 unit_tag = "unit-" + unit_obj.name.replace("/", "-")
-                logger.debug(
-                    "get_relation_data: querying unit %s (tag=%s)", unit_obj.name, unit_tag
-                )
                 result = await facade.UnitsInfo(entities=[juju_client.Entity(unit_tag)])
-                logger.debug("get_relation_data: raw result type=%s value=%r", type(result), result)
                 if not result.results:
                     continue
                 unit_result = result.results[0]
-                logger.debug(
-                    "get_relation_data: unit_result type=%s error=%r result=%r",
-                    type(unit_result),
-                    unit_result.error,
-                    unit_result.result,
-                )
                 if unit_result.error or not unit_result.result:
                     continue
-                logger.debug(
-                    "get_relation_data: relation_data count=%d, looking for relation_id=%d",
-                    len(unit_result.result.relation_data or []),
-                    relation_id,
-                )
                 for ep_data in unit_result.result.relation_data or []:
-                    logger.debug(
-                        "get_relation_data: ep_data relation_id=%r endpoint=%r"
-                        " applicationdata=%r unit_relation_data keys=%r",
-                        ep_data.relation_id,
-                        ep_data.endpoint,
-                        ep_data.applicationdata,
-                        list((ep_data.unit_relation_data or {}).keys()),
-                    )
                     if ep_data.relation_id != relation_id:
                         continue
                     # Application-level data bag (remote side's app data)

@@ -1,4 +1,3 @@
-import logging
 from typing import Any
 
 from textual.app import ComposeResult
@@ -6,8 +5,6 @@ from textual.widget import Widget
 
 from jujumate.models.entities import UnitInfo
 from jujumate.widgets.resource_table import Column, ResourceTable
-
-logger = logging.getLogger(__name__)
 
 _COLUMNS = [
     Column("Name", "name"),
@@ -17,7 +14,6 @@ _COLUMNS = [
     Column("Agent", "agent", width=12),
     Column("Address", "address", width=16),
 ]
-
 
 class UnitsView(Widget):
     DEFAULT_CSS = "UnitsView { height: 1fr; }"
@@ -33,4 +29,3 @@ class UnitsView(Widget):
             (u.name, u.app, u.machine, u.workload_status, u.agent_status, u.address) for u in units
         ]
         self.query_one(ResourceTable).update_rows(rows)
-        logger.debug("UnitsView updated with %d units", len(units))

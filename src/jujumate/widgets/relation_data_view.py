@@ -1,4 +1,3 @@
-import logging
 from typing import Any
 
 from rich import box as rich_box
@@ -15,11 +14,8 @@ from textual.widgets import Label, Static
 from jujumate import palette
 from jujumate.models.entities import RelationDataEntry, RelationInfo
 
-logger = logging.getLogger(__name__)
-
 _C_KEY = "bold white"
 _C_META = "dim"
-
 
 def _kv_table(data: dict[str, str]) -> Table:
     """Build a compact key→value Rich table for a single data bag."""
@@ -33,7 +29,6 @@ def _kv_table(data: dict[str, str]) -> Table:
         t.add_row(Text("<empty>", style=_C_META), "")
     return t
 
-
 def _unit_panel(unit_name: str, data: dict[str, str], is_leader: bool, color: str) -> Panel:
     """Render a single unit data bag as a titled panel."""
     title = Text()
@@ -41,7 +36,6 @@ def _unit_panel(unit_name: str, data: dict[str, str], is_leader: bool, color: st
     if is_leader:
         title.append("*", style="bold yellow")
     return Panel(_kv_table(data), title=title, border_style=color, expand=True)
-
 
 def _build_relation_renderable(
     relation: RelationInfo,
@@ -125,7 +119,6 @@ def _build_relation_renderable(
 
     return outer
 
-
 def _format_plain_text(
     relation: RelationInfo,
     entries: list[RelationDataEntry],
@@ -180,7 +173,6 @@ def _format_plain_text(
         lines.append("")
 
     return "\n".join(lines)
-
 
 class RelationDataView(Widget):
     """Shows the data bags for a selected relation (jhack-style layout)."""
@@ -237,11 +229,6 @@ class RelationDataView(Widget):
         self.query_one("#rd-content", Static).update(renderable)
         self.query_one("#rd-empty").display = False
         self.query_one("#rd-panel").display = True
-        logger.debug(
-            "RelationDataView updated: relation %d, %d entries",
-            relation.relation_id,
-            len(entries),
-        )
 
     def show_loading(self, relation: RelationInfo) -> None:
         """Show a loading state while data is being fetched."""

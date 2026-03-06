@@ -1,4 +1,3 @@
-import logging
 from typing import Any
 
 from textual.app import ComposeResult
@@ -9,8 +8,6 @@ from jujumate.models.entities import ControllerInfo
 from jujumate.widgets.navigable_table import NavigableTable
 from jujumate.widgets.resource_table import Column
 
-logger = logging.getLogger(__name__)
-
 _COLUMNS = [
     Column("Name", "name"),
     Column("Cloud", "cloud", width=14),
@@ -18,7 +15,6 @@ _COLUMNS = [
     Column("Juju Version", "version", width=14),
     Column("Models", "models", width=8),
 ]
-
 
 class ControllersView(Widget):
     DEFAULT_CSS = "ControllersView { height: 1fr; }"
@@ -40,7 +36,6 @@ class ControllersView(Widget):
         ]
         keys = [c.name for c in controllers]
         self.query_one(NavigableTable).update_rows(rows, keys=keys)
-        logger.debug("ControllersView updated with %d controllers", len(controllers))
 
     def on_navigable_table_row_selected(self, message: NavigableTable.RowSelected) -> None:
         message.stop()
