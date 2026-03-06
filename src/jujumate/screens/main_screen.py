@@ -134,13 +134,24 @@ class MainScreen(Screen):
         if self._poll_timer is not None:
             self._poll_timer.stop()
 
+    _TAB_FOCUS_MAP = {
+        "tab-clouds": "#clouds-table",
+        "tab-controllers": "#controllers-table",
+        "tab-models": "#models-table",
+    }
+
     def action_switch_tab(self, tab_id: str) -> None:
         tc = self.query_one(TabbedContent)
         tc.active = tab_id
         self._refresh_header()
+        if widget_id := self._TAB_FOCUS_MAP.get(tab_id):
+            self.set_timer(0.05, self.query_one(widget_id).focus)
 
     def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
         self._refresh_header()
+        tab_id = event.tab.id if event.tab else ""
+        if widget_id := self._TAB_FOCUS_MAP.get(tab_id):
+            self.set_timer(0.05, self.query_one(widget_id).focus)
 
     async def action_refresh_data(self) -> None:
         self.notify("Refreshing…")
