@@ -21,3 +21,4 @@ def setup_logging(settings: AppSettings) -> None:
     root.addHandler(handler)
 
     logging.getLogger("juju").setLevel(logging.WARNING)
+    logging.getLogger("juju.client.connection").setLevel(logging.ERROR)
