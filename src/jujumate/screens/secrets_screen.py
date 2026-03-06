@@ -25,6 +25,8 @@ class SecretDetailScreen(ModalScreen):
         Binding("y", "copy_value", "Copy value", show=False),
     ]
 
+    _MASK = "••••••••"
+
     DEFAULT_CSS = """
     SecretDetailScreen {
         align: center middle;
@@ -75,6 +77,20 @@ class SecretDetailScreen(ModalScreen):
     SecretDetailScreen .kv-val {
         width: 1fr;
     }
+    SecretDetailScreen .kv-val.masked {
+        color: $text-muted;
+        text-style: italic;
+    }
+    SecretDetailScreen #secret-data > ListItem.kv-selected .kv-val.masked {
+        color: $accent;
+        text-style: bold italic;
+    }
+    SecretDetailScreen #secret-hint {
+        height: auto;
+        color: $text-muted;
+        text-style: italic;
+        margin-top: 1;
+    }
     """
 
     def __init__(self, controller_name: str, model_name: str, secret: SecretInfo) -> None:
@@ -110,6 +126,7 @@ class SecretDetailScreen(ModalScreen):
             yield Rule()
             yield Label("Loading content…", id="secret-loading")
             yield ListView(id="secret-data")
+            yield Label("y copy to clipboard", id="secret-hint")
 
     @work
     async def _fetch(self, controller_name: str, model_name: str, secret_uri: str) -> None:
@@ -126,7 +143,7 @@ class SecretDetailScreen(ModalScreen):
                         ListItem(
                             Horizontal(
                                 Label(f"[bold]{k.ljust(col_width)}[/bold]", classes="kv-key"),
-                                Label(data[k], classes="kv-val"),
+                                Label(self._MASK, classes="kv-val masked"),
                             )
                         )
                     )

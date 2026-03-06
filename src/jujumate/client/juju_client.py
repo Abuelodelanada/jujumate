@@ -1,3 +1,4 @@
+import base64
 import logging
 from typing import Any
 
@@ -29,6 +30,20 @@ def _s(v: Any) -> str:
     if v is None:
         return ""
     return v.decode() if isinstance(v, bytes) else str(v)
+
+
+def _decode_secret_value(v: Any) -> str:
+    """Decode a Juju secret value.
+
+    Juju stores secret values base64-encoded. Attempt to decode; if the result
+    is valid UTF-8 use it, otherwise return the original string unchanged.
+    """
+    raw = _s(v)
+    try:
+        decoded = base64.b64decode(raw, validate=True).decode("utf-8")
+        return decoded
+    except Exception:
+        return raw
 
 
 class JujuClientError(Exception):
@@ -441,7 +456,7 @@ class JujuClient:
                     if value is not None:
                         data = getattr(value, "data", None)
                         if data:
-                            return dict(data)
+                            return {k: _decode_secret_value(v) for k, v in data.items()}
             return {}
         finally:
             await model.disconnect()
