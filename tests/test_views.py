@@ -806,9 +806,9 @@ def test_group_units_with_orphan_subordinates():
     sub_known = UnitInfo("nrpe/0", "nrpe", "0", "active", "idle", subordinate_of="pg/0")
     sub_orphan = UnitInfo("lldp/0", "lldp", "0", "active", "idle", subordinate_of="missing/0")
     result = _group_units([principal, sub_known, sub_orphan])
-    assert result[0] == principal
-    assert result[1] == sub_known
-    assert result[2] == sub_orphan
+    assert result[0] == (principal, "")
+    assert result[1] == (sub_known, "└─ ")
+    assert result[2] == (sub_orphan, "└─ ")
 
 
 def test_status_view_relation_selected_message():

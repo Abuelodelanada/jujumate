@@ -150,16 +150,24 @@ def _trunc_msg(text: str) -> str:
     return text[: _MSG_TRUNC_WIDTH - 1] + "…"
 
 
-def _group_units(units: list) -> list:
-    """Return units with subordinates placed immediately after their principal."""
+def _group_units(units: list) -> list[tuple]:
+    """Return (unit, tree_prefix) tuples with subordinates placed after their principal.
+
+    tree_prefix is "" for principals, "├─ " for non-last subordinates, "└─ " for the last.
+    """
     principals = [u for u in units if not u.subordinate_of]
-    result = []
-    for principal in principals:
-        result.append(principal)
-        result.extend(u for u in units if u.subordinate_of == principal.name)
-    # Append any orphan subordinates (principal not in this view) at the end
     known_principals = {p.name for p in principals}
-    result.extend(u for u in units if u.subordinate_of and u.subordinate_of not in known_principals)
+    result: list[tuple] = []
+    for principal in principals:
+        result.append((principal, ""))
+        subs = [u for u in units if u.subordinate_of == principal.name]
+        for i, sub in enumerate(subs):
+            prefix = "└─ " if i == len(subs) - 1 else "├─ "
+            result.append((sub, prefix))
+    # Orphan subordinates (principal not present in this view)
+    for u in units:
+        if u.subordinate_of and u.subordinate_of not in known_principals:
+            result.append((u, "└─ "))
     return result
 
 
@@ -397,8 +405,13 @@ class StatusView(Widget):
         full_msgs = []
         if self._is_kubernetes:
             table.reset_columns(_UNIT_COLUMNS_K8S)
-            for u in ordered:
-                name = f"  {u.name}" if u.subordinate_of else u.name
+            for u, tree_prefix in ordered:
+                if tree_prefix:
+                    name = Text()
+                    name.append(tree_prefix, style=palette.MUTED)
+                    name.append(u.name)
+                else:
+                    name = Text(u.name)
                 rows.append(
                     (
                         name,
@@ -412,8 +425,13 @@ class StatusView(Widget):
                 full_msgs.append(u.message)
         else:
             table.reset_columns(_UNIT_COLUMNS_IAAS)
-            for u in ordered:
-                name = f"  {u.name}" if u.subordinate_of else u.name
+            for u, tree_prefix in ordered:
+                if tree_prefix:
+                    name = Text()
+                    name.append(tree_prefix, style=palette.MUTED)
+                    name.append(u.name)
+                else:
+                    name = Text(u.name)
                 machine = "" if u.subordinate_of else u.machine
                 rows.append(
                     (
