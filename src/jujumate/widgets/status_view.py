@@ -575,11 +575,14 @@ class StatusView(Widget):
         self._render_relations()
 
     def _render_relations(self) -> None:
-        filtered = [
-            r
-            for r in self._all_relations
-            if _matches_filter(self._filter, r.provider, r.requirer, r.interface, r.type)
-        ]
+        filtered = sorted(
+            (
+                r
+                for r in self._all_relations
+                if _matches_filter(self._filter, r.provider, r.requirer, r.interface, r.type)
+            ),
+            key=lambda r: (r.type, r.provider, r.requirer),
+        )
         self._displayed_relations = filtered
         self._relations = filtered
         rows = [
