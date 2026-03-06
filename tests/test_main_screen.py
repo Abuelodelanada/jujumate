@@ -234,8 +234,8 @@ async def test_model_selected_switches_to_status_and_filters(pilot):
 
     screen = pilot.app.screen
     screen._all_apps = [
-        AppInfo("pg", "dev", "pg", "14/stable", 1),
-        AppInfo("mysql", "prod", "mysql", "8/stable", 1),
+        AppInfo("pg", "dev", "pg", "14/stable", 1, controller="ctrl"),
+        AppInfo("mysql", "prod", "mysql", "8/stable", 1, controller="other-ctrl"),
     ]
     mock_client = AsyncMock()
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -700,13 +700,15 @@ async def test_models_updated_prunes_stale_relations(pilot):
     screen.on_relations_updated(
         RelationsUpdated(
             model="deleted-model",
-            relations=[RelationInfo("deleted-model", "pg:db", "wp:db", "pgsql", "regular")],
+            controller="ctrl",
+            relations=[RelationInfo("deleted-model", "pg:db", "wp:db", "pgsql", "regular", controller="ctrl")],
         )
     )
     screen.on_relations_updated(
         RelationsUpdated(
             model="surviving-model",
-            relations=[RelationInfo("surviving-model", "mysql:db", "wp:db", "mysql", "regular")],
+            controller="ctrl",
+            relations=[RelationInfo("surviving-model", "mysql:db", "wp:db", "mysql", "regular", controller="ctrl")],
         )
     )
     assert any(r.model == "deleted-model" for r in screen._all_relations)
@@ -789,8 +791,9 @@ async def test_models_updated_keeps_selected_model_when_still_exists(pilot):
     """When the selected model still exists, it stays selected and data is kept."""
     screen = pilot.app.screen
     screen._selected_model = "my-model"
+    screen._selected_controller = "ctrl"
     screen._all_relations = [
-        RelationInfo("my-model", "pg:db", "wp:db", "pgsql", "regular"),
+        RelationInfo("my-model", "pg:db", "wp:db", "pgsql", "regular", controller="ctrl"),
     ]
 
     screen.on_models_updated(

@@ -63,18 +63,21 @@ class MachinesUpdated(JujuDataMessage):
 @dataclass
 class RelationsUpdated(JujuDataMessage):
     model: str = ""
+    controller: str = ""
     relations: list[RelationInfo] = field(default_factory=list)
 
 
 @dataclass
 class OffersUpdated(JujuDataMessage):
     model: str = ""
+    controller: str = ""
     offers: list[OfferInfo] = field(default_factory=list)
 
 
 @dataclass
 class SaasUpdated(JujuDataMessage):
     model: str = ""
+    controller: str = ""
     saas: list[SAASInfo] = field(default_factory=list)
 
 
@@ -143,9 +146,9 @@ class JujuPoller:
         all_clouds: dict[str, CloudInfo] = {}  # dedup by cloud name
         all_controllers: dict[str, ControllerInfo] = {}  # dedup by controller name
         all_models: dict[tuple[str, str], ModelInfo] = {}  # dedup by (controller, model)
-        all_apps: dict[tuple[str, str], AppInfo] = {}  # dedup by (model, app)
-        all_units: dict[tuple[str, str, str], UnitInfo] = {}  # dedup by (model, app, unit)
-        all_machines: dict[tuple[str, str], MachineInfo] = {}  # dedup by (model, machine)
+        all_apps: dict[tuple[str, str, str], AppInfo] = {}  # dedup by (controller, model, app)
+        all_units: dict[tuple[str, str, str, str], UnitInfo] = {}  # (controller, model, app, unit)
+        all_machines: dict[tuple[str, str, str], MachineInfo] = {}  # (controller, model, machine)
         failed = 0
 
         for name in self._controller_names:
@@ -161,11 +164,11 @@ class JujuPoller:
                         )
                         all_models[(model_info.controller, model_info.name)] = model_info
                         for app in apps:
-                            all_apps[(app.model, app.name)] = app
+                            all_apps[(app.controller, app.model, app.name)] = app
                         for unit in units:
-                            all_units[(unit.model, unit.app, unit.name)] = unit
+                            all_units[(unit.controller, unit.model, unit.app, unit.name)] = unit
                         for machine in machines:
-                            all_machines[(model_name, machine.id)] = machine
+                            all_machines[(machine.controller, model_name, machine.id)] = machine
             except Exception:
                 logger.exception("Failed to poll controller '%s'", name)
                 failed += 1

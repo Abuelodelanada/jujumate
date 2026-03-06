@@ -149,6 +149,7 @@ class JujuClient:
                             address=_s(app_st.public_address),
                             exposed=bool(app_st.exposed),
                             can_upgrade_to=_s(app_st.can_upgrade_to),
+                            controller=self._controller_name or "",
                         )
                     )
                     for unit_name, unit_st in (app_st.units or {}).items():
@@ -174,6 +175,7 @@ class JujuClient:
                                 message=_s(unit_st.workload_status.info)
                                 if unit_st.workload_status
                                 else "",
+                                controller=self._controller_name or "",
                             )
                         )
                         for sub_name, sub_st in (unit_st.subordinates or {}).items():
@@ -200,6 +202,7 @@ class JujuClient:
                                     if sub_st.workload_status
                                     else "",
                                     subordinate_of=unit_name,
+                                    controller=self._controller_name or "",
                                 )
                             )
                 machines = []
@@ -229,6 +232,7 @@ class JujuClient:
                             base=base_str,
                             az=az,
                             message=_s(m_st.instance_status.info) if m_st.instance_status else "",
+                            controller=self._controller_name or "",
                         )
                     )
             finally:
@@ -308,6 +312,7 @@ class JujuClient:
                             interface=_s(rel.interface),
                             type="peer",
                             relation_id=int(rel.id_ or 0),
+                            controller=self._controller_name or "",
                         )
                     )
                 elif provider and requirer:
@@ -319,6 +324,7 @@ class JujuClient:
                             interface=_s(rel.interface),
                             type="regular",
                             relation_id=int(rel.id_ or 0),
+                            controller=self._controller_name or "",
                         )
                     )
             for offer_name, offer_st in (status.offers or {}).items():
@@ -349,6 +355,7 @@ class JujuClient:
                             endpoint=ep_name,
                             interface=_s(ep.interface),
                             role=_s(ep.role),
+                            controller=self._controller_name or "",
                         )
                     )
             # Juju 3.6+ renamed "remote-applications" to "application-endpoints".
@@ -368,6 +375,7 @@ class JujuClient:
                         else "",
                         store=store,
                         url=offer_url,
+                        controller=self._controller_name or "",
                     )
                 )
             for remote_name, remote_st in remote_apps.items():
@@ -380,6 +388,7 @@ class JujuClient:
                         status=remote_st.status.status if remote_st.status else "",
                         store=store,
                         url=offer_url,
+                        controller=self._controller_name or "",
                     )
                 )
         finally:

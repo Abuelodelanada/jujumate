@@ -44,6 +44,7 @@ class AppInfo:
     address: str = ""
     exposed: bool = False
     can_upgrade_to: str = ""
+    controller: str = ""
 
 
 @dataclass
@@ -53,6 +54,7 @@ class SAASInfo:
     status: str
     store: str
     url: str
+    controller: str = ""
 
 
 @dataclass
@@ -91,6 +93,7 @@ class OfferInfo:
     endpoint: str
     interface: str
     role: str
+    controller: str = ""
 
 
 @dataclass
@@ -101,6 +104,7 @@ class RelationInfo:
     interface: str
     type: str
     relation_id: int = 0
+    controller: str = ""
 
 
 @dataclass
@@ -143,6 +147,7 @@ class UnitInfo:
     message: str = ""
     subordinate_of: str = ""  # principal unit name, empty if this is a principal
     model: str = ""
+    controller: str = ""
 
 
 @dataclass
@@ -155,6 +160,7 @@ class MachineInfo:
     base: str
     az: str
     message: str = ""
+    controller: str = ""
 
 
 @dataclass
