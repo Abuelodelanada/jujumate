@@ -137,7 +137,7 @@ class JujuPoller:
 
     async def poll_once(self) -> None:
         """Fetch data from every controller and post aggregated update messages."""
-        logger.info("Polling %d controller(s)", len(self._controller_names))
+        logger.debug("Polling %d controller(s)", len(self._controller_names))
 
         if not self._controller_names:
             self._target.post_message(ConnectionFailed(error="No controllers configured"))
@@ -184,7 +184,7 @@ class JujuPoller:
         self._target.post_message(UnitsUpdated(units=list(all_units.values())))
         self._target.post_message(MachinesUpdated(machines=list(all_machines.values())))
         self._target.post_message(DataRefreshed())
-        logger.info(
+        logger.debug(
             "Poll complete: %d controller(s) OK, %d failed",
             len(self._controller_names) - failed,
             failed,
