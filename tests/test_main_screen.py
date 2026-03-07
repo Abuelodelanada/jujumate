@@ -701,14 +701,22 @@ async def test_models_updated_prunes_stale_relations(pilot):
         RelationsUpdated(
             model="deleted-model",
             controller="ctrl",
-            relations=[RelationInfo("deleted-model", "pg:db", "wp:db", "pgsql", "regular", controller="ctrl")],
+            relations=[
+                RelationInfo(
+                    "deleted-model", "pg:db", "wp:db", "pgsql", "regular", controller="ctrl"
+                )
+            ],
         )
     )
     screen.on_relations_updated(
         RelationsUpdated(
             model="surviving-model",
             controller="ctrl",
-            relations=[RelationInfo("surviving-model", "mysql:db", "wp:db", "mysql", "regular", controller="ctrl")],
+            relations=[
+                RelationInfo(
+                    "surviving-model", "mysql:db", "wp:db", "mysql", "regular", controller="ctrl"
+                )
+            ],
         )
     )
     assert any(r.model == "deleted-model" for r in screen._all_relations)

@@ -15,6 +15,7 @@ _COLUMNS = [
     Column("Address", "address", width=16),
 ]
 
+
 class UnitsView(Widget):
     DEFAULT_CSS = "UnitsView { height: 1fr; }"
 

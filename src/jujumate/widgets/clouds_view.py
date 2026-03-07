@@ -15,6 +15,7 @@ _COLUMNS = [
     Column("Credentials", "credentials", width=20),
 ]
 
+
 class CloudsView(Widget):
     DEFAULT_CSS = "CloudsView { height: 1fr; }"
 

@@ -34,6 +34,7 @@ _STATUS_COLORS: dict[str, str] = {
     "unknown": palette.MUTED,
 }
 
+
 def _colored_status(status: str) -> Text:
     """Return a Rich Text object with the status colored by severity."""
     color = _STATUS_COLORS.get(status.strip().lower(), "")
@@ -41,11 +42,13 @@ def _colored_status(status: str) -> Text:
         return Text.from_markup(f"[{color}]{status}[/]")
     return Text(status)
 
+
 def _colored_ip(address: str) -> Text:
     """Color an IP address."""
     if address:
         return Text(address, style=palette.LINK)
     return Text(address)
+
 
 def _colored_relation(endpoint: str) -> Text:
     """Color the :rel_name part of an APP:REL endpoint."""
@@ -56,6 +59,7 @@ def _colored_relation(endpoint: str) -> Text:
         text.append(rel, style=palette.LINK)
         return text
     return Text(endpoint)
+
 
 _SAAS_COLUMNS = [
     Column("SAAS", "s-saas-name"),
@@ -126,6 +130,7 @@ _MACHINE_COLUMNS = [
 
 _MSG_TRUNC_WIDTH = 60
 
+
 def _matches_filter(text: str, *fields: Any) -> bool:
     """Return True if *text* is a case-insensitive substring of any field, or text is empty."""
     if not text:
@@ -133,11 +138,13 @@ def _matches_filter(text: str, *fields: Any) -> bool:
     lf = text.lower()
     return any(lf in str(f).lower() for f in fields)
 
+
 def _trunc_msg(text: str) -> str:
     """Truncate a message to _MSG_TRUNC_WIDTH chars, appending … if needed."""
     if len(text) <= _MSG_TRUNC_WIDTH:
         return text
     return text[: _MSG_TRUNC_WIDTH - 1] + "…"
+
 
 def _group_units(units: list) -> list[tuple]:
     """Return (unit, tree_prefix) tuples with subordinates placed after their principal.
@@ -159,12 +166,14 @@ def _group_units(units: list) -> list[tuple]:
             result.append((u, "└─ "))
     return result
 
+
 class _TrackedScroll(VerticalScroll, can_focus=False):
     """VerticalScroll that notifies its parent when scroll_y changes."""
 
     def watch_scroll_y(self, value: float) -> None:  # type: ignore[override]
         if isinstance(self.parent, StatusView):
             self.parent._update_scroll_indicator()
+
 
 class StatusView(Widget):
     """Displays a juju-status–style overview for the selected model."""

@@ -21,6 +21,7 @@ _COLUMNS = [
     Column("Message", "message"),
 ]
 
+
 class AppsView(Widget):
     DEFAULT_CSS = "AppsView { height: 1fr; }"
 

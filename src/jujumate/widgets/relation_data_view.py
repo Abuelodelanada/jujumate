@@ -17,6 +17,7 @@ from jujumate.models.entities import RelationDataEntry, RelationInfo
 _C_KEY = "bold white"
 _C_META = "dim"
 
+
 def _kv_table(data: dict[str, str]) -> Table:
     """Build a compact key→value Rich table for a single data bag."""
     t = Table(box=None, show_header=False, padding=(0, 1), expand=False)
@@ -29,6 +30,7 @@ def _kv_table(data: dict[str, str]) -> Table:
         t.add_row(Text("<empty>", style=_C_META), "")
     return t
 
+
 def _unit_panel(unit_name: str, data: dict[str, str], is_leader: bool, color: str) -> Panel:
     """Render a single unit data bag as a titled panel."""
     title = Text()
@@ -36,6 +38,7 @@ def _unit_panel(unit_name: str, data: dict[str, str], is_leader: bool, color: st
     if is_leader:
         title.append("*", style="bold yellow")
     return Panel(_kv_table(data), title=title, border_style=color, expand=True)
+
 
 def _build_relation_renderable(
     relation: RelationInfo,
@@ -119,6 +122,7 @@ def _build_relation_renderable(
 
     return outer
 
+
 def _format_plain_text(
     relation: RelationInfo,
     entries: list[RelationDataEntry],
@@ -173,6 +177,7 @@ def _format_plain_text(
         lines.append("")
 
     return "\n".join(lines)
+
 
 class RelationDataView(Widget):
     """Shows the data bags for a selected relation (jhack-style layout)."""

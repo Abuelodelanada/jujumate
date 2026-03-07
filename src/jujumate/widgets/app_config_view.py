@@ -23,6 +23,7 @@ _STATUS_COLORS: dict[str, str] = {
     "maintenance": palette.WARNING,
 }
 
+
 def _meta_markup(app: AppInfo) -> str:
     """Build Rich markup for the metadata header (charm, channel, rev, status)."""
     fields = [
@@ -42,6 +43,7 @@ def _meta_markup(app: AppInfo) -> str:
             styled = value
         lines.append(f"[bold]{label}[/bold]{styled}")
     return "\n".join(lines)
+
 
 def _build_config_renderable(entries: list[AppConfigEntry]) -> Table:
     """Build the config key/value table."""
@@ -82,6 +84,7 @@ def _build_config_renderable(entries: list[AppConfigEntry]) -> Table:
 
     return t
 
+
 def _format_plain_text(app: AppInfo, entries: list[AppConfigEntry]) -> str:
     """Format app config as plain text for clipboard."""
     lines = [
@@ -101,6 +104,7 @@ def _format_plain_text(app: AppInfo, entries: list[AppConfigEntry]) -> str:
     for e in defaults:
         lines.append(f"  {e.key}: {e.value}")
     return "\n".join(lines)
+
 
 class AppConfigView(Widget):
     """Shows the configuration for a selected application."""

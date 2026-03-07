@@ -16,6 +16,7 @@ _COLUMNS = [
     Column("Models", "models", width=8),
 ]
 
+
 class ControllersView(Widget):
     DEFAULT_CSS = "ControllersView { height: 1fr; }"
 

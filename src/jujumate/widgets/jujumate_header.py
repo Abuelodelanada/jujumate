@@ -11,6 +11,7 @@ from jujumate import palette
 
 _SUBTITLE = "Juju infrastructure TUI"
 
+
 @dataclass
 class HeaderContext:
     active_tab: str = ""
@@ -28,6 +29,7 @@ class HeaderContext:
     machine_count: int = 0
     is_connected: bool = False
     timestamp: str = ""
+
 
 class JujuMateHeader(Widget):
     """Header with logo+identity on the left and contextual info on the right."""

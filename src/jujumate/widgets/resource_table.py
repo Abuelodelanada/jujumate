@@ -7,11 +7,13 @@ from textual.message import Message
 from textual.widget import Widget
 from textual.widgets import DataTable, Label
 
+
 @dataclass
 class Column:
     label: str
     key: str
     width: int | None = None
+
 
 class ResourceTable(Widget):
     """Generic reusable DataTable for displaying Juju resources."""

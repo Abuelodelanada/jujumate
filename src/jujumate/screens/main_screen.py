@@ -149,7 +149,7 @@ class MainScreen(Screen):
 
     def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
         self._refresh_header()
-        tab_id = event.tab.id if event.tab else ""
+        tab_id = (event.tab.id if event.tab else "") or ""
         if widget_id := self._TAB_FOCUS_MAP.get(tab_id):
             self.set_timer(0.05, self.query_one(widget_id).focus)
 
@@ -224,20 +224,24 @@ class MainScreen(Screen):
         else:
             ctrl = self._selected_controller
             apps = [
-                a for a in self._all_apps
+                a
+                for a in self._all_apps
                 if a.model == self._selected_model and (not ctrl or a.controller == ctrl)
             ]
             units = [
-                u for u in self._all_units
+                u
+                for u in self._all_units
                 if u.model == self._selected_model and (not ctrl or u.controller == ctrl)
             ]
             machines = [
-                m for m in self._all_machines
+                m
+                for m in self._all_machines
                 if m.model == self._selected_model and (not ctrl or m.controller == ctrl)
             ]
             model_info = next(
                 (
-                    m for m in self._all_models
+                    m
+                    for m in self._all_models
                     if m.name == self._selected_model and (not ctrl or m.controller == ctrl)
                 ),
                 None,
@@ -246,7 +250,8 @@ class MainScreen(Screen):
         ctrl = self._selected_controller
         relations = (
             [
-                r for r in self._all_relations
+                r
+                for r in self._all_relations
                 if r.model == self._selected_model and (not ctrl or r.controller == ctrl)
             ]
             if self._selected_model
@@ -254,7 +259,8 @@ class MainScreen(Screen):
         )
         offers = (
             [
-                o for o in self._all_offers
+                o
+                for o in self._all_offers
                 if o.model == self._selected_model and (not ctrl or o.controller == ctrl)
             ]
             if self._selected_model
@@ -262,7 +268,8 @@ class MainScreen(Screen):
         )
         saas = (
             [
-                s for s in self._all_saas
+                s
+                for s in self._all_saas
                 if s.model == self._selected_model and (not ctrl or s.controller == ctrl)
             ]
             if self._selected_model
@@ -296,7 +303,8 @@ class MainScreen(Screen):
         ctrl = self._selected_controller
         status_offers = (
             [
-                o for o in self._all_offers
+                o
+                for o in self._all_offers
                 if o.model == self._selected_model and (not ctrl or o.controller == ctrl)
             ]
             if self._selected_model
@@ -304,7 +312,8 @@ class MainScreen(Screen):
         )
         status_relations = (
             [
-                r for r in self._all_relations
+                r
+                for r in self._all_relations
                 if r.model == self._selected_model and (not ctrl or r.controller == ctrl)
             ]
             if self._selected_model
@@ -312,7 +321,8 @@ class MainScreen(Screen):
         )
         status_saas = (
             [
-                s for s in self._all_saas
+                s
+                for s in self._all_saas
                 if s.model == self._selected_model and (not ctrl or s.controller == ctrl)
             ]
             if self._selected_model
@@ -320,7 +330,8 @@ class MainScreen(Screen):
         )
         status_machines = (
             [
-                m for m in self._all_machines
+                m
+                for m in self._all_machines
                 if m.model == self._selected_model and (not ctrl or m.controller == ctrl)
             ]
             if self._selected_model
@@ -328,7 +339,8 @@ class MainScreen(Screen):
         )
         status_apps = (
             [
-                a for a in self._all_apps
+                a
+                for a in self._all_apps
                 if a.model == self._selected_model and (not ctrl or a.controller == ctrl)
             ]
             if self._selected_model
@@ -336,7 +348,8 @@ class MainScreen(Screen):
         )
         status_units = (
             [
-                u for u in self._all_units
+                u
+                for u in self._all_units
                 if u.model == self._selected_model and (not ctrl or u.controller == ctrl)
             ]
             if self._selected_model
@@ -347,7 +360,8 @@ class MainScreen(Screen):
         if not effective_cloud and self._selected_model:
             model_info = next(
                 (
-                    m for m in self._all_models
+                    m
+                    for m in self._all_models
                     if m.name == self._selected_model and (not ctrl or m.controller == ctrl)
                 ),
                 None,
@@ -389,7 +403,10 @@ class MainScreen(Screen):
         existing = {(m.controller, m.name) for m in message.models}
 
         # If the currently selected model was deleted, notify and switch to Models tab.
-        if self._selected_model and (self._selected_controller, self._selected_model) not in existing:
+        if (
+            self._selected_model
+            and (self._selected_controller, self._selected_model) not in existing
+        ):
             self.app.notify(
                 f"Model '{self._selected_model}' no longer exists.",
                 title="Model removed",
@@ -399,7 +416,9 @@ class MainScreen(Screen):
             self.action_switch_tab("tab-models")
 
         # Prune stale relations / offers / SAAS for models that no longer exist.
-        self._all_relations = [r for r in self._all_relations if (r.controller, r.model) in existing]
+        self._all_relations = [
+            r for r in self._all_relations if (r.controller, r.model) in existing
+        ]
         self._all_offers = [o for o in self._all_offers if (o.controller, o.model) in existing]
         self._all_saas = [s for s in self._all_saas if (s.controller, s.model) in existing]
 
@@ -425,7 +444,8 @@ class MainScreen(Screen):
     def on_relations_updated(self, message: RelationsUpdated) -> None:
         # Replace relations for this (controller, model) pair (keep other models' relations intact)
         self._all_relations = [
-            r for r in self._all_relations
+            r
+            for r in self._all_relations
             if not (r.model == message.model and r.controller == message.controller)
         ] + message.relations
         self._refresh_status_view()
@@ -435,7 +455,8 @@ class MainScreen(Screen):
     def on_offers_updated(self, message: OffersUpdated) -> None:
         # Replace offers for this (controller, model) pair (keep other models' offers intact)
         self._all_offers = [
-            o for o in self._all_offers
+            o
+            for o in self._all_offers
             if not (o.model == message.model and o.controller == message.controller)
         ] + message.offers
         self._refresh_status_view()
@@ -445,7 +466,8 @@ class MainScreen(Screen):
     def on_saas_updated(self, message: SaasUpdated) -> None:
         # Replace SAAS for this (controller, model) pair (keep other models' SAAS intact)
         self._all_saas = [
-            s for s in self._all_saas
+            s
+            for s in self._all_saas
             if not (s.model == message.model and s.controller == message.controller)
         ] + message.saas
         self._refresh_status_view()
@@ -539,8 +561,12 @@ class MainScreen(Screen):
                 len(saas),
                 model_name,
             )
-            self.post_message(RelationsUpdated(model=model_name, controller=controller_name, relations=relations))
-            self.post_message(OffersUpdated(model=model_name, controller=controller_name, offers=offers))
+            self.post_message(
+                RelationsUpdated(model=model_name, controller=controller_name, relations=relations)
+            )
+            self.post_message(
+                OffersUpdated(model=model_name, controller=controller_name, offers=offers)
+            )
             self.post_message(SaasUpdated(model=model_name, controller=controller_name, saas=saas))
         except Exception:
             logger.exception("Failed to fetch status details for model '%s'", model_name)
