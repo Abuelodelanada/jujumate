@@ -84,6 +84,7 @@ On first launch JujuMate connects to your current Juju controller and auto-selec
 | `/` | Filter by app name, charm, channel or message |
 | `Esc` | Clear filter |
 | `Enter` on app | Open App Config viewer |
+| `Enter` on offer | Open Offer detail |
 | `Enter` on relation | Open Relation Data inspector |
 
 ### Modals
@@ -92,8 +93,9 @@ On first launch JujuMate connects to your current Juju controller and auto-selec
 |-----|--------|
 | `Shift+S` | Open Secrets browser for the current model |
 | `Shift+O` | Open Offers browser for the current controller |
+| `T` | Open theme switcher |
 | `Enter` | Open detail view |
-| `y` | Copy value to clipboard (Relation Data) |
+| `y` | Copy value to clipboard (Relation Data / Secrets) |
 | `Esc` | Close modal |
 
 ---
@@ -137,14 +139,16 @@ theme: ubuntu               # Theme name (default: ubuntu)
 refresh_interval: 5         # Seconds between auto-refresh (default: 5)
 default_controller: prod    # Controller to use (default: current Juju controller)
 log_file: ~/.local/state/jujumate/jujumate.log
-log_level: WARNING          # DEBUG | INFO | WARNING | ERROR | CRITICAL
+log_level: INFO             # DEBUG | INFO | WARNING | ERROR | CRITICAL
 ```
 
 ---
 
 ## Themes
 
-JujuMate ships with two built-in themes: **`ubuntu`** (default) and **`dark`**.
+JujuMate ships with five built-in themes: **`ubuntu`** (default), **`dark`**, **`monokai`**, **`solarized-dark`** and **`spacemacs`**.
+
+Press `T` at any time to open the live theme switcher and preview themes before applying them.
 
 To create a custom theme, add a YAML file to `~/.config/jujumate/themes/`:
 
