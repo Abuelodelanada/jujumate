@@ -1,0 +1,15 @@
+/* Ubuntu orange — primary & accent */
+[data-md-color-scheme="default"],
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color:        #E95420;
+  --md-primary-fg-color--light: #F46033;
+  --md-primary-fg-color--dark:  #C73D0E;
+  --md-accent-fg-color:         #E95420;
+}
+
+/* Asciinema player sizing */
+.asciinema-player-container {
+  margin: 1.5rem 0;
+  border-radius: 8px;
+  overflow: hidden;
+}

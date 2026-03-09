@@ -24,3 +24,8 @@ htmlcov/
 .idea/
 *.swp
 *~
+
+# mkdocs
+site/
+docs/assets/icon.svg
+docs/assets/demo.cast
