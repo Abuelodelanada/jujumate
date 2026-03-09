@@ -37,6 +37,7 @@ from jujumate.models.entities import (
 )
 from jujumate.screens.app_config_screen import AppConfigScreen
 from jujumate.screens.help_screen import HelpScreen
+from jujumate.screens.log_screen import LogScreen
 from jujumate.screens.offers_screen import OfferDetailScreen, OffersScreen
 from jujumate.screens.relation_data_screen import RelationDataScreen
 from jujumate.screens.secrets_screen import SecretsScreen
@@ -60,6 +61,7 @@ class MainScreen(Screen):
         Binding("S", "show_secrets", "Secrets", show=False),
         Binding("O", "show_offers", "Offers", show=False),
         Binding("T", "show_themes", "Theme", show=False),
+        Binding("L", "show_logs", "Logs", show=False),
         Binding("r", "refresh_data", "Refresh"),
         Binding("escape", "clear_filter", "Clear filter", show=False),
         Binding("question_mark", "show_help", "Help"),
@@ -193,6 +195,12 @@ class MainScreen(Screen):
 
     def action_show_themes(self) -> None:
         self.app.push_screen(ThemeScreen())
+
+    def action_show_logs(self) -> None:
+        if not self._selected_controller or not self._selected_model:
+            self.notify("Select a model first", severity="warning")
+            return
+        self.app.push_screen(LogScreen(self._selected_controller, self._selected_model))
 
     # ── Filter helpers ────────────────────────────────────────────────────────
 

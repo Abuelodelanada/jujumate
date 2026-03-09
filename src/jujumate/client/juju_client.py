@@ -1,7 +1,13 @@
+import asyncio
 import base64
+import json
 import logging
+import ssl as ssl_module
+from collections.abc import AsyncGenerator
+from datetime import datetime
 from typing import Any
 
+import websockets
 from juju.client import client as juju_client
 from juju.controller import Controller
 
@@ -11,6 +17,7 @@ from jujumate.models.entities import (
     CloudInfo,
     ControllerInfo,
     ControllerOfferInfo,
+    LogEntry,
     MachineInfo,
     ModelInfo,
     OfferEndpoint,
@@ -23,6 +30,33 @@ from jujumate.models.entities import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _utc_ts_to_local_hms(ts_raw: str) -> str:
+    """Convert a Juju RFC3339/nanosecond UTC timestamp to local-time HH:MM:SS.
+
+    Juju timestamps look like ``"2024-03-07T15:30:45.123456789Z"``.
+    Python's fromisoformat only accepts up to microseconds, so we truncate
+    the fractional part to 6 digits before parsing.
+    """
+    if "T" not in ts_raw:
+        return ts_raw[:8]
+    try:
+        date_part, time_part = ts_raw.split("T", 1)
+        dot = time_part.find(".")
+        if dot >= 0:
+            # Find where the fractional digits end (Z or +/-)
+            end = dot + 1
+            while end < len(time_part) and time_part[end].isdigit():
+                end += 1
+            frac = time_part[dot + 1 : end][:6]  # truncate nanoseconds → microseconds
+            time_clean = time_part[: dot + 1] + frac + time_part[end:]
+        else:
+            time_clean = time_part
+        iso = f"{date_part}T{time_clean.replace('Z', '+00:00')}"
+        return datetime.fromisoformat(iso).astimezone().strftime("%H:%M:%S")
+    except Exception:
+        return ts_raw.split("T")[1][:8] if "T" in ts_raw else ts_raw[:8]
 
 
 def _s(v: Any) -> str:
@@ -690,3 +724,77 @@ class JujuClient:
                 logger.warning("Could not list offers for model '%s'", model_name)
         logger.debug("Controller offers: %d total", len(result))
         return result
+
+    async def stream_logs(
+        self,
+        model_name: str,
+        level: str = "DEBUG",
+    ) -> AsyncGenerator[LogEntry, None]:
+        """Stream live log entries from a Juju model.
+
+        Connects directly to the Juju debug-log WebSocket endpoint.
+        Uses ``backlog=100`` to show the last 100 lines as recent context and
+        then streams new log entries as they arrive.
+
+        Yields LogEntry objects as they arrive from the controller.
+        The generator runs until cancelled (e.g. when the log screen is closed).
+
+        Args:
+            model_name: Model to stream logs from.
+            level: Minimum log level — TRACE, DEBUG, INFO, WARNING, ERROR.
+        """
+        uuids = await self._controller.model_uuids()
+        uuid = uuids.get(model_name)
+        if not uuid:
+            raise JujuClientError(f"Model '{model_name}' not found")
+
+        conn = self._controller.connection()
+        params = conn.connect_params()
+        endpoint = params["endpoint"]
+        if isinstance(endpoint, list):
+            endpoint = endpoint[0]
+        username = conn.username
+        password = params["password"]
+        cacert = params["cacert"]
+
+        if not password:
+            raise JujuClientError("Live log streaming requires username/password authentication")
+
+        url = (
+            f"wss://user-{username}:{password}@{endpoint}"
+            f"/model/{uuid}/log?backlog=100&level={level}"
+        )
+
+        if cacert:
+            ssl_ctx: ssl_module.SSLContext | bool = ssl_module.create_default_context(
+                purpose=ssl_module.Purpose.SERVER_AUTH, cadata=cacert
+            )
+            # Controller certs don't contain the IP/hostname — safe to skip check
+            ssl_ctx.check_hostname = False  # type: ignore[union-attr]
+        else:
+            ssl_ctx = True
+
+        while True:
+            try:
+                async with websockets.connect(url, ssl=ssl_ctx, ping_interval=None) as ws:
+                    async for message in ws:
+                        try:
+                            data = json.loads(message)
+                            ts_raw: str = data.get("ts", "")
+                            yield LogEntry(
+                                timestamp=_utc_ts_to_local_hms(ts_raw),
+                                level=data.get("sev", ""),
+                                entity=data.get("tag", ""),
+                                module=data.get("mod", ""),
+                                message=data.get("msg", ""),
+                            )
+                        except (json.JSONDecodeError, KeyError, IndexError):
+                            continue
+            except asyncio.CancelledError:
+                return
+            except websockets.ConnectionClosed:
+                logger.debug("Log stream connection closed, reconnecting…")
+                await asyncio.sleep(2)
+                continue
+            except Exception:
+                return
