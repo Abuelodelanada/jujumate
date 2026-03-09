@@ -3,6 +3,12 @@ name: Tag and Release
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      force_publish:
+        description: "Publish to PyPI even if the tag already exists"
+        type: boolean
+        default: false
 
 jobs:
   tag:
@@ -44,7 +50,7 @@ jobs:
   publish:
     name: Publish to PyPI
     needs: tag
-    if: needs.tag.outputs.created == 'true'
+    if: needs.tag.outputs.created == 'true' || inputs.force_publish == true
     runs-on: ubuntu-latest
     environment:
       name: pypi
