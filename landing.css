@@ -75,17 +75,23 @@ a { color: inherit; }
 /* ── Hero ─────────────────────────────────────────────────── */
 
 .hero {
-  min-height: calc(100vh - 60px);
   display: flex;
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding: 5rem 2rem;
+  padding: 3rem 2rem 1.5rem;
   background:
     radial-gradient(ellipse 80% 50% at 50% -10%, rgba(233, 84, 32, 0.18) 0%, transparent 60%);
 }
 
 .hero-inner { max-width: 760px; }
+
+.hero-logo {
+  width: 90px;
+  height: 90px;
+  margin-bottom: 1.25rem;
+  filter: drop-shadow(0 0 20px rgba(233, 84, 32, 0.4));
+}
 
 .badge {
   display: inline-block;
@@ -198,7 +204,7 @@ a { color: inherit; }
 /* ── Demo ─────────────────────────────────────────────────── */
 
 .demo-section {
-  padding: 5rem 0;
+  padding: 0.5rem 0 4rem;
   text-align: center;
 }
 

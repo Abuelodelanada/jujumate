@@ -7,7 +7,6 @@
   <meta name="description" content="A terminal UI for Juju — monitor all your infrastructure resources in a single interactive screen with real-time updates.">
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="landing.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3/dist/bundle/player.css">
 </head>
 <body>
 
@@ -43,20 +42,10 @@
     </div>
   </section>
 
-  <section class="screenshot-section">
-    <div class="container">
-      <img
-        src="https://github.com/user-attachments/assets/8382e7a7-bb60-4fab-93bc-cade54cbb025"
-        alt="JujuMate terminal screenshot"
-        class="screenshot"
-      >
-    </div>
-  </section>
-
   <section class="demo-section">
     <div class="container">
       <h2>See it in action</h2>
-      <div id="player"></div>
+      <script src="https://asciinema.org/a/2CEYUKKPbHc9Ch0R.js" id="asciicast-2CEYUKKPbHc9Ch0R" async="true"></script>
     </div>
   </section>
 
@@ -152,14 +141,7 @@
     </div>
   </footer>
 
-  <script src="https://cdn.jsdelivr.net/npm/asciinema-player@3/dist/bundle/player.min.js"></script>
   <script>
-    AsciinemaPlayer.create(
-      'https://asciinema.org/a/2CEYUKKPbHc9Ch0R.cast',
-      document.getElementById('player'),
-      { cols: 220, rows: 50, autoPlay: false, loop: true, theme: 'monokai' }
-    );
-
     function copyInstall(btn) {
       navigator.clipboard.writeText('uv tool install jujumate').then(() => {
         btn.textContent = '✓';
