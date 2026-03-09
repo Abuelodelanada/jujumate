@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>JujuMate — Terminal UI for Juju</title>
   <meta name="description" content="A terminal UI for Juju — monitor all your infrastructure resources in a single interactive screen with real-time updates.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Ubuntu:ital,wght@0,300;0,400;0,500;0,700;1,400&family=Ubuntu+Mono:wght@400;700&display=swap" rel="stylesheet">
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="landing.css">
 </head>
@@ -25,6 +28,7 @@
     <div class="hero-inner">
       <div class="badge">v0.1.0 — Now on PyPI</div>
       <h1>⬢ JujuMate</h1>
+      <p class="hero-subtitle"><em>A mate for Juju</em></p>
       <p class="tagline">
         A terminal UI for <a href="https://juju.is" target="_blank" rel="noopener">Juju</a> —
         monitor all your infrastructure resources in a single interactive screen
@@ -36,8 +40,13 @@
       </div>
       <div class="install-box">
         <span class="prompt">$</span>
+        <code>sudo snap install jujumate</code>
+        <button class="copy-btn" onclick="copyInstall(this, 'sudo snap install jujumate')" title="Copy to clipboard">⧉</button>
+      </div>
+      <div class="install-box">
+        <span class="prompt">$</span>
         <code>uv tool install jujumate</code>
-        <button class="copy-btn" onclick="copyInstall(this)" title="Copy to clipboard">⧉</button>
+        <button class="copy-btn" onclick="copyInstall(this, 'uv tool install jujumate')" title="Copy to clipboard">⧉</button>
       </div>
     </div>
   </section>
@@ -112,7 +121,7 @@
       <div class="install-steps">
         <div class="step">
           <div class="step-num">1</div>
-          <div class="terminal"><span class="prompt">$</span> uv tool install jujumate</div>
+          <div class="terminal"><span class="prompt">$</span> sudo snap install jujumate &nbsp;<span class="step-alt">or: uv tool install jujumate</span></div>
         </div>
         <div class="step">
           <div class="step-num">2</div>
@@ -142,8 +151,8 @@
   </footer>
 
   <script>
-    function copyInstall(btn) {
-      navigator.clipboard.writeText('uv tool install jujumate').then(() => {
+    function copyInstall(btn, text) {
+      navigator.clipboard.writeText(text).then(() => {
         btn.textContent = '✓';
         setTimeout(() => { btn.textContent = '⧉'; }, 2000);
       });
