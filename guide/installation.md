@@ -11,7 +11,15 @@ JujuMate reads your Juju credentials automatically from `~/.local/share/juju/` â
 
 ## Install
 
-=== "uv (recommended)"
+=== "snap (recommended)"
+
+    ```bash
+    sudo snap install jujumate
+    ```
+
+    The snap package bundles all dependencies â€” no Python installation required.
+
+=== "uv"
 
     ```bash
     uv tool install jujumate
@@ -55,6 +63,12 @@ uv run jujumate
 ---
 
 ## Upgrade
+
+=== "snap"
+
+    ```bash
+    sudo snap refresh jujumate
+    ```
 
 === "uv"
 

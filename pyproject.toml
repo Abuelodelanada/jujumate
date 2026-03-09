@@ -22,7 +22,8 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
-    "mkdocs-material>=9.7.4",
+    "mkdocs<2.0",
+    "mkdocs-material<9.7",
     "nox>=2026.2.9",
     "nox-uv>=0.7.1",
     "pyright>=1.1.408",
