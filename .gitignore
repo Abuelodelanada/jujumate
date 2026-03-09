@@ -27,5 +27,5 @@ htmlcov/
 
 # mkdocs
 site/
-docs/assets/icon.svg
-docs/assets/demo.cast
+guide/assets/icon.svg
+guide/assets/demo.cast
