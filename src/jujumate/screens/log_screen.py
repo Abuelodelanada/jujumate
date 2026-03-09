@@ -236,7 +236,7 @@ class LogScreen(ModalScreen):
     def _format_entry(self, entry: LogEntry) -> Text:
         color = _LEVEL_COLORS.get(entry.level, palette.MUTED)
         needle = self._filter_text
-        t = Text(no_wrap=True, overflow="fold")
+        t = Text(overflow="fold")
         _append_highlighted(t, entry.entity, needle, palette.MUTED)
         t.append(" ", style=palette.MUTED)
         t.append(entry.timestamp, style=palette.MUTED)
