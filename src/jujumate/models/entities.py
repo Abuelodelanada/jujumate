@@ -173,3 +173,12 @@ class SecretInfo:
     rotate_policy: str
     created: str
     updated: str
+
+
+@dataclass
+class LogEntry:
+    timestamp: str
+    level: str  # TRACE | DEBUG | INFO | WARNING | ERROR
+    entity: str  # e.g. "unit:mysql/0", "machine:2"
+    module: str
+    message: str

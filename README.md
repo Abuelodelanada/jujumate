@@ -93,6 +93,7 @@ On first launch JujuMate connects to your current Juju controller and auto-selec
 |-----|--------|
 | `Shift+S` | Open Secrets browser for the current model |
 | `Shift+O` | Open Offers browser for the current controller |
+| `Shift+L` | Open live Log viewer for the current model |
 | `T` | Open theme switcher |
 | `Enter` | Open detail view |
 | `y` | Copy value to clipboard (Relation Data / Secrets) |
