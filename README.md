@@ -6,7 +6,7 @@
 
 > A terminal UI for [Juju](https://juju.is) — monitor all your infrastructure resources in a single interactive screen with real-time updates. Inspired by [K9s](https://k9scli.io/) and [KDash](https://github.com/kdash-rs/kdash).
 
-<img width="1195" height="878" alt="JujuMate — terminal UI for Juju" src="https://github.com/user-attachments/assets/8382e7a7-bb60-4fab-93bc-cade54cbb025" />
+[![asciicast](https://asciinema.org/a/2CEYUKKPbHc9Ch0R.svg)](https://asciinema.org/a/2CEYUKKPbHc9Ch0R)
 
 ---
 
