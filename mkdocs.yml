@@ -4,6 +4,11 @@ site_url: https://abuelodelanada.github.io/jujumate
 repo_url: https://github.com/Abuelodelanada/jujumate
 repo_name: Abuelodelanada/jujumate
 
+docs_dir: guide
+
+hooks:
+  - docs_hooks.py
+
 theme:
   name: material
   logo: assets/icon.svg
@@ -43,7 +48,6 @@ markdown_extensions:
       base_path: [.]
 
 nav:
-  - Home: index.md
   - Installation: installation.md
   - Usage: usage.md
   - Configuration: configuration.md
