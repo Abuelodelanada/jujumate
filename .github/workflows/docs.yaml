@@ -22,7 +22,6 @@ jobs:
         run: |
           mkdir -p guide/assets
           cp icon.svg guide/assets/icon.svg
-          cp demo.cast guide/assets/demo.cast
 
       - name: Deploy to GitHub Pages
         run: uv run mkdocs gh-deploy --force
