@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JujuMate — Terminal UI for Juju</title>
+  <meta name="description" content="A terminal UI for Juju — monitor all your infrastructure resources in a single interactive screen with real-time updates.">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="landing.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3/dist/bundle/player.css">
+</head>
+<body>
+
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="/" class="nav-logo">⬢ JujuMate</a>
+      <div class="nav-links">
+        <a href="installation/">Docs</a>
+        <a href="https://github.com/Abuelodelanada/jujumate" target="_blank" rel="noopener">GitHub ↗</a>
+        <a href="https://pypi.org/project/jujumate" target="_blank" rel="noopener">PyPI ↗</a>
+      </div>
+    </div>
+  </nav>
+
+  <section class="hero">
+    <div class="hero-inner">
+      <div class="badge">v0.1.0 — Now on PyPI</div>
+      <h1>⬢ JujuMate</h1>
+      <p class="tagline">
+        A terminal UI for <a href="https://juju.is" target="_blank" rel="noopener">Juju</a> —
+        monitor all your infrastructure resources in a single interactive screen
+        with real-time updates.
+      </p>
+      <div class="hero-actions">
+        <a href="installation/" class="btn btn-primary">Get Started →</a>
+        <a href="https://github.com/Abuelodelanada/jujumate" class="btn btn-outline" target="_blank" rel="noopener">View on GitHub</a>
+      </div>
+      <div class="install-box">
+        <span class="prompt">$</span>
+        <code>uv tool install jujumate</code>
+        <button class="copy-btn" onclick="copyInstall(this)" title="Copy to clipboard">⧉</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="screenshot-section">
+    <div class="container">
+      <img
+        src="https://github.com/user-attachments/assets/8382e7a7-bb60-4fab-93bc-cade54cbb025"
+        alt="JujuMate terminal screenshot"
+        class="screenshot"
+      >
+    </div>
+  </section>
+
+  <section class="demo-section">
+    <div class="container">
+      <h2>See it in action</h2>
+      <div id="player"></div>
+    </div>
+  </section>
+
+  <section class="features-section">
+    <div class="container">
+      <h2>Everything in one screen</h2>
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">🔄</div>
+          <h3>Real-time updates</h3>
+          <p>Live data from your Juju controller via WebSocket — no polling, instant visibility.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">☁️</div>
+          <h3>Full resource tree</h3>
+          <p>Clouds, controllers, models, applications, units and machines — all in one place.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📊</div>
+          <h3>Status view</h3>
+          <p>Full <code>juju status</code>-style breakdown including offers, integrations and SAAS.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🔍</div>
+          <h3>Drill-down navigation</h3>
+          <p>Select a model and jump straight to its full status. Press <kbd>Esc</kbd> to go back.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📜</div>
+          <h3>Live log viewer</h3>
+          <p>Stream model logs in real time with filtering, level selector and clipboard copy.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📋</div>
+          <h3>Relation data inspector</h3>
+          <p>Examine raw databags for both sides of any relation — perfect for debugging integrations.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🔐</div>
+          <h3>Secrets browser</h3>
+          <p>List and inspect Juju secrets per model with full metadata and revision history.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🎨</div>
+          <h3>Themeable</h3>
+          <p>Five built-in themes. Fully customisable via YAML. Live theme switcher included.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">⌨️</div>
+          <h3>K9s-style UX</h3>
+          <p>No persistent footer — press <kbd>?</kbd> for all shortcuts on demand. Inspired by K9s.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="install-section">
+    <div class="container">
+      <h2>Zero configuration</h2>
+      <p class="section-desc">
+        JujuMate reads your existing Juju credentials from <code>~/.local/share/juju/</code>
+        automatically. No setup needed if <code>juju</code> is already working.
+      </p>
+      <div class="install-steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="terminal"><span class="prompt">$</span> uv tool install jujumate</div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="terminal"><span class="prompt">$</span> jujumate</div>
+        </div>
+      </div>
+      <a href="installation/" class="btn btn-primary">Full installation guide →</a>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-inner">
+        <span class="footer-logo">⬢ JujuMate</span>
+        <div class="footer-links">
+          <a href="installation/">Docs</a>
+          <a href="changelog/">Changelog</a>
+          <a href="https://github.com/Abuelodelanada/jujumate" target="_blank" rel="noopener">GitHub</a>
+          <a href="https://pypi.org/project/jujumate" target="_blank" rel="noopener">PyPI</a>
+        </div>
+        <span class="footer-license">
+          GPL-3.0 · Made with ♥ by
+          <a href="https://github.com/Abuelodelanada" target="_blank" rel="noopener">Abuelodelanada</a>
+        </span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/asciinema-player@3/dist/bundle/player.min.js"></script>
+  <script>
+    AsciinemaPlayer.create(
+      'https://asciinema.org/a/2CEYUKKPbHc9Ch0R.cast',
+      document.getElementById('player'),
+      { cols: 220, rows: 50, autoPlay: false, loop: true, theme: 'monokai' }
+    );
+
+    function copyInstall(btn) {
+      navigator.clipboard.writeText('uv tool install jujumate').then(() => {
+        btn.textContent = '✓';
+        setTimeout(() => { btn.textContent = '⧉'; }, 2000);
+      });
+    }
+  </script>
+</body>
+</html>
