@@ -12,7 +12,7 @@
 
 ## Features
 
-- 🔄 **Real-time updates** — live data from your Juju controller via python-libjuju
+- 🔄 **Auto-refresh** — status updates automatically every few seconds; logs stream live via WebSocket
 - ☁️ **Full resource tree** — clouds, controllers, models, applications, units, machines
 - 📊 **Status view** — apps, units, offers, integrations, SAAS and machines in one screen
 - 🔍 **Drill-down navigation** — select a controller → filter models; select a model → see its full status
