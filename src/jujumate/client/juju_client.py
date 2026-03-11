@@ -1,7 +1,9 @@
 import asyncio
 import base64
+import binascii
 import json
 import logging
+import re
 import ssl as ssl_module
 from collections.abc import AsyncGenerator
 from datetime import datetime
@@ -39,23 +41,10 @@ def _utc_ts_to_local_hms(ts_raw: str) -> str:
     Python's fromisoformat only accepts up to microseconds, so we truncate
     the fractional part to 6 digits before parsing.
     """
-    if "T" not in ts_raw:
-        return ts_raw[:8]
     try:
-        date_part, time_part = ts_raw.split("T", 1)
-        dot = time_part.find(".")
-        if dot >= 0:
-            # Find where the fractional digits end (Z or +/-)
-            end = dot + 1
-            while end < len(time_part) and time_part[end].isdigit():
-                end += 1
-            frac = time_part[dot + 1 : end][:6]  # truncate nanoseconds → microseconds
-            time_clean = time_part[: dot + 1] + frac + time_part[end:]
-        else:
-            time_clean = time_part
-        iso = f"{date_part}T{time_clean.replace('Z', '+00:00')}"
-        return datetime.fromisoformat(iso).astimezone().strftime("%H:%M:%S")
-    except Exception:
+        normalized = re.sub(r"(\.\d{6})\d*", r"\1", ts_raw).replace("Z", "+00:00")
+        return datetime.fromisoformat(normalized).astimezone().strftime("%H:%M:%S")
+    except ValueError:
         return ts_raw.split("T")[1][:8] if "T" in ts_raw else ts_raw[:8]
 
 
@@ -76,7 +65,7 @@ def _decode_secret_value(v: Any) -> str:
     try:
         decoded = base64.b64decode(raw, validate=True).decode("utf-8")
         return decoded
-    except Exception:
+    except (binascii.Error, UnicodeDecodeError):
         return raw
 
 
