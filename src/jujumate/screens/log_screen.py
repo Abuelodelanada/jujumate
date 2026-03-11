@@ -21,15 +21,17 @@ logger = logging.getLogger(__name__)
 
 _LEVELS = ["TRACE", "DEBUG", "INFO", "WARNING", "ERROR"]
 
-_LEVEL_COLORS: dict[str, str] = {
-    "TRACE": palette.MUTED,
-    "DEBUG": palette.LINK,
-    "INFO": palette.SUCCESS,
-    "WARNING": palette.WARNING,
-    "ERROR": palette.ERROR,
-    "FATAL": palette.ERROR,
-    "CRITICAL": palette.ERROR,
-}
+
+def _level_color(level: str) -> str:
+    return {
+        "TRACE": palette.MUTED,
+        "DEBUG": palette.LINK,
+        "INFO": palette.SUCCESS,
+        "WARNING": palette.WARNING,
+        "ERROR": palette.ERROR,
+        "FATAL": palette.ERROR,
+        "CRITICAL": palette.ERROR,
+    }.get(level, palette.MUTED)
 
 
 def _append_highlighted(t: Text, value: str, needle: str, base_style: str) -> None:
@@ -160,7 +162,7 @@ class LogScreen(ModalScreen):
             self.notify(str(exc), title="Log stream error", severity="error")
 
     def _format_entry(self, entry: LogEntry) -> Text:
-        color = _LEVEL_COLORS.get(entry.level, palette.MUTED)
+        color = _level_color(entry.level)
         needle = self._filter_text
         t = Text(overflow="fold")
         _append_highlighted(t, entry.entity, needle, palette.MUTED)
@@ -182,7 +184,7 @@ class LogScreen(ModalScreen):
 
     def _update_level_label(self) -> None:
         label = self.query_one("#log-level-label", Label)
-        color = _LEVEL_COLORS.get(self._level, palette.MUTED)
+        color = _level_color(self._level)
         label.update(Text(f"  │  Level: {self._level}", style=f"bold {color}"))
 
     def _rerender_buffer(self) -> None:
