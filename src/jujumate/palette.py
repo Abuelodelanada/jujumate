@@ -45,22 +45,18 @@ def init(theme: Theme) -> None:
     and ``variables:`` entries (link, muted, pulse-off) from the theme YAML.
     """
     g = globals()
-
-    if theme.primary:
-        g["PRIMARY"] = theme.primary
-    if theme.secondary:
-        g["SECONDARY"] = theme.secondary
-    if theme.success:
-        g["SUCCESS"] = theme.success
-    if theme.warning:
-        g["WARNING"] = theme.warning
-    if theme.error:
-        g["ERROR"] = theme.error
-
     variables = theme.variables or {}
-    if "link" in variables:
-        g["LINK"] = variables["link"]
-    if "muted" in variables:
-        g["MUTED"] = variables["muted"]
-    if "pulse-off" in variables:
-        g["PULSE_OFF"] = variables["pulse-off"]
+
+    color_map = {
+        "PRIMARY": theme.primary,
+        "SECONDARY": theme.secondary,
+        "SUCCESS": theme.success,
+        "WARNING": theme.warning,
+        "ERROR": theme.error,
+        "LINK": variables.get("link"),
+        "MUTED": variables.get("muted"),
+        "PULSE_OFF": variables.get("pulse-off"),
+    }
+    for global_name, value in color_map.items():
+        if value:
+            g[global_name] = value
