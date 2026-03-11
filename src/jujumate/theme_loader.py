@@ -36,15 +36,16 @@ class ThemeError(Exception):
 
 
 def _load_theme_file(path: Path) -> Theme:
-    with path.open() as f:
-        data = yaml.safe_load(f) or {}
+    try:
+        with path.open() as f:
+            data = yaml.safe_load(f) or {}
+    except (OSError, yaml.YAMLError) as e:
+        raise ThemeError(f"Theme file '{path}' could not be read: {e}") from e
 
-    name = data.get("name")
-    if not name:
+    if not (name := data.get("name")):
         raise ThemeError(f"Theme file '{path}' is missing required field 'name'.")
 
-    primary = data.get("primary")
-    if not primary:
+    if not data.get("primary"):
         raise ThemeError(f"Theme file '{path}' is missing required field 'primary'.")
 
     kwargs = {k: v for k, v in data.items() if k in _THEME_FIELDS}
@@ -63,7 +64,7 @@ def load_all_themes() -> dict[str, Theme]:
                 theme = _load_theme_file(path)
                 themes[theme.name] = theme
                 logger.debug("Loaded theme '%s' from %s", theme.name, path)
-            except Exception:
+            except ThemeError:
                 logger.exception("Failed to load theme from '%s'", path)
 
     return themes
