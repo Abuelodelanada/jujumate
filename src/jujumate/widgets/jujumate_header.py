@@ -10,8 +10,6 @@ from textual.widgets import Static
 
 from jujumate import palette
 
-_SUBTITLE = "Juju infrastructure TUI"
-
 
 @dataclass
 class HeaderContext:
@@ -61,7 +59,7 @@ class JujuMateHeader(Widget):
 
         # Left: bordered panel
         inner = RichText()
-        inner.append(_SUBTITLE, style="dim")
+        inner.append(self.app.sub_title, style="dim")
         inner.append("\n")
         inner.append_text(RichText.from_markup(status))
         sec = palette.SECONDARY
