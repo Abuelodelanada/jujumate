@@ -21,20 +21,20 @@ if TYPE_CHECKING:
     from textual.theme import Theme
 
 # ── Brand colors ─────────────────────────────────────────────────────────────
-PRIMARY = "#E95420"  # Brand primary   (Ubuntu Orange in ubuntu theme)
-SECONDARY = "#77216F"  # Brand secondary (Aubergine in ubuntu theme)
+PRIMARY = ""
+SECONDARY = ""
 
 # ── Semantic status colors ────────────────────────────────────────────────────
-SUCCESS = "#26A269"  # Active / healthy / admin access
-WARNING = "#EFB73E"  # Warning / maintenance / waiting / peer
-ERROR = "#FF5555"  # Error / blocked / terminated
+SUCCESS = ""
+WARNING = ""
+ERROR = ""
 
 # ── UI accent colors ──────────────────────────────────────────────────────────
-LINK = "#19B6EE"  # URLs, IP addresses, ports, consume access
-MUTED = "#888888"  # Unknown / inactive / read-only
+LINK = ""
+MUTED = ""
 
 # ── Animation ─────────────────────────────────────────────────────────────────
-PULSE_OFF = "#004d26"  # Heartbeat indicator dim state (on state = SUCCESS)
+PULSE_OFF = ""
 
 
 def init(theme: Theme) -> None:
