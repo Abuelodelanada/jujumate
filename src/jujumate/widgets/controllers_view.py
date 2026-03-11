@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Any
 
 from textual.app import ComposeResult
@@ -18,7 +19,7 @@ _COLUMNS = [
 
 
 class ControllersView(Widget):
-    DEFAULT_CSS = "ControllersView { height: 1fr; }"
+    DEFAULT_CSS = (Path(__file__).parent / "controllers_view.tcss").read_text()
 
     class ControllerSelected(Message):
         def __init__(self, name: str) -> None:

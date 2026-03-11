@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 
 from textual import work
 from textual.app import ComposeResult
@@ -14,20 +15,7 @@ logger = logging.getLogger(__name__)
 
 class AppConfigScreen(ModalScreen):
     BINDINGS = [Binding("escape", "dismiss", show=False)]
-    DEFAULT_CSS = """
-    AppConfigScreen {
-        align: center middle;
-    }
-    AppConfigScreen AppConfigView {
-        width: 88%;
-        height: 85%;
-        background: $surface;
-        border: round $accent;
-        border-title-color: $accent;
-        border-title-style: bold;
-        padding: 1 2;
-    }
-    """
+    DEFAULT_CSS = (Path(__file__).parent / "app_config_screen.tcss").read_text()
 
     def __init__(self, controller_name: str, model_name: str, app: AppInfo) -> None:
         super().__init__()

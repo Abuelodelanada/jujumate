@@ -1,0 +1,20 @@
+RelationDataView {
+    height: 1fr;
+}
+RelationDataView #rd-panel {
+    height: 1fr;
+}
+RelationDataView #rd-scroll {
+    height: 1fr;
+    scrollbar-size-vertical: 0;
+}
+RelationDataView #rd-content {
+    height: auto;
+    padding: 0 1;
+}
+RelationDataView #rd-empty {
+    height: 1fr;
+    content-align: center middle;
+    color: $text-muted;
+    text-style: italic;
+}

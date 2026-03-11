@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Any
 
 from rich import box as rich_box
@@ -28,25 +29,7 @@ class NavigableTable(Widget, can_focus=True):
         Binding("down", "cursor_down", show=False),
     ]
 
-    DEFAULT_CSS = """
-    NavigableTable {
-        height: 1fr;
-    }
-    NavigableTable #nt-scroll {
-        height: 1fr;
-        scrollbar-size-vertical: 0;
-    }
-    NavigableTable #nt-content {
-        height: auto;
-        padding: 0 1;
-    }
-    NavigableTable #nt-empty {
-        height: 1fr;
-        content-align: center middle;
-        color: $text-muted;
-        text-style: italic;
-    }
-    """
+    DEFAULT_CSS = (Path(__file__).parent / "navigable_table.tcss").read_text()
 
     class RowSelected(Message):
         """Posted when the user presses Enter on a row."""

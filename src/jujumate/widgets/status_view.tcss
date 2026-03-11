@@ -1,0 +1,48 @@
+StatusView {
+    height: 1fr;
+    layout: vertical;
+}
+StatusView .section-label {
+    padding: 1 2 0 2;
+    text-style: bold;
+    color: $accent;
+}
+StatusView ResourceTable {
+    height: auto;
+    border: solid $accent;
+    border-title-color: $accent;
+    border-title-style: bold;
+    margin-bottom: 0;
+    padding: 1 1 0 1;
+}
+StatusView DataTable {
+    height: auto;
+    border: none;
+    scrollbar-size: 0 0;
+    overflow-x: hidden;
+}
+StatusView #status-scroll {
+    height: 1fr;
+    scrollbar-size: 0 0;
+}
+StatusView #filter-input {
+    display: none;
+    height: 1;
+    border: none;
+    padding: 0 2;
+    background: $boost;
+}
+StatusView #msg-bar {
+    height: 1;
+    width: 100%;
+    padding: 0 2;
+    color: $text-muted;
+    text-style: italic;
+}
+StatusView #scroll-indicator {
+    height: 1;
+    width: 100%;
+    text-align: center;
+    text-style: dim;
+    color: $text-muted;
+}

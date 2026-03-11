@@ -2,6 +2,7 @@
 
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 
 from rich.text import Text
 from textual import work
@@ -49,53 +50,7 @@ class OfferDetailScreen(ModalScreen):
 
     BINDINGS = [Binding("escape", "dismiss", show=False)]
 
-    DEFAULT_CSS = """
-    OfferDetailScreen {
-        align: center middle;
-    }
-    OfferDetailScreen #detail-panel {
-        width: 88%;
-        height: auto;
-        max-height: 85%;
-        background: $surface;
-        border: round $accent;
-        border-title-color: $accent;
-        border-title-style: bold;
-        padding: 1 2;
-    }
-    OfferDetailScreen #top-row {
-        height: auto;
-    }
-    OfferDetailScreen #fields-col {
-        width: 1fr;
-        height: auto;
-        border-right: tall $panel-lighten-2;
-        padding-right: 2;
-    }
-    OfferDetailScreen #endpoints-col {
-        width: 1fr;
-        height: auto;
-        padding-left: 2;
-    }
-    OfferDetailScreen .detail-row {
-        height: auto;
-    }
-    OfferDetailScreen .section-label {
-        height: auto;
-        text-style: bold;
-        margin-top: 1;
-        margin-bottom: 0;
-    }
-    OfferDetailScreen .sub-table {
-        height: auto;
-        max-height: 8;
-        margin-top: 0;
-    }
-    OfferDetailScreen Rule {
-        margin-top: 1;
-        color: $panel-lighten-2;
-    }
-    """
+    DEFAULT_CSS = (Path(__file__).parent / "offers_screen.tcss").read_text()
 
     def __init__(self, offer: ControllerOfferInfo, controller_name: str) -> None:
         super().__init__()
@@ -206,29 +161,7 @@ class OffersScreen(ModalScreen):
 
     BINDINGS = [Binding("escape", "dismiss", show=False)]
 
-    DEFAULT_CSS = """
-    OffersScreen {
-        align: center middle;
-    }
-    OffersScreen #offers-panel {
-        width: 88%;
-        height: 85%;
-        background: $surface;
-        border: round $accent;
-        border-title-color: $accent;
-        border-title-style: bold;
-        padding: 1 2;
-    }
-    OffersScreen #offers-loading {
-        height: 1fr;
-        content-align: center middle;
-        color: $text-muted;
-        text-style: italic;
-    }
-    OffersScreen DataTable {
-        height: 1fr;
-    }
-    """
+    DEFAULT_CSS = (Path(__file__).parent / "offers_screen.tcss").read_text()
 
     def __init__(self, controller_name: str) -> None:
         super().__init__()

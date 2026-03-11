@@ -1,0 +1,28 @@
+AppConfigView {
+    height: 1fr;
+}
+AppConfigView #ac-panel {
+    height: 1fr;
+}
+AppConfigView #ac-meta-content {
+    height: auto;
+    padding: 0 1;
+}
+AppConfigView Rule {
+    height: 1;
+    color: $panel-lighten-2;
+}
+AppConfigView #ac-scroll {
+    height: 1fr;
+    scrollbar-size-vertical: 0;
+}
+AppConfigView #ac-content {
+    height: auto;
+    padding: 0 1;
+}
+AppConfigView #ac-empty {
+    height: 1fr;
+    content-align: center middle;
+    color: $text-muted;
+    text-style: italic;
+}

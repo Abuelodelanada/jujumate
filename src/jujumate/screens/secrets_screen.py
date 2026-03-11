@@ -1,6 +1,7 @@
 """Modal screens for secrets list and secret detail."""
 
 import logging
+from pathlib import Path
 
 from rich.text import Text
 from textual import work
@@ -27,71 +28,7 @@ class SecretDetailScreen(ModalScreen):
 
     _MASK = "••••••••"
 
-    DEFAULT_CSS = """
-    SecretDetailScreen {
-        align: center middle;
-    }
-    SecretDetailScreen #detail-panel {
-        width: 88%;
-        height: 85%;
-        background: $surface;
-        border: round $accent;
-        border-title-color: $accent;
-        border-title-style: bold;
-        padding: 1 2;
-    }
-    SecretDetailScreen .detail-row {
-        height: auto;
-    }
-    SecretDetailScreen Rule {
-        height: 1;
-        color: $panel-lighten-2;
-    }
-    SecretDetailScreen #secret-loading {
-        height: auto;
-        color: $text-muted;
-        text-style: italic;
-    }
-    SecretDetailScreen #secret-data {
-        height: 1fr;
-        margin-top: 1;
-        border: none;
-        padding: 0;
-        scrollbar-size-vertical: 0;
-    }
-    SecretDetailScreen #secret-data > ListItem {
-        height: auto;
-        width: 1fr;
-        padding: 0 1 1 1;
-    }
-    SecretDetailScreen #secret-data > ListItem.kv-selected {
-        background: $accent 40%;
-    }
-    SecretDetailScreen #secret-data > ListItem > Horizontal {
-        width: 1fr;
-        height: auto;
-    }
-    SecretDetailScreen .kv-key {
-        width: auto;
-    }
-    SecretDetailScreen .kv-val {
-        width: 1fr;
-    }
-    SecretDetailScreen .kv-val.masked {
-        color: $text-muted;
-        text-style: italic;
-    }
-    SecretDetailScreen #secret-data > ListItem.kv-selected .kv-val.masked {
-        color: $accent;
-        text-style: bold italic;
-    }
-    SecretDetailScreen #secret-hint {
-        height: auto;
-        color: $text-muted;
-        text-style: italic;
-        margin-top: 1;
-    }
-    """
+    DEFAULT_CSS = (Path(__file__).parent / "secrets_screen.tcss").read_text()
 
     def __init__(self, controller_name: str, model_name: str, secret: SecretInfo) -> None:
         super().__init__()
@@ -180,30 +117,7 @@ class SecretsScreen(ModalScreen):
 
     BINDINGS = [Binding("escape", "dismiss", show=False)]
 
-    DEFAULT_CSS = """
-    SecretsScreen {
-        align: center middle;
-    }
-    SecretsScreen #secrets-panel {
-        width: 88%;
-        height: 85%;
-        background: $surface;
-        border: round $accent;
-        border-title-color: $accent;
-        border-title-style: bold;
-        padding: 1 2;
-    }
-    SecretsScreen #secrets-loading {
-        height: 1fr;
-        content-align: center middle;
-        color: $text-muted;
-        text-style: italic;
-    }
-    SecretsScreen DataTable {
-        height: 1fr;
-        scrollbar-size-horizontal: 0;
-    }
-    """
+    DEFAULT_CSS = (Path(__file__).parent / "secrets_screen.tcss").read_text()
 
     def __init__(self, controller_name: str, model_name: str) -> None:
         super().__init__()

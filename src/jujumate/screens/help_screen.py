@@ -1,5 +1,7 @@
 """Modal help overlay showing keyboard shortcuts."""
 
+from pathlib import Path
+
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Center, Middle
@@ -40,20 +42,7 @@ class HelpScreen(ModalScreen):
         Binding("escape", "dismiss", "Close help", show=False),
     ]
 
-    DEFAULT_CSS = """
-    HelpScreen {
-        align: center middle;
-    }
-
-    HelpScreen #help-panel {
-        width: 60;
-        height: auto;
-        max-height: 80%;
-        padding: 1 2;
-        border: round $accent;
-        background: $surface;
-    }
-    """
+    DEFAULT_CSS = (Path(__file__).parent / "help_screen.tcss").read_text()
 
     def compose(self) -> ComposeResult:
         with Middle():

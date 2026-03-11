@@ -1,0 +1,16 @@
+JujuMateHeader {
+    height: 4;
+    dock: top;
+    background: ansi_default;
+    layout: horizontal;
+}
+JujuMateHeader #header-left {
+    width: auto;
+    min-width: 30;
+}
+JujuMateHeader #header-right {
+    width: 1fr;
+    padding: 0 2;
+    color: $primary;
+    content-align: left middle;
+}

@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Any
 
 from textual.app import ComposeResult
@@ -17,7 +18,7 @@ _COLUMNS = [
 
 
 class CloudsView(Widget):
-    DEFAULT_CSS = "CloudsView { height: 1fr; }"
+    DEFAULT_CSS = (Path(__file__).parent / "clouds_view.tcss").read_text()
 
     class CloudSelected(Message):
         def __init__(self, name: str) -> None:

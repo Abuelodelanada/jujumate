@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 
 from textual import work
 from textual.app import ComposeResult
@@ -14,20 +15,7 @@ logger = logging.getLogger(__name__)
 
 class RelationDataScreen(ModalScreen):
     BINDINGS = [Binding("escape", "dismiss", show=False)]
-    DEFAULT_CSS = """
-    RelationDataScreen {
-        align: center middle;
-    }
-    RelationDataScreen RelationDataView {
-        width: 88%;
-        height: 85%;
-        background: $surface;
-        border: round $accent;
-        border-title-color: $accent;
-        border-title-style: bold;
-        padding: 1 2;
-    }
-    """
+    DEFAULT_CSS = (Path(__file__).parent / "relation_data_screen.tcss").read_text()
 
     def __init__(self, controller_name: str, model_name: str, relation: RelationInfo) -> None:
         super().__init__()

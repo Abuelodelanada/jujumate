@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Any
 
 from rich import box as rich_box
@@ -113,36 +114,7 @@ class AppConfigView(Widget):
         Binding("y", "copy_to_clipboard", "Copy config", show=False),
     ]
 
-    DEFAULT_CSS = """
-    AppConfigView {
-        height: 1fr;
-    }
-    AppConfigView #ac-panel {
-        height: 1fr;
-    }
-    AppConfigView #ac-meta-content {
-        height: auto;
-        padding: 0 1;
-    }
-    AppConfigView Rule {
-        height: 1;
-        color: $panel-lighten-2;
-    }
-    AppConfigView #ac-scroll {
-        height: 1fr;
-        scrollbar-size-vertical: 0;
-    }
-    AppConfigView #ac-content {
-        height: auto;
-        padding: 0 1;
-    }
-    AppConfigView #ac-empty {
-        height: 1fr;
-        content-align: center middle;
-        color: $text-muted;
-        text-style: italic;
-    }
-    """
+    DEFAULT_CSS = (Path(__file__).parent / "app_config_view.tcss").read_text()
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)

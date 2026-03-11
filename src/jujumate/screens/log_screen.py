@@ -3,6 +3,7 @@
 import asyncio
 import logging
 from collections import deque
+from pathlib import Path
 
 from rich.text import Text
 from textual import work
@@ -65,82 +66,7 @@ class LogScreen(ModalScreen):
         Binding("enter", "insert_separator", "── separator", show=True),
     ]
 
-    DEFAULT_CSS = """
-    LogScreen {
-        align: center middle;
-    }
-    LogScreen #log-outer {
-        width: 98%;
-        height: 95%;
-        background: $surface;
-        border: round $accent;
-        border-title-color: $accent;
-        border-title-style: bold;
-    }
-    LogScreen #log-header {
-        height: 3;
-        background: $panel;
-        padding: 1 1 0 1;
-    }
-    LogScreen #log-header Label {
-        height: 1;
-    }
-    LogScreen #log-level-label {
-        color: $accent;
-        text-style: bold;
-    }
-    LogScreen #log-model-label {
-        color: $text-muted;
-    }
-    LogScreen #log-live-indicator {
-        width: 1fr;
-        content-align: right middle;
-    }
-    LogScreen #log-divider {
-        color: $accent;
-        margin: 0;
-    }
-    LogScreen #log-filter-bar {
-        height: 1;
-        background: $panel;
-        padding: 0 1;
-        display: none;
-    }
-    LogScreen #log-filter-bar.visible {
-        display: block;
-        height: 3;
-        padding: 0 1;
-    }
-    LogScreen #log-filter {
-        background: $surface;
-        border: solid $accent;
-        height: 3;
-        padding: 0 1;
-    }
-    LogScreen #log-richlog {
-        height: 1fr;
-        background: $surface;
-        padding: 0 1;
-        scrollbar-size-vertical: 0;
-    }
-    LogScreen #log-hint {
-        height: 1;
-        background: $panel;
-        padding: 0 1;
-    }
-    LogScreen .hint-key {
-        color: $accent;
-        height: 1;
-    }
-    LogScreen .hint-item {
-        color: $text-muted;
-        height: 1;
-    }
-    LogScreen .hint-sep {
-        color: $accent;
-        height: 1;
-    }
-    """
+    DEFAULT_CSS = (Path(__file__).parent / "log_screen.tcss").read_text()
 
     def __init__(self, controller: str, model: str, **kwargs) -> None:
         super().__init__(**kwargs)

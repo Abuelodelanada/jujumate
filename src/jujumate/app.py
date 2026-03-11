@@ -29,48 +29,7 @@ def _asyncio_exception_handler(loop: asyncio.AbstractEventLoop, context: dict) -
 class JujuMateApp(App):
     TITLE = "JujuMate"
     SUB_TITLE = "Juju infrastructure at a glance"
-    CSS = """
-    * {
-        background: ansi_default;
-    }
-    Screen {
-        background: ansi_default;
-    }
-    Underline > .underline--bar {
-        color: $accent;
-        background: ansi_default;
-    }
-    Tab.-active {
-        color: $accent;
-        text-style: bold;
-    }
-    DataTable {
-        background: ansi_default;
-    }
-    DataTable > .datatable--header {
-        background: ansi_default;
-    }
-    DataTable > .datatable--even-row {
-        background: ansi_default;
-    }
-    DataTable > .datatable--odd-row {
-        background: ansi_default;
-    }
-    DataTable > .datatable--hover {
-        background: $primary 20%;
-    }
-    DataTable > .datatable--cursor {
-        background: ansi_default;
-    }
-    DataTable:focus > .datatable--cursor {
-        background: $block-cursor-background;
-        text-style: bold;
-    }
-    ToastRack {
-        dock: top;
-        align: right top;
-    }
-    """
+    CSS_PATH = "app.tcss"
 
     def __init__(self, settings: AppSettings | None = None) -> None:
         super().__init__()

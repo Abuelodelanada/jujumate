@@ -1,6 +1,7 @@
 """Modal screen for switching themes at runtime with live preview."""
 
 import logging
+from pathlib import Path
 
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -32,32 +33,7 @@ class ThemeScreen(ModalScreen):
 
     BINDINGS = [Binding("escape", "cancel", show=False)]
 
-    DEFAULT_CSS = """
-    ThemeScreen {
-        align: center middle;
-    }
-    ThemeScreen #theme-panel {
-        width: 52;
-        height: auto;
-        max-height: 80%;
-        background: $surface;
-        border: round $accent;
-        border-title-color: $accent;
-        border-title-style: bold;
-        padding: 1 2;
-    }
-    ThemeScreen ListView {
-        height: auto;
-        max-height: 16;
-        background: transparent;
-    }
-    ThemeScreen #theme-hint {
-        height: 1;
-        margin-top: 1;
-        color: $text-muted;
-        text-style: italic;
-    }
-    """
+    DEFAULT_CSS = (Path(__file__).parent / "theme_screen.tcss").read_text()
 
     def __init__(self) -> None:
         super().__init__()

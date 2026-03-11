@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from rich.panel import Panel
@@ -34,24 +35,7 @@ class HeaderContext:
 class JujuMateHeader(Widget):
     """Header with logo+identity on the left and contextual info on the right."""
 
-    DEFAULT_CSS = """
-    JujuMateHeader {
-        height: 4;
-        dock: top;
-        background: ansi_default;
-        layout: horizontal;
-    }
-    JujuMateHeader #header-left {
-        width: auto;
-        min-width: 30;
-    }
-    JujuMateHeader #header-right {
-        width: 1fr;
-        padding: 0 2;
-        color: $primary;
-        content-align: left middle;
-    }
-    """
+    DEFAULT_CSS = (Path(__file__).parent / "jujumate_header.tcss").read_text()
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)

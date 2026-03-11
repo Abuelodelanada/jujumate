@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Any
 
 from rich.text import Text
@@ -23,7 +24,7 @@ _COLUMNS = [
 
 
 class AppsView(Widget):
-    DEFAULT_CSS = "AppsView { height: 1fr; }"
+    DEFAULT_CSS = (Path(__file__).parent / "apps_view.tcss").read_text()
 
     class AppSelected(Message):
         def __init__(self, name: str) -> None:

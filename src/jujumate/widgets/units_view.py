@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Any
 
 from textual.app import ComposeResult
@@ -17,7 +18,7 @@ _COLUMNS = [
 
 
 class UnitsView(Widget):
-    DEFAULT_CSS = "UnitsView { height: 1fr; }"
+    DEFAULT_CSS = (Path(__file__).parent / "units_view.tcss").read_text()
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
