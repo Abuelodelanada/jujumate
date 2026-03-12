@@ -22,6 +22,7 @@ from jujumate.models.entities import (
 )
 from jujumate.widgets.resource_table import Column, ResourceTable
 
+
 def _status_color(status: str) -> str:
     return {
         "active": palette.SUCCESS,

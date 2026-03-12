@@ -16,6 +16,7 @@ from jujumate.models.entities import AppConfigEntry, AppInfo
 _C_KEY = "bold white"
 _C_META = "dim"
 
+
 def _status_color(status: str) -> str:
     return {
         "active": palette.SUCCESS,
