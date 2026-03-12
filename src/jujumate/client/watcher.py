@@ -125,6 +125,49 @@ class ConnectionFailed(JujuDataMessage):
     error: str = ""
 
 
+# ── Poll helpers ──────────────────────────────────────────────────────────────
+
+
+@dataclass
+class PollSnapshot:
+    clouds: dict[str, CloudInfo] = field(default_factory=dict)
+    controllers: dict[str, ControllerInfo] = field(default_factory=dict)
+    models: dict[tuple[str, str], ModelInfo] = field(default_factory=dict)
+    apps: dict[tuple[str, str, str], AppInfo] = field(default_factory=dict)
+    units: dict[tuple[str, str, str, str], UnitInfo] = field(default_factory=dict)
+    machines: dict[tuple[str, str, str], MachineInfo] = field(default_factory=dict)
+    failed: int = 0
+
+
+async def _poll_controller(name: str, snapshot: PollSnapshot) -> None:
+    """Fetch data from one controller and merge results into *snapshot*."""
+    async with JujuClient(controller_name=name) as client:
+        for cloud in await client.get_clouds():
+            snapshot.clouds[cloud.name] = cloud
+        for ctrl in await client.get_controllers():
+            snapshot.controllers[ctrl.name] = ctrl
+        for model_name in await client.list_model_names():
+            model_info, apps, units, machines = await client.get_model_snapshot(model_name)
+            snapshot.models[(model_info.controller, model_info.name)] = model_info
+            for app in apps:
+                snapshot.apps[(app.controller, app.model, app.name)] = app
+            for unit in units:
+                snapshot.units[(unit.controller, unit.model, unit.app, unit.name)] = unit
+            for machine in machines:
+                snapshot.machines[(machine.controller, model_name, machine.id)] = machine
+
+
+def _post_snapshot_messages(target: Widget, snapshot: PollSnapshot) -> None:
+    """Post aggregated update messages to *target* from a completed snapshot."""
+    target.post_message(CloudsUpdated(clouds=list(snapshot.clouds.values())))
+    target.post_message(ControllersUpdated(controllers=list(snapshot.controllers.values())))
+    target.post_message(ModelsUpdated(models=list(snapshot.models.values())))
+    target.post_message(AppsUpdated(apps=list(snapshot.apps.values())))
+    target.post_message(UnitsUpdated(units=list(snapshot.units.values())))
+    target.post_message(MachinesUpdated(machines=list(snapshot.machines.values())))
+    target.post_message(DataRefreshed())
+
+
 # ── Poller ────────────────────────────────────────────────────────────────────
 
 
@@ -138,54 +181,25 @@ class JujuPoller:
     async def poll_once(self) -> None:
         """Fetch data from every controller and post aggregated update messages."""
         logger.debug("Polling %d controller(s)", len(self._controller_names))
-
         if not self._controller_names:
             self._target.post_message(ConnectionFailed(error="No controllers configured"))
             return
 
-        all_clouds: dict[str, CloudInfo] = {}  # dedup by cloud name
-        all_controllers: dict[str, ControllerInfo] = {}  # dedup by controller name
-        all_models: dict[tuple[str, str], ModelInfo] = {}  # dedup by (controller, model)
-        all_apps: dict[tuple[str, str, str], AppInfo] = {}  # dedup by (controller, model, app)
-        all_units: dict[tuple[str, str, str, str], UnitInfo] = {}  # (controller, model, app, unit)
-        all_machines: dict[tuple[str, str, str], MachineInfo] = {}  # (controller, model, machine)
-        failed = 0
-
+        snapshot = PollSnapshot()
         for name in self._controller_names:
             try:
-                async with JujuClient(controller_name=name) as client:
-                    for cloud in await client.get_clouds():
-                        all_clouds[cloud.name] = cloud
-                    for ctrl in await client.get_controllers():
-                        all_controllers[ctrl.name] = ctrl
-                    for model_name in await client.list_model_names():
-                        model_info, apps, units, machines = await client.get_model_snapshot(
-                            model_name
-                        )
-                        all_models[(model_info.controller, model_info.name)] = model_info
-                        for app in apps:
-                            all_apps[(app.controller, app.model, app.name)] = app
-                        for unit in units:
-                            all_units[(unit.controller, unit.model, unit.app, unit.name)] = unit
-                        for machine in machines:
-                            all_machines[(machine.controller, model_name, machine.id)] = machine
+                await _poll_controller(name, snapshot)
             except Exception:
                 logger.exception("Failed to poll controller '%s'", name)
-                failed += 1
+                snapshot.failed += 1
 
-        if failed == len(self._controller_names):
+        if snapshot.failed == len(self._controller_names):
             self._target.post_message(ConnectionFailed(error="All controllers failed to connect"))
             return
 
-        self._target.post_message(CloudsUpdated(clouds=list(all_clouds.values())))
-        self._target.post_message(ControllersUpdated(controllers=list(all_controllers.values())))
-        self._target.post_message(ModelsUpdated(models=list(all_models.values())))
-        self._target.post_message(AppsUpdated(apps=list(all_apps.values())))
-        self._target.post_message(UnitsUpdated(units=list(all_units.values())))
-        self._target.post_message(MachinesUpdated(machines=list(all_machines.values())))
-        self._target.post_message(DataRefreshed())
+        _post_snapshot_messages(self._target, snapshot)
         logger.debug(
             "Poll complete: %d controller(s) OK, %d failed",
-            len(self._controller_names) - failed,
-            failed,
+            len(self._controller_names) - snapshot.failed,
+            snapshot.failed,
         )
