@@ -199,9 +199,8 @@ class RelationDataView(Widget):
             "No relation selected — press Enter on a relation to see its data bags.",
             id="rd-empty",
         )
-        with Vertical(id="rd-panel"):
-            with VerticalScroll(id="rd-scroll"):
-                yield Static("", id="rd-content")
+        with Vertical(id="rd-panel"), VerticalScroll(id="rd-scroll"):
+            yield Static("", id="rd-content")
 
     def on_mount(self) -> None:
         self.query_one("#rd-panel").display = False

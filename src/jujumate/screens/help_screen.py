@@ -45,6 +45,5 @@ class HelpScreen(ModalScreen):
     DEFAULT_CSS = (Path(__file__).parent / "help_screen.tcss").read_text()
 
     def compose(self) -> ComposeResult:
-        with Middle():
-            with Center():
-                yield Static(HELP_TEXT, id="help-panel")
+        with Middle(), Center():
+            yield Static(HELP_TEXT, id="help-panel")
