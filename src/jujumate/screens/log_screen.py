@@ -24,14 +24,14 @@ _LEVELS = ["TRACE", "DEBUG", "INFO", "WARNING", "ERROR"]
 
 def _level_color(level: str) -> str:
     return {
-        "TRACE": palette.MUTED,
-        "DEBUG": palette.LINK,
-        "INFO": palette.SUCCESS,
-        "WARNING": palette.WARNING,
-        "ERROR": palette.ERROR,
-        "FATAL": palette.ERROR,
-        "CRITICAL": palette.ERROR,
-    }.get(level, palette.MUTED)
+        "TRACE": palette.LOG_TRACE,
+        "DEBUG": palette.LOG_DEBUG,
+        "INFO": palette.LOG_INFO,
+        "WARNING": palette.LOG_WARNING,
+        "ERROR": palette.LOG_ERROR,
+        "FATAL": palette.LOG_ERROR,
+        "CRITICAL": palette.LOG_ERROR,
+    }.get(level, palette.LOG_TRACE)
 
 
 def _append_highlighted(t: Text, value: str, needle: str, base_style: str) -> None:

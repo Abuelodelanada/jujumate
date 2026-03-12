@@ -8,7 +8,7 @@ from jujumate.theme_loader import load_all_themes
 
 # Variables that every theme MUST define for palette.init() to fully populate.
 _REQUIRED_TOP_LEVEL = {"primary", "secondary", "success", "warning", "error"}
-_REQUIRED_VARIABLES = {"link", "muted", "pulse-off"}
+_REQUIRED_VARIABLES = {"link", "muted", "pulse-off", "log-trace", "log-debug", "log-info"}
 
 
 def _builtin_theme_names() -> list[str]:
@@ -43,3 +43,8 @@ def test_palette_init_populates_all_globals(theme_name: str) -> None:
     assert palette.LINK, f"palette.LINK is empty after init with theme '{theme_name}'"
     assert palette.MUTED, f"palette.MUTED is empty after init with theme '{theme_name}'"
     assert palette.PULSE_OFF, f"palette.PULSE_OFF is empty after init with theme '{theme_name}'"
+    assert palette.LOG_TRACE, f"palette.LOG_TRACE is empty after init with theme '{theme_name}'"
+    assert palette.LOG_DEBUG, f"palette.LOG_DEBUG is empty after init with theme '{theme_name}'"
+    assert palette.LOG_INFO, f"palette.LOG_INFO is empty after init with theme '{theme_name}'"
+    assert palette.LOG_WARNING, f"palette.LOG_WARNING is empty after init with theme '{theme_name}'"
+    assert palette.LOG_ERROR, f"palette.LOG_ERROR is empty after init with theme '{theme_name}'"

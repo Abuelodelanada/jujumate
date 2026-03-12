@@ -14,6 +14,9 @@ variables:
   link: "#19B6EE"
   muted: "#888888"
   pulse-off: "#004d26"
+  log-trace:   "#888888"   # same as muted
+  log-debug:   "#19B6EE"   # cyan
+  log-info:    "#26A269"   # green (same as success)
   block-cursor-background: "#2D4A6D"
   block-cursor-blurred-background: "#2D4A6D"
   block-cursor-foreground: "#FFFFFF"

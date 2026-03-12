@@ -36,6 +36,13 @@ MUTED = ""
 # ── Animation ─────────────────────────────────────────────────────────────────
 PULSE_OFF = ""
 
+# ── Log level colors ──────────────────────────────────────────────────────────
+LOG_TRACE = ""
+LOG_DEBUG = ""
+LOG_INFO = ""
+LOG_WARNING = ""
+LOG_ERROR = ""
+
 
 def init(theme: Theme) -> None:
     """Override palette globals with the active Textual theme's colors.
@@ -56,6 +63,11 @@ def init(theme: Theme) -> None:
         "LINK": variables.get("link"),
         "MUTED": variables.get("muted"),
         "PULSE_OFF": variables.get("pulse-off"),
+        "LOG_TRACE": variables.get("log-trace"),
+        "LOG_DEBUG": variables.get("log-debug"),
+        "LOG_INFO": variables.get("log-info"),
+        "LOG_WARNING": variables.get("log-warning") or theme.warning,
+        "LOG_ERROR": variables.get("log-error") or theme.error,
     }
     for global_name, value in color_map.items():
         if value:
