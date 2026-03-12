@@ -391,7 +391,7 @@ def _log_stream_connection_params(controller: Controller) -> tuple[str, str, str
     endpoint: str = params["endpoint"]
     if isinstance(endpoint, list):
         endpoint = endpoint[0]
-    username: str = conn.username
+    username: str = conn.username or ""
     password: str = params["password"]
     cacert: str | None = params["cacert"]
     if not password:
@@ -418,7 +418,7 @@ def _build_ssl_context(cacert: str | None) -> ssl_module.SSLContext | bool:
     return True
 
 
-def _parse_log_entry(message: str) -> LogEntry:
+def _parse_log_entry(message: str | bytes) -> LogEntry:
     """Parse a JSON WebSocket message string into a LogEntry.
 
     May raise ``json.JSONDecodeError``, ``KeyError``, or ``IndexError``.
