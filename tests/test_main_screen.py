@@ -3,6 +3,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from juju.errors import JujuError
 from textual.widgets import DataTable, Label, TabbedContent
 from textual.widgets._data_table import RowKey
 
@@ -421,7 +422,7 @@ async def test_fetch_relations_worker_posts_message(pilot):
 async def test_fetch_relations_worker_handles_exception(pilot):
     screen = pilot.app.screen
     mock_client = AsyncMock()
-    mock_client.__aenter__ = AsyncMock(side_effect=Exception("boom"))
+    mock_client.__aenter__ = AsyncMock(side_effect=JujuError("boom"))
     mock_client.__aexit__ = AsyncMock(return_value=None)
     with patch("jujumate.screens.main_screen.JujuClient", return_value=mock_client):
         screen._fetch_relations("ctrl", "dev")

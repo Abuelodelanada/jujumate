@@ -1,9 +1,13 @@
+import asyncio
 import logging
 from pathlib import Path
+from typing import TypeVar
 
+from juju.errors import JujuError
 from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
+from textual.css.query import NoMatches
 from textual.screen import Screen
 from textual.timer import Timer
 from textual.widgets import TabbedContent, TabPane
@@ -51,6 +55,8 @@ from jujumate.widgets.status_view import StatusView
 
 logger = logging.getLogger(__name__)
 
+_T = TypeVar("_T")
+
 
 class MainScreen(Screen):
     BINDINGS = [
@@ -67,6 +73,12 @@ class MainScreen(Screen):
         Binding("question_mark", "show_help", "Help"),
         Binding("q", "quit", "Quit"),
     ]
+
+    _TAB_FOCUS_MAP = {
+        "tab-clouds": "#clouds-table",
+        "tab-controllers": "#controllers-table",
+        "tab-models": "#models-table",
+    }
 
     def __init__(self, settings: AppSettings | None = None, **kwargs) -> None:
         super().__init__(**kwargs)
@@ -135,12 +147,6 @@ class MainScreen(Screen):
     async def on_unmount(self) -> None:
         if self._poll_timer is not None:
             self._poll_timer.stop()
-
-    _TAB_FOCUS_MAP = {
-        "tab-clouds": "#clouds-table",
-        "tab-controllers": "#controllers-table",
-        "tab-models": "#models-table",
-    }
 
     def action_switch_tab(self, tab_id: str) -> None:
         tc = self.query_one(TabbedContent)
@@ -223,66 +229,41 @@ class MainScreen(Screen):
         if self._selected_model and self._selected_controller:
             models_view.select_model(self._selected_controller, self._selected_model)
 
-    def _refresh_status_view(self) -> None:
+    def _filter_by_model(self, items: list[_T]) -> list[_T]:
+        """Return items whose .model matches the selected model (and .controller if set)."""
         if self._selected_model is None:
-            apps: list[AppInfo] = []
-            units: list[UnitInfo] = []
-            machines: list[MachineInfo] = []
-            is_kubernetes = False
-        else:
-            ctrl = self._selected_controller
-            apps = [
-                a
-                for a in self._all_apps
-                if a.model == self._selected_model and (not ctrl or a.controller == ctrl)
-            ]
-            units = [
-                u
-                for u in self._all_units
-                if u.model == self._selected_model and (not ctrl or u.controller == ctrl)
-            ]
-            machines = [
-                m
-                for m in self._all_machines
-                if m.model == self._selected_model and (not ctrl or m.controller == ctrl)
-            ]
-            model_info = next(
-                (
-                    m
-                    for m in self._all_models
-                    if m.name == self._selected_model and (not ctrl or m.controller == ctrl)
-                ),
-                None,
-            )
-            is_kubernetes = model_info.is_kubernetes if model_info else False
+            return []
         ctrl = self._selected_controller
-        relations = (
-            [
-                r
-                for r in self._all_relations
-                if r.model == self._selected_model and (not ctrl or r.controller == ctrl)
-            ]
-            if self._selected_model
-            else []
+        return [
+            x
+            for x in items
+            if x.model == self._selected_model and (not ctrl or x.controller == ctrl)  # type: ignore[attr-defined]
+        ]
+
+    def _is_kubernetes_model(self) -> bool:
+        """Return True if the currently selected model is a Kubernetes model."""
+        if self._selected_model is None:
+            return False
+        ctrl = self._selected_controller
+        model_info = next(
+            (
+                m
+                for m in self._all_models
+                if m.name == self._selected_model and (not ctrl or m.controller == ctrl)
+            ),
+            None,
         )
-        offers = (
-            [
-                o
-                for o in self._all_offers
-                if o.model == self._selected_model and (not ctrl or o.controller == ctrl)
-            ]
-            if self._selected_model
-            else []
-        )
-        saas = (
-            [
-                s
-                for s in self._all_saas
-                if s.model == self._selected_model and (not ctrl or s.controller == ctrl)
-            ]
-            if self._selected_model
-            else []
-        )
+        return model_info.is_kubernetes if model_info else False
+
+    def _refresh_status_view(self) -> None:
+        apps = self._filter_by_model(self._all_apps)
+        units = self._filter_by_model(self._all_units)
+        machines = self._filter_by_model(self._all_machines)
+        relations = self._filter_by_model(self._all_relations)
+        offers = self._filter_by_model(self._all_offers)
+        saas = self._filter_by_model(self._all_saas)
+        is_kubernetes = self._is_kubernetes_model()
+
         status_view = self.query_one("#status-view", StatusView)
         status_view.update_apps(apps)
         status_view.update_units(units, is_kubernetes=is_kubernetes)
@@ -291,13 +272,31 @@ class MainScreen(Screen):
         status_view.update_offers(offers)
         status_view.update_relations(relations)
 
+    def _effective_cloud(self) -> str | None:
+        """Return the effective cloud: explicit selection, or derived from the selected model."""
+        if self._selected_cloud:
+            return self._selected_cloud
+        if self._selected_model:
+            ctrl = self._selected_controller
+            model_info = next(
+                (
+                    m
+                    for m in self._all_models
+                    if m.name == self._selected_model and (not ctrl or m.controller == ctrl)
+                ),
+                None,
+            )
+            if model_info:
+                return model_info.cloud
+        return None
+
     def _refresh_header(self) -> None:
         try:
             header = self.query_one("#main-header", JujuMateHeader)
             active_tab = self.query_one(TabbedContent).active
-        except Exception:
+        except NoMatches:
             return  # Not fully mounted yet
-        # Filtered counts matching what each view displays
+
         filtered_controllers = [
             c
             for c in self._all_controllers
@@ -308,88 +307,20 @@ class MainScreen(Screen):
             for m in self._all_models
             if self._selected_controller is None or m.controller == self._selected_controller
         ]
-        ctrl = self._selected_controller
-        status_offers = (
-            [
-                o
-                for o in self._all_offers
-                if o.model == self._selected_model and (not ctrl or o.controller == ctrl)
-            ]
-            if self._selected_model
-            else []
-        )
-        status_relations = (
-            [
-                r
-                for r in self._all_relations
-                if r.model == self._selected_model and (not ctrl or r.controller == ctrl)
-            ]
-            if self._selected_model
-            else []
-        )
-        status_saas = (
-            [
-                s
-                for s in self._all_saas
-                if s.model == self._selected_model and (not ctrl or s.controller == ctrl)
-            ]
-            if self._selected_model
-            else []
-        )
-        status_machines = (
-            [
-                m
-                for m in self._all_machines
-                if m.model == self._selected_model and (not ctrl or m.controller == ctrl)
-            ]
-            if self._selected_model
-            else []
-        )
-        status_apps = (
-            [
-                a
-                for a in self._all_apps
-                if a.model == self._selected_model and (not ctrl or a.controller == ctrl)
-            ]
-            if self._selected_model
-            else []
-        )
-        status_units = (
-            [
-                u
-                for u in self._all_units
-                if u.model == self._selected_model and (not ctrl or u.controller == ctrl)
-            ]
-            if self._selected_model
-            else []
-        )
-        # Derive cloud from selected model if not explicitly set
-        effective_cloud = self._selected_cloud
-        if not effective_cloud and self._selected_model:
-            model_info = next(
-                (
-                    m
-                    for m in self._all_models
-                    if m.name == self._selected_model and (not ctrl or m.controller == ctrl)
-                ),
-                None,
-            )
-            if model_info:
-                effective_cloud = model_info.cloud
         ctx = HeaderContext(
             active_tab=active_tab,
-            selected_cloud=effective_cloud,
+            selected_cloud=self._effective_cloud(),
             selected_controller=self._selected_controller,
             selected_model=self._selected_model,
             cloud_count=len(self._all_clouds),
             controller_count=len(filtered_controllers),
             model_count=len(filtered_models),
-            app_count=len(status_apps),
-            unit_count=len(status_units),
-            offer_count=len(status_offers),
-            relation_count=len(status_relations),
-            saas_count=len(status_saas),
-            machine_count=len(status_machines),
+            app_count=len(self._filter_by_model(self._all_apps)),
+            unit_count=len(self._filter_by_model(self._all_units)),
+            offer_count=len(self._filter_by_model(self._all_offers)),
+            relation_count=len(self._filter_by_model(self._all_relations)),
+            saas_count=len(self._filter_by_model(self._all_saas)),
+            machine_count=len(self._filter_by_model(self._all_machines)),
             is_connected=self._is_connected,
             timestamp=self._last_refresh_ts,
         )
@@ -576,7 +507,7 @@ class MainScreen(Screen):
                 OffersUpdated(model=model_name, controller=controller_name, offers=offers)
             )
             self.post_message(SaasUpdated(model=model_name, controller=controller_name, saas=saas))
-        except Exception:
+        except (JujuError, OSError, asyncio.TimeoutError, KeyError):
             logger.exception("Failed to fetch status details for model '%s'", model_name)
 
     def on_status_view_app_selected(self, message: StatusView.AppSelected) -> None:
