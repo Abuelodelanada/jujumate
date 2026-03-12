@@ -105,8 +105,6 @@ def relation_data_entries() -> list[RelationDataEntry]:
 
 @pytest.fixture
 def mock_controller():
-    with patch("jujumate.client.juju_client.Controller") as MockController:
-        ctrl = AsyncMock()
-        ctrl.controller_name = "test-controller"
-        MockController.return_value = ctrl
-        yield ctrl
+    ctrl = AsyncMock()
+    ctrl.controller_name = "test-controller"
+    return ctrl
