@@ -1,8 +1,10 @@
 """Modal screens for secrets list and secret detail."""
 
+import asyncio
 import logging
 from pathlib import Path
 
+from juju.errors import JujuError
 from rich.text import Text
 from textual import work
 from textual.app import ComposeResult
@@ -65,6 +67,23 @@ class SecretDetailScreen(ModalScreen):
             yield ListView(id="secret-data")
             yield Label("y copy to clipboard", id="secret-hint")
 
+    def _populate_list(self, lv: ListView, data: dict[str, str]) -> None:
+        """Populate the secret key-value ListView, or show an empty placeholder."""
+        if not data:
+            lv.append(ListItem(Label("[dim]<empty>[/dim]")))
+            return
+        keys = sorted(data.keys())
+        col_width = max(len(k) for k in keys) + 2
+        for k in keys:
+            lv.append(
+                ListItem(
+                    Horizontal(
+                        Label(f"[bold]{k.ljust(col_width)}[/bold]", classes="kv-key"),
+                        Label(self._MASK, classes="kv-val masked"),
+                    )
+                )
+            )
+
     @work
     async def _fetch(self, controller_name: str, model_name: str, secret_uri: str) -> None:
         try:
@@ -72,24 +91,11 @@ class SecretDetailScreen(ModalScreen):
                 data = await client.get_secret_content(model_name, secret_uri)
             self._content_data = data
             lv = self.query_one("#secret-data", ListView)
-            if data:
-                keys = sorted(data.keys())
-                col_width = max(len(k) for k in keys) + 2
-                for k in keys:
-                    lv.append(
-                        ListItem(
-                            Horizontal(
-                                Label(f"[bold]{k.ljust(col_width)}[/bold]", classes="kv-key"),
-                                Label(self._MASK, classes="kv-val masked"),
-                            )
-                        )
-                    )
-            else:
-                lv.append(ListItem(Label("[dim]<empty>[/dim]")))
+            self._populate_list(lv, data)
             self.query_one("#secret-loading").display = False
             lv.display = True
             lv.focus()
-        except Exception as exc:
+        except (JujuError, OSError, asyncio.TimeoutError, KeyError) as exc:
             logger.exception("Failed to fetch content for secret %s", secret_uri)
             self.query_one("#secret-loading", Label).update(f"[red]Error: {exc}[/red]")
 
@@ -143,7 +149,7 @@ class SecretsScreen(ModalScreen):
             async with JujuClient(controller_name=controller_name) as client:
                 secrets = await client.get_secrets(model_name)
             self._populate(secrets)
-        except Exception as exc:
+        except (JujuError, OSError, asyncio.TimeoutError, KeyError) as exc:
             logger.exception("Failed to fetch secrets for model '%s'", model_name)
             self._show_error(str(exc))
 

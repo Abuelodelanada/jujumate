@@ -1,6 +1,8 @@
+import asyncio
 import logging
 from pathlib import Path
 
+from juju.errors import JujuError
 from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -49,6 +51,6 @@ class RelationDataScreen(ModalScreen):
                     model_name, relation.relation_id, provider_app, requirer_app
                 )
             self.query_one(RelationDataView).update(relation, entries)
-        except Exception as exc:
+        except (JujuError, OSError, asyncio.TimeoutError, KeyError) as exc:
             logger.exception("Failed to fetch relation data for relation %d", relation.relation_id)
             self.query_one(RelationDataView).show_error(relation, str(exc))

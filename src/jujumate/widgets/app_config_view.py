@@ -16,13 +16,14 @@ from jujumate.models.entities import AppConfigEntry, AppInfo
 _C_KEY = "bold white"
 _C_META = "dim"
 
-_STATUS_COLORS: dict[str, str] = {
-    "active": palette.SUCCESS,
-    "blocked": palette.ERROR,
-    "error": palette.ERROR,
-    "waiting": palette.WARNING,
-    "maintenance": palette.WARNING,
-}
+def _status_color(status: str) -> str:
+    return {
+        "active": palette.SUCCESS,
+        "blocked": palette.ERROR,
+        "error": palette.ERROR,
+        "waiting": palette.WARNING,
+        "maintenance": palette.WARNING,
+    }.get(status, "")
 
 
 def _meta_markup(app: AppInfo) -> str:
@@ -38,7 +39,7 @@ def _meta_markup(app: AppInfo) -> str:
     for field, value in fields:
         label = f"{field}:".ljust(col_width)
         if field == "Status":
-            color = _STATUS_COLORS.get(value.strip().lower(), "")
+            color = _status_color(value.strip().lower())
             styled = f"[{color}]{value}[/]" if color else value
         else:
             styled = value
