@@ -23,6 +23,7 @@ if TYPE_CHECKING:
 # ── Brand colors ─────────────────────────────────────────────────────────────
 PRIMARY = ""
 SECONDARY = ""
+ACCENT = ""
 
 # ── Semantic status colors ────────────────────────────────────────────────────
 SUCCESS = ""
@@ -57,6 +58,7 @@ def init(theme: Theme) -> None:
     color_map = {
         "PRIMARY": theme.primary,
         "SECONDARY": theme.secondary,
+        "ACCENT": theme.accent,
         "SUCCESS": theme.success,
         "WARNING": theme.warning,
         "ERROR": theme.error,

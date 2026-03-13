@@ -25,12 +25,22 @@ StatusView #status-scroll {
     height: 1fr;
     scrollbar-size: 0 0;
 }
-StatusView #filter-input {
+StatusView #filter-bar {
     display: none;
     height: 1;
-    border: none;
-    padding: 0 2;
-    background: $boost;
+    background: $panel;
+    padding: 0 1;
+}
+StatusView #filter-bar.visible {
+    display: block;
+    height: 3;
+    padding: 0 1;
+}
+StatusView #filter-input {
+    background: $surface;
+    border: solid $accent;
+    height: 3;
+    padding: 0 1;
 }
 StatusView #msg-bar {
     height: 1;

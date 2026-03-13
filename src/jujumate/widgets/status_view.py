@@ -5,7 +5,7 @@ from rich.text import Text
 from textual import on
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import VerticalScroll
+from textual.containers import Horizontal, VerticalScroll
 from textual.message import Message
 from textual.reactive import reactive
 from textual.widget import Widget
@@ -134,6 +134,26 @@ _MACHINE_COLUMNS = [
 _MSG_TRUNC_WIDTH = 60
 
 
+def _highlight(text: str, needle: str) -> Text:
+    """Return Rich Text with every case-insensitive occurrence of needle highlighted."""
+    if not needle or needle.lower() not in text.lower():
+        return Text(text)
+    result = Text()
+    lower_text = text.lower()
+    lower_needle = needle.lower()
+    needle_len = len(needle)
+    start = 0
+    while True:
+        idx = lower_text.find(lower_needle, start)
+        if idx == -1:
+            result.append(text[start:])
+            break
+        result.append(text[start:idx])
+        result.append(text[idx : idx + needle_len], style=f"bold {palette.ACCENT}")
+        start = idx + needle_len
+    return result
+
+
 def _matches_filter(text: str, *fields: Any) -> bool:
     """Return True if *text* is a case-insensitive substring of any field, or text is empty."""
     if not text:
@@ -184,6 +204,7 @@ class StatusView(Widget):
     BINDINGS = [
         Binding("/", "activate_filter", show=False),
         Binding("escape", "close_filter", show=False),
+        Binding("y", "copy_to_clipboard", "Copy status", show=False),
     ]
 
     class RelationSelected(Message):
@@ -228,6 +249,10 @@ class StatusView(Widget):
         self._displayed_relations: list[RelationInfo] = []
         self._displayed_offers: list[OfferInfo] = []
         self._is_kubernetes: bool = False
+        self._ctx_cloud: str = ""
+        self._ctx_controller: str = ""
+        self._ctx_model: str = ""
+        self._ctx_juju_version: str = ""
 
     def compose(self) -> ComposeResult:
         with _TrackedScroll(id="status-scroll"):
@@ -249,7 +274,9 @@ class StatusView(Widget):
             t = ResourceTable(columns=_REL_COLUMNS, id="status-rels-table")
             t.border_title = "Integrations"
             yield t
-        yield Input(placeholder="/ Filter…", id="filter-input")
+        with Horizontal(id="filter-bar"):
+            yield Label("Filter: ")
+            yield Input(placeholder="type to filter…", id="filter-input")
         yield Label("", id="msg-bar")
         yield Label("▼ more below", id="scroll-indicator")
 
@@ -259,6 +286,13 @@ class StatusView(Widget):
         self.query_one("#status-machines-table").display = False
         self.query_one("#status-rels-table").display = False
         self._update_scroll_indicator()
+
+    def update_context(self, cloud: str, controller: str, model: str, juju_version: str) -> None:
+        """Store context metadata used in the clipboard header."""
+        self._ctx_cloud = cloud
+        self._ctx_controller = controller
+        self._ctx_model = model
+        self._ctx_juju_version = juju_version
 
     def _update_scroll_indicator(self) -> None:
         try:
@@ -293,18 +327,18 @@ class StatusView(Widget):
         for a in filtered:
             rows.append(
                 (
-                    a.name,
-                    a.version,
+                    _highlight(a.name, self._filter),
+                    _highlight(a.version, self._filter),
                     _colored_status(a.status),
                     str(a.unit_count),
-                    a.charm,
-                    a.channel,
+                    _highlight(a.charm, self._filter),
+                    _highlight(a.channel, self._filter),
                     Text(str(a.revision), style=f"bold {palette.WARNING}")
                     if a.can_upgrade_to
                     else str(a.revision),
                     _colored_ip(a.address),
                     "yes" if a.exposed else "no",
-                    _trunc_msg(a.message),
+                    _highlight(_trunc_msg(a.message), self._filter),
                 )
             )
             full_msgs.append(a.message)
@@ -322,7 +356,15 @@ class StatusView(Widget):
             for s in self._all_saas
             if _matches_filter(self._filter, s.name, s.status, s.store, s.url)
         ]
-        rows = [(s.name, _colored_status(s.status), s.store, s.url) for s in filtered]
+        rows = [
+            (
+                _highlight(s.name, self._filter),
+                _colored_status(s.status),
+                _highlight(s.store, self._filter),
+                _highlight(s.url, self._filter),
+            )
+            for s in filtered
+        ]
         has_saas = bool(rows)
         self.query_one("#status-saas-table").display = has_saas
         self.query_one("#status-saas-table", ResourceTable).update_rows(rows)
@@ -357,17 +399,17 @@ class StatusView(Widget):
                 if tree_prefix:
                     name = Text()
                     name.append(tree_prefix, style=palette.MUTED)
-                    name.append(u.name)
+                    name.append_text(_highlight(u.name, self._filter))
                 else:
-                    name = Text(u.name)
+                    name = _highlight(u.name, self._filter)
                 rows.append(
                     (
                         name,
                         _colored_status(u.workload_status),
                         _colored_status(u.agent_status),
                         _colored_ip(u.address),
-                        u.ports,
-                        _trunc_msg(u.message),
+                        _highlight(u.ports, self._filter),
+                        _highlight(_trunc_msg(u.message), self._filter),
                     )
                 )
                 full_msgs.append(u.message)
@@ -377,19 +419,19 @@ class StatusView(Widget):
                 if tree_prefix:
                     name = Text()
                     name.append(tree_prefix, style=palette.MUTED)
-                    name.append(u.name)
+                    name.append_text(_highlight(u.name, self._filter))
                 else:
-                    name = Text(u.name)
+                    name = _highlight(u.name, self._filter)
                 machine = "" if u.subordinate_of else u.machine
                 rows.append(
                     (
                         name,
                         _colored_status(u.workload_status),
                         _colored_status(u.agent_status),
-                        machine,
+                        _highlight(machine, self._filter),
                         _colored_ip(u.public_address),
-                        u.ports,
-                        _trunc_msg(u.message),
+                        _highlight(u.ports, self._filter),
+                        _highlight(_trunc_msg(u.message), self._filter),
                     )
                 )
                 full_msgs.append(u.message)
@@ -414,13 +456,13 @@ class StatusView(Widget):
         self.query_one("#status-offers-table").display = has_offers
         rows = [
             (
-                o.name,
-                o.application,
-                o.charm,
+                _highlight(o.name, self._filter),
+                _highlight(o.application, self._filter),
+                _highlight(o.charm, self._filter),
                 str(o.rev),
                 o.connected,
-                o.endpoint,
-                o.interface,
+                _highlight(o.endpoint, self._filter),
+                _highlight(o.interface, self._filter),
                 o.role,
             )
             for o in filtered
@@ -451,13 +493,13 @@ class StatusView(Widget):
         for m in filtered:
             rows.append(
                 (
-                    m.id,
+                    _highlight(m.id, self._filter),
                     _colored_status(m.state),
                     _colored_ip(m.address),
-                    m.instance_id,
-                    m.base,
-                    m.az,
-                    _trunc_msg(m.message),
+                    _highlight(m.instance_id, self._filter),
+                    _highlight(m.base, self._filter),
+                    _highlight(m.az, self._filter),
+                    _highlight(_trunc_msg(m.message), self._filter),
                 )
             )
             full_msgs.append(m.message)
@@ -531,7 +573,12 @@ class StatusView(Widget):
         self._displayed_relations = filtered
         self._relations = filtered
         rows = [
-            (_colored_relation(r.provider), _colored_relation(r.requirer), r.interface, r.type)
+            (
+                _colored_relation(r.provider),
+                _colored_relation(r.requirer),
+                _highlight(r.interface, self._filter),
+                _highlight(r.type, self._filter),
+            )
             for r in filtered
         ]
         table = self.query_one("#status-rels-table", ResourceTable)
@@ -587,22 +634,23 @@ class StatusView(Widget):
     def check_action(self, action: str, parameters: tuple) -> bool | None:
         if action == "close_filter":
             try:
-                fi = self.query_one("#filter-input", Input)
-                return fi.display or bool(self._filter)
+                bar = self.query_one("#filter-bar")
+                return "visible" in bar.classes or bool(self._filter)
             except Exception:
                 return False
         return True
 
     def action_activate_filter(self) -> None:
+        bar = self.query_one("#filter-bar")
         fi = self.query_one("#filter-input", Input)
-        fi.display = True
+        bar.add_class("visible")
         fi.focus()
 
     def action_close_filter(self) -> None:
         fi = self.query_one("#filter-input", Input)
         fi.value = ""
         self._filter = ""
-        fi.display = False
+        self.query_one("#filter-bar").remove_class("visible")
         self._rerender_all()
 
     @on(Input.Changed, "#filter-input")
@@ -610,11 +658,156 @@ class StatusView(Widget):
         self._filter = event.value
         self._rerender_all()
 
+    def _format_for_clipboard(self) -> str:
+        """Format all visible status data as plain text."""
+        lines: list[str] = []
+
+        # Header
+        if any([self._ctx_cloud, self._ctx_controller, self._ctx_model, self._ctx_juju_version]):
+            lines.append("Model:       " + (self._ctx_model or "—"))
+            lines.append("Controller:  " + (self._ctx_controller or "—"))
+            lines.append("Cloud:       " + (self._ctx_cloud or "—"))
+            lines.append("Juju:        " + (self._ctx_juju_version or "—"))
+            lines.append("")
+
+        def section(title: str, headers: list[str], rows: list[list[str]]) -> None:
+            if not rows:
+                return
+            widths = [len(h) for h in headers]
+            for row in rows:
+                for i, cell in enumerate(row):
+                    if i < len(widths):
+                        widths[i] = max(widths[i], len(cell))
+            fmt = "  ".join(f"{{:<{w}}}" for w in widths)
+            lines.append(f"\n{title}")
+            lines.append(fmt.format(*headers))
+            lines.append("  ".join("─" * w for w in widths))
+            for row in rows:
+                padded = list(row) + [""] * (len(headers) - len(row))
+                lines.append(fmt.format(*padded))
+
+        if self._all_saas:
+            section(
+                "SAAS",
+                ["SAAS", "Status", "Store", "URL"],
+                [[s.name, s.status, s.store, s.url] for s in self._all_saas],
+            )
+
+        if self._displayed_apps:
+            section(
+                "Applications",
+                [
+                    "App",
+                    "Version",
+                    "Status",
+                    "Scale",
+                    "Charm",
+                    "Channel",
+                    "Rev",
+                    "Address",
+                    "Exposed",
+                    "Message",
+                ],
+                [
+                    [
+                        a.name,
+                        a.version,
+                        a.status,
+                        str(a.unit_count),
+                        a.charm,
+                        a.channel,
+                        str(a.revision),
+                        a.address,
+                        "yes" if a.exposed else "no",
+                        a.message,
+                    ]
+                    for a in self._displayed_apps
+                ],
+            )
+
+        if self._all_units:
+            if self._is_kubernetes:
+                section(
+                    "Units",
+                    ["Unit", "Workload", "Agent", "Address", "Ports", "Message"],
+                    [
+                        [u.name, u.workload_status, u.agent_status, u.address, u.ports, u.message]
+                        for u in self._all_units
+                    ],
+                )
+            else:
+                section(
+                    "Units",
+                    ["Unit", "Workload", "Agent", "Machine", "Public Address", "Ports", "Message"],
+                    [
+                        [
+                            u.name,
+                            u.workload_status,
+                            u.agent_status,
+                            "" if u.subordinate_of else u.machine,
+                            u.public_address,
+                            u.ports,
+                            u.message,
+                        ]
+                        for u in self._all_units
+                    ],
+                )
+
+        if self._all_machines and not self._is_kubernetes:
+            section(
+                "Machines",
+                ["Machine", "State", "Address", "Inst id", "Base", "AZ", "Message"],
+                [
+                    [m.id, m.state, m.address, m.instance_id, m.base, m.az, m.message]
+                    for m in self._all_machines
+                ],
+            )
+
+        if self._displayed_offers:
+            section(
+                "Offers",
+                [
+                    "Offer",
+                    "Application",
+                    "Charm",
+                    "Rev",
+                    "Connected",
+                    "Endpoint",
+                    "Interface",
+                    "Role",
+                ],
+                [
+                    [
+                        o.name,
+                        o.application,
+                        o.charm,
+                        str(o.rev),
+                        o.connected,
+                        o.endpoint,
+                        o.interface,
+                        o.role,
+                    ]
+                    for o in self._displayed_offers
+                ],
+            )
+
+        if self._displayed_relations:
+            section(
+                "Integrations",
+                ["Provider", "Requirer", "Interface", "Type"],
+                [[r.provider, r.requirer, r.interface, r.type] for r in self._displayed_relations],
+            )
+
+        return "\n".join(lines).strip()
+
+    def action_copy_to_clipboard(self) -> None:
+        text = self._format_for_clipboard()
+        if not text:
+            self.notify("Nothing to copy", severity="warning")
+            return
+        self.app.copy_to_clipboard(text)
+        self.notify("Status copied to clipboard")
+
     @on(Input.Submitted, "#filter-input")
     def _on_filter_submitted(self, event: Input.Submitted) -> None:
-        fi = self.query_one("#filter-input", Input)
-        fi.display = False
-        try:
-            self.query_one("#status-apps-table DataTable", DataTable).focus()
-        except Exception:
-            pass
+        self.query_one("#filter-bar").remove_class("visible")

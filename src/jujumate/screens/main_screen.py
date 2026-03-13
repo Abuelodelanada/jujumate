@@ -265,6 +265,19 @@ class MainScreen(Screen):
         is_kubernetes = self._is_kubernetes_model()
 
         status_view = self.query_one("#status-view", StatusView)
+        status_view.update_context(
+            cloud=self._effective_cloud() or "",
+            controller=self._selected_controller or "",
+            model=self._selected_model or "",
+            juju_version=next(
+                (
+                    c.juju_version
+                    for c in self._all_controllers
+                    if c.name == self._selected_controller
+                ),
+                "",
+            ),
+        )
         status_view.update_apps(apps)
         status_view.update_units(units, is_kubernetes=is_kubernetes)
         status_view.update_machines(machines, is_kubernetes=is_kubernetes)
