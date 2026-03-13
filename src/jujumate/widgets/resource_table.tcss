@@ -1,0 +1,7 @@
+ResourceTable {
+    height: 1fr;
+}
+ResourceTable Label {
+    padding: 1 2;
+    color: $text-muted;
+}

@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Any
 
 from rich import box as rich_box
@@ -186,28 +187,7 @@ class RelationDataView(Widget):
         Binding("y", "copy_to_clipboard", "Copy data", show=False),
     ]
 
-    DEFAULT_CSS = """
-    RelationDataView {
-        height: 1fr;
-    }
-    RelationDataView #rd-panel {
-        height: 1fr;
-    }
-    RelationDataView #rd-scroll {
-        height: 1fr;
-        scrollbar-size-vertical: 0;
-    }
-    RelationDataView #rd-content {
-        height: auto;
-        padding: 0 1;
-    }
-    RelationDataView #rd-empty {
-        height: 1fr;
-        content-align: center middle;
-        color: $text-muted;
-        text-style: italic;
-    }
-    """
+    DEFAULT_CSS = (Path(__file__).parent / "relation_data_view.tcss").read_text()
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
@@ -219,9 +199,8 @@ class RelationDataView(Widget):
             "No relation selected — press Enter on a relation to see its data bags.",
             id="rd-empty",
         )
-        with Vertical(id="rd-panel"):
-            with VerticalScroll(id="rd-scroll"):
-                yield Static("", id="rd-content")
+        with Vertical(id="rd-panel"), VerticalScroll(id="rd-scroll"):
+            yield Static("", id="rd-content")
 
     def on_mount(self) -> None:
         self.query_one("#rd-panel").display = False

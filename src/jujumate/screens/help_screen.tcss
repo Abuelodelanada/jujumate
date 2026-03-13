@@ -1,0 +1,12 @@
+HelpScreen {
+    align: center middle;
+}
+
+HelpScreen #help-panel {
+    width: 60;
+    height: auto;
+    max-height: 80%;
+    padding: 1 2;
+    border: round $accent;
+    background: $surface;
+}

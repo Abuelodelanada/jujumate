@@ -65,3 +65,24 @@ def test_theme_missing_primary_raises(tmp_path, monkeypatch):
 
     themes = load_all_themes()
     assert "noprimary" not in themes
+
+
+def test_invalid_yaml_skipped(tmp_path, monkeypatch):
+    monkeypatch.setattr("jujumate.theme_loader.USER_THEMES_DIR", tmp_path)
+    bad = tmp_path / "broken.yaml"
+    bad.write_text(":::: not valid yaml ::::")
+
+    themes = load_all_themes()
+    assert "broken" not in themes
+
+
+def test_unreadable_file_skipped(tmp_path, monkeypatch):
+    monkeypatch.setattr("jujumate.theme_loader.USER_THEMES_DIR", tmp_path)
+    bad = tmp_path / "locked.yaml"
+    bad.write_text(yaml.dump({"name": "locked", "primary": "#FF0000"}))
+    bad.chmod(0o000)
+
+    themes = load_all_themes()
+    assert "locked" not in themes
+
+    bad.chmod(0o644)  # restore so tmp_path cleanup doesn't fail

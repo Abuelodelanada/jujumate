@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Any
 
 from rich import box as rich_box
@@ -15,13 +16,15 @@ from jujumate.models.entities import AppConfigEntry, AppInfo
 _C_KEY = "bold white"
 _C_META = "dim"
 
-_STATUS_COLORS: dict[str, str] = {
-    "active": palette.SUCCESS,
-    "blocked": palette.ERROR,
-    "error": palette.ERROR,
-    "waiting": palette.WARNING,
-    "maintenance": palette.WARNING,
-}
+
+def _status_color(status: str) -> str:
+    return {
+        "active": palette.SUCCESS,
+        "blocked": palette.ERROR,
+        "error": palette.ERROR,
+        "waiting": palette.WARNING,
+        "maintenance": palette.WARNING,
+    }.get(status, "")
 
 
 def _meta_markup(app: AppInfo) -> str:
@@ -37,7 +40,7 @@ def _meta_markup(app: AppInfo) -> str:
     for field, value in fields:
         label = f"{field}:".ljust(col_width)
         if field == "Status":
-            color = _STATUS_COLORS.get(value.strip().lower(), "")
+            color = _status_color(value.strip().lower())
             styled = f"[{color}]{value}[/]" if color else value
         else:
             styled = value
@@ -113,36 +116,7 @@ class AppConfigView(Widget):
         Binding("y", "copy_to_clipboard", "Copy config", show=False),
     ]
 
-    DEFAULT_CSS = """
-    AppConfigView {
-        height: 1fr;
-    }
-    AppConfigView #ac-panel {
-        height: 1fr;
-    }
-    AppConfigView #ac-meta-content {
-        height: auto;
-        padding: 0 1;
-    }
-    AppConfigView Rule {
-        height: 1;
-        color: $panel-lighten-2;
-    }
-    AppConfigView #ac-scroll {
-        height: 1fr;
-        scrollbar-size-vertical: 0;
-    }
-    AppConfigView #ac-content {
-        height: auto;
-        padding: 0 1;
-    }
-    AppConfigView #ac-empty {
-        height: 1fr;
-        content-align: center middle;
-        color: $text-muted;
-        text-style: italic;
-    }
-    """
+    DEFAULT_CSS = (Path(__file__).parent / "app_config_view.tcss").read_text()
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)

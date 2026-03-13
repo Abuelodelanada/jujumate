@@ -1,8 +1,12 @@
 """Modal screens for controller offers list and offer detail."""
 
+import asyncio
 import logging
+from collections.abc import Iterable
 from dataclasses import dataclass
+from pathlib import Path
 
+from juju.errors import JujuError
 from rich.text import Text
 from textual import work
 from textual.app import ComposeResult
@@ -13,7 +17,7 @@ from textual.widgets import DataTable, Label, Rule, Static
 
 from jujumate import palette
 from jujumate.client.juju_client import JujuClient
-from jujumate.config import load_config
+from jujumate.config import JujuConfigError, load_config
 from jujumate.models.entities import ControllerOfferInfo, SAASInfo
 from jujumate.widgets.status_view import _colored_status
 
@@ -26,16 +30,17 @@ class _ConsumerEntry:
     saas: SAASInfo
 
 
-_ACCESS_COLORS: dict[str, str] = {
-    "admin": palette.SUCCESS,
-    "consume": palette.LINK,
-    "read": palette.MUTED,
-}
+def _access_color(access: str) -> str:
+    return {
+        "admin": palette.SUCCESS,
+        "consume": palette.LINK,
+        "read": palette.MUTED,
+    }.get(access, "")
 
 
 def _colored_access(access: str) -> str:
     """Return Rich markup string for access level."""
-    color = _ACCESS_COLORS.get(access.strip().lower(), "")
+    color = _access_color(access.strip().lower())
     return f"[{color}]{access}[/]" if color else access
 
 
@@ -49,58 +54,24 @@ class OfferDetailScreen(ModalScreen):
 
     BINDINGS = [Binding("escape", "dismiss", show=False)]
 
-    DEFAULT_CSS = """
-    OfferDetailScreen {
-        align: center middle;
-    }
-    OfferDetailScreen #detail-panel {
-        width: 88%;
-        height: auto;
-        max-height: 85%;
-        background: $surface;
-        border: round $accent;
-        border-title-color: $accent;
-        border-title-style: bold;
-        padding: 1 2;
-    }
-    OfferDetailScreen #top-row {
-        height: auto;
-    }
-    OfferDetailScreen #fields-col {
-        width: 1fr;
-        height: auto;
-        border-right: tall $panel-lighten-2;
-        padding-right: 2;
-    }
-    OfferDetailScreen #endpoints-col {
-        width: 1fr;
-        height: auto;
-        padding-left: 2;
-    }
-    OfferDetailScreen .detail-row {
-        height: auto;
-    }
-    OfferDetailScreen .section-label {
-        height: auto;
-        text-style: bold;
-        margin-top: 1;
-        margin-bottom: 0;
-    }
-    OfferDetailScreen .sub-table {
-        height: auto;
-        max-height: 8;
-        margin-top: 0;
-    }
-    OfferDetailScreen Rule {
-        margin-top: 1;
-        color: $panel-lighten-2;
-    }
-    """
+    DEFAULT_CSS = (Path(__file__).parent / "offers_screen.tcss").read_text()
 
     def __init__(self, offer: ControllerOfferInfo, controller_name: str) -> None:
         super().__init__()
         self._offer = offer
         self._controller_name = controller_name
+
+    def _field_labels(self, fields: list[tuple[str, str]], col_width: int) -> Iterable[Label]:
+        """Yield formatted Labels for each offer field."""
+        for field, value in fields:
+            label = f"{field}:".ljust(col_width)
+            if field == "Offer URL":
+                styled = f"[{palette.LINK}]{value}[/]"
+            elif field == "Access":
+                styled = _colored_access(value)
+            else:
+                styled = value
+            yield Label(f"[bold]{label}[/bold]{styled}", classes="detail-row")
 
     def compose(self) -> ComposeResult:
         o = self._offer
@@ -116,15 +87,7 @@ class OfferDetailScreen(ModalScreen):
         with Vertical(id="detail-panel"):
             with Horizontal(id="top-row"):
                 with Vertical(id="fields-col"):
-                    for field, value in fields:
-                        label = f"{field}:".ljust(col_width)
-                        if field == "Offer URL":
-                            styled = f"[{palette.LINK}]{value}[/]"
-                        elif field == "Access":
-                            styled = _colored_access(value)
-                        else:
-                            styled = value
-                        yield Label(f"[bold]{label}[/bold]{styled}", classes="detail-row")
+                    yield from self._field_labels(fields, col_width)
                 with Vertical(id="endpoints-col"):
                     yield Label("Endpoints:", classes="section-label")
                     yield DataTable(id="endpoints-table", show_cursor=False, classes="sub-table")
@@ -160,7 +123,7 @@ class OfferDetailScreen(ModalScreen):
         target_url = _normalize_url(offer.offer_url)
         try:
             all_controllers = load_config().controllers
-        except Exception:
+        except JujuConfigError:
             all_controllers = [controller_name]
 
         for ctrl_name in all_controllers:
@@ -173,14 +136,14 @@ class OfferDetailScreen(ModalScreen):
                             for s in saas_list:
                                 if _normalize_url(s.url) == target_url:
                                     consumers.append(_ConsumerEntry(controller=ctrl_name, saas=s))
-                        except Exception as exc:
+                        except (JujuError, OSError, asyncio.TimeoutError, KeyError) as exc:
                             logger.debug(
                                 "Could not fetch SAAS for model '%s' on '%s': %s",
                                 model_name,
                                 ctrl_name,
                                 exc,
                             )
-            except Exception as exc:
+            except (JujuError, OSError, asyncio.TimeoutError, KeyError) as exc:
                 logger.debug("Could not connect to controller '%s': %s", ctrl_name, exc)
 
         self._populate_consumers(consumers)
@@ -206,29 +169,7 @@ class OffersScreen(ModalScreen):
 
     BINDINGS = [Binding("escape", "dismiss", show=False)]
 
-    DEFAULT_CSS = """
-    OffersScreen {
-        align: center middle;
-    }
-    OffersScreen #offers-panel {
-        width: 88%;
-        height: 85%;
-        background: $surface;
-        border: round $accent;
-        border-title-color: $accent;
-        border-title-style: bold;
-        padding: 1 2;
-    }
-    OffersScreen #offers-loading {
-        height: 1fr;
-        content-align: center middle;
-        color: $text-muted;
-        text-style: italic;
-    }
-    OffersScreen DataTable {
-        height: 1fr;
-    }
-    """
+    DEFAULT_CSS = (Path(__file__).parent / "offers_screen.tcss").read_text()
 
     def __init__(self, controller_name: str) -> None:
         super().__init__()

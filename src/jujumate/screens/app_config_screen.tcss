@@ -1,0 +1,12 @@
+AppConfigScreen {
+    align: center middle;
+}
+AppConfigScreen AppConfigView {
+    width: 88%;
+    height: 85%;
+    background: $surface;
+    border: round $accent;
+    border-title-color: $accent;
+    border-title-style: bold;
+    padding: 1 2;
+}

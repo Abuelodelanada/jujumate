@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from textual import events
@@ -25,15 +26,7 @@ class ResourceTable(Widget):
             super().__init__()
             self.resource_table = resource_table
 
-    DEFAULT_CSS = """
-    ResourceTable {
-        height: 1fr;
-    }
-    ResourceTable Label {
-        padding: 1 2;
-        color: $text-muted;
-    }
-    """
+    DEFAULT_CSS = (Path(__file__).parent / "resource_table.tcss").read_text()
 
     def __init__(
         self, columns: list[Column], *args: Any, cursor: bool = True, **kwargs: Any

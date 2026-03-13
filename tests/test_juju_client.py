@@ -1,6 +1,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from juju.errors import JujuConnectionError, JujuError
 
 from jujumate.client.juju_client import JujuClient, JujuClientError
 from jujumate.models.entities import (
@@ -13,29 +14,29 @@ from jujumate.models.entities import (
 
 @pytest.mark.asyncio
 async def test_connect_current(mock_controller):
-    client = JujuClient()
+    client = JujuClient(controller=mock_controller)
     await client.connect()
     mock_controller.connect_current.assert_awaited_once()
 
 
 @pytest.mark.asyncio
 async def test_connect_named_controller(mock_controller):
-    client = JujuClient(controller_name="prod")
+    client = JujuClient(controller_name="prod", controller=mock_controller)
     await client.connect()
     mock_controller.connect.assert_awaited_once_with("prod")
 
 
 @pytest.mark.asyncio
 async def test_connect_raises_on_failure(mock_controller):
-    mock_controller.connect_current.side_effect = Exception("connection refused")
-    client = JujuClient()
+    mock_controller.connect_current.side_effect = JujuConnectionError("connection refused")
+    client = JujuClient(controller=mock_controller)
     with pytest.raises(JujuClientError, match="Failed to connect"):
         await client.connect()
 
 
 @pytest.mark.asyncio
 async def test_context_manager_connects_and_disconnects(mock_controller):
-    async with JujuClient():
+    async with JujuClient(controller=mock_controller):
         mock_controller.connect_current.assert_awaited_once()
     mock_controller.disconnect.assert_awaited_once()
 
@@ -49,7 +50,7 @@ async def test_get_clouds(mock_controller):
     cloud.regions = [region]
     mock_controller.clouds.return_value = MagicMock(clouds={"cloud-aws": cloud})
 
-    client = JujuClient()
+    client = JujuClient(controller=mock_controller)
     result = await client.get_clouds()
 
     assert len(result) == 1
@@ -64,7 +65,7 @@ async def test_get_models(mock_controller):
     model, _, _ = _make_model_mock()
     mock_controller.get_model.return_value = model
 
-    client = JujuClient()
+    client = JujuClient(controller=mock_controller)
     result = await client.get_models()
 
     assert len(result) == 2
@@ -76,7 +77,7 @@ async def test_get_models(mock_controller):
 @pytest.mark.asyncio
 async def test_list_model_names(mock_controller):
     mock_controller.list_models.return_value = ["dev", "prod"]
-    client = JujuClient()
+    client = JujuClient(controller=mock_controller)
     result = await client.list_model_names()
     assert result == ["dev", "prod"]
 
@@ -139,7 +140,7 @@ async def test_get_model_snapshot(mock_controller):
     model, app_st, unit_st = _make_model_mock()
     mock_controller.get_model.return_value = model
 
-    client = JujuClient()
+    client = JujuClient(controller=mock_controller)
     model_info, apps, units, machines = await client.get_model_snapshot("dev")
 
     assert model_info.name == "dev"
@@ -178,7 +179,7 @@ async def test_get_model_snapshot_kubernetes(mock_controller):
     model, _, _ = _make_model_mock(is_kubernetes=True, unit_address="10.1.2.3")
     mock_controller.get_model.return_value = model
 
-    client = JujuClient()
+    client = JujuClient(controller=mock_controller)
     model_info, apps, units, machines = await client.get_model_snapshot("cos")
 
     assert model_info.is_kubernetes is True
@@ -191,8 +192,8 @@ async def test_get_model_snapshot_kubernetes(mock_controller):
 
 @pytest.mark.asyncio
 async def test_get_model_snapshot_fallback_on_failure(mock_controller):
-    mock_controller.get_model.side_effect = Exception("timeout")
-    client = JujuClient()
+    mock_controller.get_model.side_effect = JujuError("timeout")
+    client = JujuClient(controller=mock_controller)
     model_info, apps, units, machines = await client.get_model_snapshot("broken")
     assert model_info.status == "unknown"
     assert apps == []
@@ -213,7 +214,7 @@ async def test_get_model_snapshot_includes_subordinate_units(mock_controller):
     unit_st.subordinates = {"nrpe/0": sub_st}
     mock_controller.get_model.return_value = model
 
-    client = JujuClient()
+    client = JujuClient(controller=mock_controller)
     _, _, units, _ = await client.get_model_snapshot("dev")
 
     assert len(units) == 2
@@ -229,7 +230,7 @@ async def test_get_applications(mock_controller):
     model, _, _ = _make_model_mock()
     mock_controller.get_model.return_value = model
 
-    client = JujuClient()
+    client = JujuClient(controller=mock_controller)
     result = await client.get_applications("dev")
 
     assert len(result) == 1
@@ -244,7 +245,7 @@ async def test_get_units(mock_controller):
     model, _, _ = _make_model_mock(unit_address="10.0.0.1")
     mock_controller.get_model.return_value = model
 
-    client = JujuClient()
+    client = JujuClient(controller=mock_controller)
     result = await client.get_units("dev")
 
     assert len(result) == 1
@@ -258,9 +259,9 @@ async def test_get_units(mock_controller):
 async def test_get_models_falls_back_on_failed_model(mock_controller):
     mock_controller.list_models.return_value = ["broken", "ok"]
     ok_model, _, _ = _make_model_mock()
-    mock_controller.get_model.side_effect = [Exception("boom"), ok_model]
+    mock_controller.get_model.side_effect = [JujuError("boom"), ok_model]
 
-    client = JujuClient()
+    client = JujuClient(controller=mock_controller)
     result = await client.get_models()
 
     # Both models are returned: one with full info, one minimal (fallback)
@@ -281,9 +282,9 @@ async def test_get_models_falls_back_on_failed_model(mock_controller):
     ],
 )
 async def test_get_returns_empty_on_failure(mock_controller, method_name):
-    mock_controller.get_model.side_effect = Exception("boom")
+    mock_controller.get_model.side_effect = JujuError("boom")
 
-    client = JujuClient()
+    client = JujuClient(controller=mock_controller)
     result = await getattr(client, method_name)("broken-model")
 
     assert result == []
@@ -297,7 +298,7 @@ async def test_get_controllers(mock_controller):
     mock_controller.get_cloud = AsyncMock(return_value="aws")
     mock_controller.list_models = AsyncMock(return_value=["dev", "prod"])
 
-    client = JujuClient()
+    client = JujuClient(controller=mock_controller)
     result = await client.get_controllers()
 
     assert len(result) == 1
@@ -309,9 +310,9 @@ async def test_get_controllers(mock_controller):
 
 @pytest.mark.asyncio
 async def test_get_controllers_returns_empty_on_failure(mock_controller):
-    mock_controller.get_cloud.side_effect = Exception("boom")
+    mock_controller.get_cloud.side_effect = JujuError("boom")
 
-    client = JujuClient()
+    client = JujuClient(controller=mock_controller)
     result = await client.get_controllers()
 
     assert result == []
@@ -341,7 +342,7 @@ async def test_get_relations(mock_controller):
     model.applications = {}
     mock_controller.get_model.return_value = model
 
-    client = JujuClient()
+    client = JujuClient(controller=mock_controller)
     result = await client.get_relations("dev")
 
     assert len(result) == 1
@@ -370,7 +371,7 @@ async def test_get_relations_peer(mock_controller):
     model.applications = {}
     mock_controller.get_model.return_value = model
 
-    client = JujuClient()
+    client = JujuClient(controller=mock_controller)
     result = await client.get_relations("dev")
 
     assert len(result) == 1
@@ -383,7 +384,7 @@ async def test_get_relations_peer(mock_controller):
 async def test_get_relations_raises_on_failure(mock_controller):
     mock_controller.get_model.side_effect = Exception("boom")
 
-    client = JujuClient()
+    client = JujuClient(controller=mock_controller)
     with pytest.raises(Exception, match="boom"):
         await client.get_relations("broken-model")
 
@@ -413,7 +414,7 @@ async def test_get_status_details_returns_offers(mock_controller):
     model.applications = {"alertmanager": live_app}
     mock_controller.get_model.return_value = model
 
-    client = JujuClient()
+    client = JujuClient(controller=mock_controller)
     relations, offers, saas = await client.get_status_details("cos")
 
     assert relations == []
@@ -457,7 +458,7 @@ async def test_get_secrets_owner_tag_parsing(mock_controller, owner_tag, expecte
     mock_controller.disconnect = AsyncMock()
     model.disconnect = AsyncMock()
 
-    client = JujuClient()
+    client = JujuClient(controller=mock_controller)
     await client.connect()
     result = await client.get_secrets("dev")
 
@@ -475,7 +476,7 @@ async def test_get_secrets_empty(mock_controller):
     mock_controller.disconnect = AsyncMock()
     model.disconnect = AsyncMock()
 
-    client = JujuClient()
+    client = JujuClient(controller=mock_controller)
     await client.connect()
     result = await client.get_secrets("dev")
     assert result == []
@@ -514,7 +515,7 @@ async def test_get_app_config(mock_controller):
     mock_controller.disconnect = AsyncMock()
     model.disconnect = AsyncMock()
 
-    client = JujuClient()
+    client = JujuClient(controller=mock_controller)
     await client.connect()
     result = await client.get_app_config("dev", "pg")
 
@@ -545,7 +546,7 @@ async def test_get_app_config_non_dict_values_skipped(mock_controller):
     mock_controller.disconnect = AsyncMock()
     model.disconnect = AsyncMock()
 
-    client = JujuClient()
+    client = JujuClient(controller=mock_controller)
     await client.connect()
     result = await client.get_app_config("dev", "pg")
     assert len(result) == 1
@@ -559,7 +560,7 @@ async def test_get_app_config_app_not_found(mock_controller):
     mock_controller.disconnect = AsyncMock()
     model.disconnect = AsyncMock()
 
-    client = JujuClient()
+    client = JujuClient(controller=mock_controller)
     await client.connect()
     result = await client.get_app_config("dev", "missing")
     assert result == []
@@ -607,7 +608,7 @@ async def test_get_relation_data_provider_side(mock_controller):
         mock_controller.disconnect = AsyncMock()
         model.disconnect = AsyncMock()
 
-        client = JujuClient()
+        client = JujuClient(controller=mock_controller)
         await client.connect()
         result = await client.get_relation_data("dev", 5, "postgresql", "wordpress")
 
@@ -632,7 +633,7 @@ async def test_get_relation_data_no_units(mock_controller):
         mock_controller.disconnect = AsyncMock()
         model.disconnect = AsyncMock()
 
-        client = JujuClient()
+        client = JujuClient(controller=mock_controller)
         await client.connect()
         result = await client.get_relation_data("dev", 5, "postgresql", "wordpress")
 
@@ -672,7 +673,7 @@ async def test_get_relation_data_skips_wrong_relation_id(mock_controller):
         mock_controller.disconnect = AsyncMock()
         model.disconnect = AsyncMock()
 
-        client = JujuClient()
+        client = JujuClient(controller=mock_controller)
         await client.connect()
         result = await client.get_relation_data("dev", 5, "postgresql", "wordpress")
 
@@ -711,7 +712,7 @@ async def test_get_status_details_saas_from_unknown_fields(mock_controller):
     model.applications = {}
     mock_controller.get_model.return_value = model
 
-    client = JujuClient()
+    client = JujuClient(controller=mock_controller)
     _, _, saas = await client.get_status_details("cos")
 
     assert len(saas) == 2
@@ -746,7 +747,7 @@ async def test_get_status_details_saas_from_remote_applications(mock_controller)
     model.applications = {}
     mock_controller.get_model.return_value = model
 
-    client = JujuClient()
+    client = JujuClient(controller=mock_controller)
     _, _, saas = await client.get_status_details("dev")
 
     assert len(saas) == 1
@@ -795,7 +796,7 @@ async def test_get_relation_data_peer_relation(mock_controller):
         mock_controller.get_model = AsyncMock(return_value=model)
         model.disconnect = AsyncMock()
 
-        client = JujuClient()
+        client = JujuClient(controller=mock_controller)
         await client.connect()
         result = await client.get_relation_data("dev", 3, "etcd", "etcd")
 
@@ -826,7 +827,7 @@ async def test_get_relation_data_empty_units_info_results(mock_controller):
         mock_controller.get_model = AsyncMock(return_value=model)
         model.disconnect = AsyncMock()
 
-        client = JujuClient()
+        client = JujuClient(controller=mock_controller)
         await client.connect()
         result = await client.get_relation_data("dev", 5, "postgresql", "wordpress")
 
@@ -860,7 +861,7 @@ async def test_get_relation_data_unit_result_has_error(mock_controller):
         mock_controller.get_model = AsyncMock(return_value=model)
         model.disconnect = AsyncMock()
 
-        client = JujuClient()
+        client = JujuClient(controller=mock_controller)
         await client.connect()
         result = await client.get_relation_data("dev", 5, "postgresql", "wordpress")
 
@@ -904,7 +905,7 @@ async def test_get_relation_data_includes_unit_level_data(mock_controller):
         mock_controller.get_model = AsyncMock(return_value=model)
         model.disconnect = AsyncMock()
 
-        client = JujuClient()
+        client = JujuClient(controller=mock_controller)
         await client.connect()
         result = await client.get_relation_data("dev", 5, "postgresql", "wordpress")
 
@@ -953,7 +954,7 @@ async def test_get_controller_offers_uses_status_counts(mock_controller):
     model.disconnect = AsyncMock()
     mock_controller.get_model = AsyncMock(return_value=model)
 
-    client = JujuClient()
+    client = JujuClient(controller=mock_controller)
     await client.connect()
     results = await client.get_controller_offers()
 

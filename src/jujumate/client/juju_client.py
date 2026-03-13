@@ -1,7 +1,9 @@
 import asyncio
 import base64
+import binascii
 import json
 import logging
+import re
 import ssl as ssl_module
 from collections.abc import AsyncGenerator
 from datetime import datetime
@@ -10,6 +12,7 @@ from typing import Any
 import websockets
 from juju.client import client as juju_client
 from juju.controller import Controller
+from juju.errors import JujuError
 
 from jujumate.models.entities import (
     AppConfigEntry,
@@ -39,23 +42,10 @@ def _utc_ts_to_local_hms(ts_raw: str) -> str:
     Python's fromisoformat only accepts up to microseconds, so we truncate
     the fractional part to 6 digits before parsing.
     """
-    if "T" not in ts_raw:
-        return ts_raw[:8]
     try:
-        date_part, time_part = ts_raw.split("T", 1)
-        dot = time_part.find(".")
-        if dot >= 0:
-            # Find where the fractional digits end (Z or +/-)
-            end = dot + 1
-            while end < len(time_part) and time_part[end].isdigit():
-                end += 1
-            frac = time_part[dot + 1 : end][:6]  # truncate nanoseconds → microseconds
-            time_clean = time_part[: dot + 1] + frac + time_part[end:]
-        else:
-            time_clean = time_part
-        iso = f"{date_part}T{time_clean.replace('Z', '+00:00')}"
-        return datetime.fromisoformat(iso).astimezone().strftime("%H:%M:%S")
-    except Exception:
+        normalized = re.sub(r"(\.\d{6})\d*", r"\1", ts_raw).replace("Z", "+00:00")
+        return datetime.fromisoformat(normalized).astimezone().strftime("%H:%M:%S")
+    except ValueError:
         return ts_raw.split("T")[1][:8] if "T" in ts_raw else ts_raw[:8]
 
 
@@ -76,7 +66,7 @@ def _decode_secret_value(v: Any) -> str:
     try:
         decoded = base64.b64decode(raw, validate=True).decode("utf-8")
         return decoded
-    except Exception:
+    except (binascii.Error, UnicodeDecodeError):
         return raw
 
 
@@ -84,10 +74,374 @@ class JujuClientError(Exception):
     pass
 
 
+def _parse_model_info(
+    model: Any, full_status: Any, model_name: str, controller_name: str
+) -> ModelInfo:
+    info = model.info
+    cloud_tag = (info.cloud_tag or "") if info else ""
+    cloud = cloud_tag.split("-", 1)[-1] if "-" in cloud_tag else cloud_tag
+    app_statuses = full_status.applications or {}
+    is_kubernetes = getattr(info, "type_", "") == "caas" if info else False
+    return ModelInfo(
+        name=model_name,
+        controller=controller_name,
+        cloud=cloud,
+        region=(info.cloud_region or "") if info else "",
+        status=info.status.status if info and info.status else "",
+        machine_count=len(full_status.machines or {}),
+        app_count=len(app_statuses),
+        is_kubernetes=is_kubernetes,
+    )
+
+
+def _parse_app_info(
+    app_name: str, app_st: Any, model: Any, model_name: str, controller_name: str
+) -> AppInfo:
+    charm_name = (
+        model.applications[app_name].charm_name
+        if app_name in model.applications
+        else _s(app_st.charm).split("/")[-1].rsplit("-", 1)[0]
+    )
+    return AppInfo(
+        name=app_name,
+        model=model_name,
+        charm=_s(charm_name),
+        channel=_s(app_st.charm_channel),
+        revision=app_st.charm_rev or 0,
+        unit_count=len(app_st.units or {}),
+        status=_s(app_st.status.status) if app_st.status else "",
+        message=_s(app_st.status.info) if app_st.status else "",
+        version=_s(app_st.workload_version),
+        address=_s(app_st.public_address),
+        exposed=bool(app_st.exposed),
+        can_upgrade_to=_s(app_st.can_upgrade_to),
+        controller=controller_name,
+    )
+
+
+def _parse_unit_info(
+    unit_name: str, unit_st: Any, app_name: str, model_name: str, controller_name: str
+) -> UnitInfo:
+    ports_list: list[str] = [_s(p) for p in (unit_st.opened_ports or [])]
+    ports_str = ", ".join(ports_list) if ports_list else ""
+    return UnitInfo(
+        name=unit_name,
+        app=app_name,
+        model=model_name,
+        machine=_s(unit_st.machine),
+        workload_status=_s(unit_st.workload_status.status) if unit_st.workload_status else "",
+        agent_status=_s(unit_st.agent_status.status) if unit_st.agent_status else "",
+        address=_s(unit_st.address),
+        public_address=_s(unit_st.public_address),
+        ports=ports_str,
+        message=_s(unit_st.workload_status.info) if unit_st.workload_status else "",
+        controller=controller_name,
+    )
+
+
+def _parse_subordinate(
+    sub_name: str,
+    sub_st: Any,
+    unit_st: Any,
+    unit_name: str,
+    model_name: str,
+    controller_name: str,
+) -> UnitInfo:
+    sub_app = sub_name.split("/")[0]
+    return UnitInfo(
+        name=sub_name,
+        app=sub_app,
+        model=model_name,
+        machine=_s(unit_st.machine),
+        workload_status=_s(sub_st.workload_status.status) if sub_st.workload_status else "",
+        agent_status=_s(sub_st.agent_status.status) if sub_st.agent_status else "",
+        address=_s(sub_st.address) or _s(unit_st.address),
+        public_address=_s(sub_st.public_address) or _s(unit_st.public_address),
+        ports=", ".join([_s(p) for p in (sub_st.opened_ports or [])]),
+        message=_s(sub_st.workload_status.info) if sub_st.workload_status else "",
+        subordinate_of=unit_name,
+        controller=controller_name,
+    )
+
+
+def _parse_machine_info(m_id: str, m_st: Any, model_name: str, controller_name: str) -> MachineInfo:
+    base_str = ""
+    if m_st.base:
+        base_str = f"{_s(m_st.base.name)}@{_s(m_st.base.channel)}" if m_st.base.name else ""
+    az = ""
+    if m_st.hardware:
+        for part in _s(m_st.hardware).split():
+            if part.startswith("availability-zone="):
+                az = part.split("=", 1)[1]
+                break
+    return MachineInfo(
+        model=model_name,
+        id=m_id,
+        state=_s(m_st.agent_status.status) if m_st.agent_status else "",
+        address=_s(m_st.dns_name),
+        instance_id=_s(m_st.instance_id),
+        base=base_str,
+        az=az,
+        message=_s(m_st.instance_status.info) if m_st.instance_status else "",
+        controller=controller_name,
+    )
+
+
+def _parse_relation(rel: Any, model_name: str, controller_name: str) -> RelationInfo | None:
+    endpoints = list(rel.endpoints or [])
+    provider = next((e for e in endpoints if e is not None and e.role == "provider"), None)
+    requirer = next((e for e in endpoints if e is not None and e.role == "requirer"), None)
+    peer = next((e for e in endpoints if e is not None and e.role == "peer"), None)
+    if peer:
+        return RelationInfo(
+            model=model_name,
+            provider=f"{peer.application}:{peer.name}",
+            requirer=f"{peer.application}:{peer.name}",
+            interface=_s(rel.interface),
+            type="peer",
+            relation_id=int(rel.id_ or 0),
+            controller=controller_name,
+        )
+    elif provider and requirer:
+        return RelationInfo(
+            model=model_name,
+            provider=f"{provider.application}:{provider.name}",
+            requirer=f"{requirer.application}:{requirer.name}",
+            interface=_s(rel.interface),
+            type="regular",
+            relation_id=int(rel.id_ or 0),
+            controller=controller_name,
+        )
+    return None
+
+
+def _parse_offer_endpoints(
+    offer_name: str,
+    offer_st: Any,
+    model: Any,
+    app_statuses: dict,
+    model_name: str,
+    controller_name: str,
+) -> list[OfferInfo]:
+    app_name = _s(offer_st.application_name)
+    app_st = app_statuses.get(app_name)
+    rev = app_st.charm_rev if app_st else 0
+    charm_name = (
+        model.applications[app_name].charm_name if app_name in model.applications else app_name
+    )
+    active = offer_st.active_connected_count or 0
+    total = offer_st.total_connected_count or 0
+    connected = f"{active}/{total}"
+    return [
+        OfferInfo(
+            model=model_name,
+            name=offer_name,
+            application=app_name,
+            charm=_s(charm_name),
+            rev=rev or 0,
+            connected=connected,
+            endpoint=ep_name,
+            interface=_s(ep.interface),
+            role=_s(ep.role),
+            controller=controller_name,
+        )
+        for ep_name, ep in (offer_st.endpoints or {}).items()
+        if ep is not None
+    ]
+
+
+def _parse_saas_app_endpoint(name: str, ep: Any, model_name: str, controller_name: str) -> SAASInfo:
+    offer_url = ep.get("url", "") if isinstance(ep, dict) else ""
+    store = offer_url.split(":")[0] if ":" in offer_url else "local"
+    app_status = ep.get("application-status", {}) if isinstance(ep, dict) else {}
+    return SAASInfo(
+        model=model_name,
+        name=name,
+        status=app_status.get("current", "") if isinstance(app_status, dict) else "",
+        store=store,
+        url=offer_url,
+        controller=controller_name,
+    )
+
+
+def _parse_saas_remote_app(
+    name: str, remote_st: Any, model_name: str, controller_name: str
+) -> SAASInfo:
+    offer_url = remote_st.offer_url or ""
+    store = offer_url.split(":")[0] if ":" in offer_url else "local"
+    return SAASInfo(
+        model=model_name,
+        name=name,
+        status=remote_st.status.status if remote_st.status else "",
+        store=store,
+        url=offer_url,
+        controller=controller_name,
+    )
+
+
+def _relation_sides(provider_app: str, requirer_app: str) -> list[tuple[str, str, str, str]]:
+    """Return the list of (app_name, own_side, other_side, other_app_name) tuples for a relation."""
+    if provider_app == requirer_app:
+        return [(provider_app, "peer", "peer", provider_app)]
+    return [
+        (provider_app, "provider", "requirer", requirer_app),
+        (requirer_app, "requirer", "provider", provider_app),
+    ]
+
+
+def _parse_app_relation_data(
+    ep_data: Any, other_side: str, other_app_name: str
+) -> list[RelationDataEntry]:
+    """Return application-level RelationDataEntry items from an endpoint data bag."""
+    if not ep_data.applicationdata:
+        return []
+    return [
+        RelationDataEntry(side=other_side, unit=other_app_name, key=k, value=str(v), scope="app")
+        for k, v in sorted(ep_data.applicationdata.items())
+    ]
+
+
+def _parse_unit_relation_data(ep_data: Any, other_side: str) -> list[RelationDataEntry]:
+    """Return unit-level RelationDataEntry items from an endpoint data bag."""
+    entries: list[RelationDataEntry] = []
+    for unit_n, rel_data in (ep_data.unit_relation_data or {}).items():
+        if not rel_data:
+            continue
+        if not rel_data.unitdata:
+            continue
+        for k, v in sorted(rel_data.unitdata.items()):
+            entries.append(
+                RelationDataEntry(side=other_side, unit=unit_n, key=k, value=str(v), scope="unit")
+            )
+    return entries
+
+
+def _offer_status_counts(status: Any) -> dict[str, tuple[int, int]]:
+    """Extract {offer_name: (active_connected, total_connected)} from a model status object."""
+    counts: dict[str, tuple[int, int]] = {}
+    for name, offer_st in (status.offers or {}).items():
+        if offer_st is None:
+            continue
+        counts[name] = (
+            offer_st.active_connected_count or 0,
+            offer_st.total_connected_count or 0,
+        )
+    return counts
+
+
+def _build_offer_endpoints(offer: Any) -> list[OfferEndpoint]:
+    """Build a list of OfferEndpoint from a raw offer's endpoints."""
+    return [
+        OfferEndpoint(
+            name=ep.name or "",
+            interface=ep.interface or "",
+            role=ep.role or "",
+        )
+        for ep in (offer.endpoints or [])
+    ]
+
+
+def _build_controller_offer_info(
+    offer: Any, model_name: str, status_counts: dict[str, tuple[int, int]]
+) -> ControllerOfferInfo:
+    """Combine a raw offer and status_counts into a ControllerOfferInfo."""
+    _access_rank = {"admin": 3, "consume": 2, "read": 1}
+    offer_name = offer.offer_name or ""
+    active, total = status_counts.get(offer_name, (0, 0))
+    users = offer.users or []
+    access = max(
+        (getattr(u, "access", "") or "" for u in users),
+        key=lambda a: _access_rank.get(a, 0),
+        default="",
+    )
+    return ControllerOfferInfo(
+        model=model_name,
+        name=offer_name,
+        offer_url=offer.offer_url or "",
+        application=offer.application_name or "",
+        charm=offer.charm_url or "",
+        description=offer.application_description or "",
+        access=access,
+        endpoints=_build_offer_endpoints(offer),
+        active_connections=active,
+        total_connections=total,
+    )
+
+
+async def _resolve_model_uuid(controller: Controller, model_name: str) -> str:
+    """Look up the UUID for *model_name* on *controller*.
+
+    Raises JujuClientError if the model is not found.
+    """
+    uuids = await controller.model_uuids()
+    uuid = uuids.get(model_name)
+    if not uuid:
+        raise JujuClientError(f"Model '{model_name}' not found")
+    return uuid
+
+
+def _log_stream_connection_params(controller: Controller) -> tuple[str, str, str, str | None]:
+    """Extract ``(endpoint, username, password, cacert)`` from *controller*'s connection.
+
+    Raises JujuClientError if *password* is empty (token-based auth is not supported
+    for the raw WebSocket log endpoint).
+    """
+    conn = controller.connection()
+    params = conn.connect_params()
+    endpoint: str = params["endpoint"]
+    if isinstance(endpoint, list):
+        endpoint = endpoint[0]
+    username: str = conn.username or ""
+    password: str = params["password"]
+    cacert: str | None = params["cacert"]
+    if not password:
+        raise JujuClientError("Live log streaming requires username/password authentication")
+    return endpoint, username, password, cacert
+
+
+def _build_log_stream_url(
+    endpoint: str, username: str, password: str, uuid: str, level: str
+) -> str:
+    """Return the ``wss://`` URL for the Juju model debug-log WebSocket endpoint."""
+    return f"wss://user-{username}:{password}@{endpoint}/model/{uuid}/log?backlog=100&level={level}"
+
+
+def _build_ssl_context(cacert: str | None) -> ssl_module.SSLContext | bool:
+    """Return an SSLContext loaded with *cacert*, or ``True`` to use default verification."""
+    if cacert:
+        ctx = ssl_module.create_default_context(
+            purpose=ssl_module.Purpose.SERVER_AUTH, cadata=cacert
+        )
+        # Controller certs don't contain the IP/hostname — safe to skip check
+        ctx.check_hostname = False
+        return ctx
+    return True
+
+
+def _parse_log_entry(message: str | bytes) -> LogEntry:
+    """Parse a JSON WebSocket message string into a LogEntry.
+
+    May raise ``json.JSONDecodeError``, ``KeyError``, or ``IndexError``.
+    """
+    data = json.loads(message)
+    ts_raw: str = data.get("ts", "")
+    return LogEntry(
+        timestamp=_utc_ts_to_local_hms(ts_raw),
+        level=data.get("sev", ""),
+        entity=data.get("tag", ""),
+        module=data.get("mod", ""),
+        message=data.get("msg", ""),
+    )
+
+
 class JujuClient:
-    def __init__(self, controller_name: str | None = None) -> None:
+    def __init__(
+        self,
+        controller_name: str | None = None,
+        controller: Controller | None = None,
+    ) -> None:
         self._controller_name = controller_name
-        self._controller = Controller()
+        self._controller = controller if controller is not None else Controller()
 
     async def connect(self) -> None:
         logger.debug("Connecting to controller: %s", self._controller_name or "current")
@@ -96,7 +450,7 @@ class JujuClient:
                 await self._controller.connect(self._controller_name)
             else:
                 await self._controller.connect_current()
-        except Exception as e:
+        except (JujuError, OSError, asyncio.TimeoutError) as e:
             raise JujuClientError(f"Failed to connect to controller: {e}") from e
         logger.debug("Connected to controller: %s", self._controller.controller_name)
 
@@ -130,7 +484,7 @@ class JujuClient:
                     model_count=len(model_names),
                 )
             ]
-        except Exception:
+        except (JujuError, AttributeError):
             logger.exception(
                 "Failed to get controller info for '%s'", self._controller_name or "current"
             )
@@ -160,144 +514,51 @@ class JujuClient:
         try:
             model = await self._controller.get_model(model_name)
             try:
-                info = model.info
-                cloud_tag = (info.cloud_tag or "") if info else ""
-                cloud = cloud_tag.split("-", 1)[-1] if "-" in cloud_tag else cloud_tag
                 full_status = await model.get_status()
                 app_statuses = full_status.applications or {}
-                is_kubernetes = getattr(info, "type_", "") == "caas" if info else False
-                model_info = ModelInfo(
-                    name=model_name,
-                    controller=controller_name,
-                    cloud=cloud,
-                    region=(info.cloud_region or "") if info else "",
-                    status=info.status.status if info and info.status else "",
-                    machine_count=len(full_status.machines or {}),
-                    app_count=len(app_statuses),
-                    is_kubernetes=is_kubernetes,
-                )
+                model_info = _parse_model_info(model, full_status, model_name, controller_name)
                 apps = []
                 units = []
                 for app_name, app_st in app_statuses.items():
                     if app_st is None:
                         continue
-                    charm_name = (
-                        model.applications[app_name].charm_name
-                        if app_name in model.applications
-                        else _s(app_st.charm).split("/")[-1].rsplit("-", 1)[0]
-                    )
                     apps.append(
-                        AppInfo(
-                            name=app_name,
-                            model=model_name,
-                            charm=_s(charm_name),
-                            channel=_s(app_st.charm_channel),
-                            revision=app_st.charm_rev or 0,
-                            unit_count=len(app_st.units or {}),
-                            status=_s(app_st.status.status) if app_st.status else "",
-                            message=_s(app_st.status.info) if app_st.status else "",
-                            version=_s(app_st.workload_version),
-                            address=_s(app_st.public_address),
-                            exposed=bool(app_st.exposed),
-                            can_upgrade_to=_s(app_st.can_upgrade_to),
-                            controller=self._controller_name or "",
-                        )
+                        _parse_app_info(app_name, app_st, model, model_name, controller_name)
                     )
                     for unit_name, unit_st in (app_st.units or {}).items():
                         if unit_st is None:
                             continue
-                        ports_list: list[str] = [_s(p) for p in (unit_st.opened_ports or [])]
-                        ports_str = ", ".join(ports_list) if ports_list else ""
                         units.append(
-                            UnitInfo(
-                                name=unit_name,
-                                app=app_name,
-                                model=model_name,
-                                machine=_s(unit_st.machine),
-                                workload_status=_s(unit_st.workload_status.status)
-                                if unit_st.workload_status
-                                else "",
-                                agent_status=_s(unit_st.agent_status.status)
-                                if unit_st.agent_status
-                                else "",
-                                address=_s(unit_st.address),
-                                public_address=_s(unit_st.public_address),
-                                ports=ports_str,
-                                message=_s(unit_st.workload_status.info)
-                                if unit_st.workload_status
-                                else "",
-                                controller=self._controller_name or "",
+                            _parse_unit_info(
+                                unit_name, unit_st, app_name, model_name, controller_name
                             )
                         )
                         for sub_name, sub_st in (unit_st.subordinates or {}).items():
                             if sub_st is None:
                                 continue
-                            sub_app = sub_name.split("/")[0]
                             units.append(
-                                UnitInfo(
-                                    name=sub_name,
-                                    app=sub_app,
-                                    model=model_name,
-                                    machine=_s(unit_st.machine),
-                                    workload_status=_s(sub_st.workload_status.status)
-                                    if sub_st.workload_status
-                                    else "",
-                                    agent_status=_s(sub_st.agent_status.status)
-                                    if sub_st.agent_status
-                                    else "",
-                                    address=_s(sub_st.address) or _s(unit_st.address),
-                                    public_address=_s(sub_st.public_address)
-                                    or _s(unit_st.public_address),
-                                    ports=", ".join([_s(p) for p in (sub_st.opened_ports or [])]),
-                                    message=_s(sub_st.workload_status.info)
-                                    if sub_st.workload_status
-                                    else "",
-                                    subordinate_of=unit_name,
-                                    controller=self._controller_name or "",
+                                _parse_subordinate(
+                                    sub_name,
+                                    sub_st,
+                                    unit_st,
+                                    unit_name,
+                                    model_name,
+                                    controller_name,
                                 )
                             )
-                machines = []
-                for m_id, m_st in (full_status.machines or {}).items():
-                    if m_st is None:
-                        continue
-                    base_str = ""
-                    if m_st.base:
-                        base_str = (
-                            f"{_s(m_st.base.name)}@{_s(m_st.base.channel)}"
-                            if m_st.base.name
-                            else ""
-                        )
-                    az = ""
-                    if m_st.hardware:
-                        for part in _s(m_st.hardware).split():
-                            if part.startswith("availability-zone="):
-                                az = part.split("=", 1)[1]
-                                break
-                    machines.append(
-                        MachineInfo(
-                            model=model_name,
-                            id=m_id,
-                            state=_s(m_st.agent_status.status) if m_st.agent_status else "",
-                            address=_s(m_st.dns_name),
-                            instance_id=_s(m_st.instance_id),
-                            base=base_str,
-                            az=az,
-                            message=_s(m_st.instance_status.info) if m_st.instance_status else "",
-                            controller=self._controller_name or "",
-                        )
-                    )
+                machines = [
+                    _parse_machine_info(m_id, m_st, model_name, controller_name)
+                    for m_id, m_st in (full_status.machines or {}).items()
+                    if m_st is not None
+                ]
             finally:
                 await model.disconnect()
-        except Exception:
+        except JujuError:
             logger.exception(
                 "Failed to get snapshot for model '%s', using minimal info", model_name
             )
             model_info = ModelInfo(
-                name=model_name,
-                controller=controller_name,
-                cloud="",
-                region="",
-                status="unknown",
+                name=model_name, controller=controller_name, cloud="", region="", status="unknown"
             )
             apps = []
             units = []
@@ -336,112 +597,37 @@ class JujuClient:
         self, model_name: str
     ) -> tuple[list[RelationInfo], list[OfferInfo], list[SAASInfo]]:
         """Fetch relations, offers and SAAS for a model in a single connection."""
-        relations: list[RelationInfo] = []
-        offers: list[OfferInfo] = []
-        saas: list[SAASInfo] = []
         model = await self._controller.get_model(model_name)
         try:
             status = await model.get_status()
             app_statuses = status.applications or {}
-            for rel in status.relations or []:
-                if rel is None:
-                    continue
-                endpoints: list = list(rel.endpoints or [])
-                provider = next(
-                    (e for e in endpoints if e is not None and e.role == "provider"), None
+            controller_name = self._controller_name or ""
+
+            relations = [
+                r
+                for rel in (status.relations or [])
+                if rel is not None
+                and (r := _parse_relation(rel, model_name, controller_name)) is not None
+            ]
+            offers = [
+                offer
+                for offer_name, offer_st in (status.offers or {}).items()
+                if offer_st is not None
+                for offer in _parse_offer_endpoints(
+                    offer_name, offer_st, model, app_statuses, model_name, controller_name
                 )
-                requirer = next(
-                    (e for e in endpoints if e is not None and e.role == "requirer"), None
-                )
-                peer = next((e for e in endpoints if e is not None and e.role == "peer"), None)
-                if peer:
-                    relations.append(
-                        RelationInfo(
-                            model=model_name,
-                            provider=f"{peer.application}:{peer.name}",
-                            requirer=f"{peer.application}:{peer.name}",
-                            interface=_s(rel.interface),
-                            type="peer",
-                            relation_id=int(rel.id_ or 0),
-                            controller=self._controller_name or "",
-                        )
-                    )
-                elif provider and requirer:
-                    relations.append(
-                        RelationInfo(
-                            model=model_name,
-                            provider=f"{provider.application}:{provider.name}",
-                            requirer=f"{requirer.application}:{requirer.name}",
-                            interface=_s(rel.interface),
-                            type="regular",
-                            relation_id=int(rel.id_ or 0),
-                            controller=self._controller_name or "",
-                        )
-                    )
-            for offer_name, offer_st in (status.offers or {}).items():
-                if offer_st is None:
-                    continue
-                app_name = _s(offer_st.application_name)
-                app_st = app_statuses.get(app_name)
-                rev = app_st.charm_rev if app_st else 0
-                charm_name = (
-                    model.applications[app_name].charm_name
-                    if app_name in model.applications
-                    else app_name
-                )
-                active = offer_st.active_connected_count or 0
-                total = offer_st.total_connected_count or 0
-                connected = f"{active}/{total}"
-                for ep_name, ep in (offer_st.endpoints or {}).items():
-                    if ep is None:
-                        continue
-                    offers.append(
-                        OfferInfo(
-                            model=model_name,
-                            name=offer_name,
-                            application=app_name,
-                            charm=_s(charm_name),
-                            rev=rev or 0,
-                            connected=connected,
-                            endpoint=ep_name,
-                            interface=_s(ep.interface),
-                            role=_s(ep.role),
-                            controller=self._controller_name or "",
-                        )
-                    )
+            ]
             # Juju 3.6+ renamed "remote-applications" to "application-endpoints".
             # python-libjuju doesn't know about the new field yet, so it ends up in unknown_fields.
             app_endpoints: dict = (status.unknown_fields or {}).get("application-endpoints", {})
             remote_apps: dict = status.remote_applications or {}
-            for remote_name, ep in app_endpoints.items():
-                offer_url = ep.get("url", "") if isinstance(ep, dict) else ""
-                store = offer_url.split(":")[0] if ":" in offer_url else "local"
-                app_status = ep.get("application-status", {}) if isinstance(ep, dict) else {}
-                saas.append(
-                    SAASInfo(
-                        model=model_name,
-                        name=remote_name,
-                        status=app_status.get("current", "")
-                        if isinstance(app_status, dict)
-                        else "",
-                        store=store,
-                        url=offer_url,
-                        controller=self._controller_name or "",
-                    )
-                )
-            for remote_name, remote_st in remote_apps.items():
-                offer_url = remote_st.offer_url or ""
-                store = offer_url.split(":")[0] if ":" in offer_url else "local"
-                saas.append(
-                    SAASInfo(
-                        model=model_name,
-                        name=remote_name,
-                        status=remote_st.status.status if remote_st.status else "",
-                        store=store,
-                        url=offer_url,
-                        controller=self._controller_name or "",
-                    )
-                )
+            saas = [
+                _parse_saas_app_endpoint(name, ep, model_name, controller_name)
+                for name, ep in app_endpoints.items()
+            ] + [
+                _parse_saas_remote_app(name, remote_st, model_name, controller_name)
+                for name, remote_st in remote_apps.items()
+            ]
         finally:
             await model.disconnect()
         logger.debug(
@@ -487,12 +673,18 @@ class JujuClient:
         try:
             results = await model.list_secrets(show_secrets=True)
             for s in results or []:
-                if getattr(s, "uri", "") == secret_uri:
-                    value = getattr(s, "value", None)
-                    if value is not None:
-                        data = getattr(value, "data", None)
-                        if data:
-                            return {k: _decode_secret_value(v) for k, v in data.items()}
+                if getattr(s, "uri", "") != secret_uri:
+                    continue
+
+                value = getattr(s, "value", None)
+                if value is None:
+                    continue
+
+                data = getattr(value, "data", None)
+                if not data:
+                    continue
+
+                return {k: _decode_secret_value(v) for k, v in data.items()}
             return {}
         finally:
             await model.disconnect()
@@ -556,17 +748,9 @@ class JujuClient:
         try:
             facade = juju_client.ApplicationFacade.from_connection(model.connection())
             entries: list[RelationDataEntry] = []
-            is_peer = provider_app == requirer_app
-            sides: list[tuple[str, str, str, str]] = []  # (app, own_side, other_side, other_app)
-            if is_peer:
-                sides = [(provider_app, "peer", "peer", provider_app)]
-            else:
-                sides = [
-                    (provider_app, "provider", "requirer", requirer_app),
-                    (requirer_app, "requirer", "provider", provider_app),
-                ]
-
-            for app_name, _own_side, other_side, other_app_name in sides:
+            for app_name, _own_side, other_side, other_app_name in _relation_sides(
+                provider_app, requirer_app
+            ):
                 app = model.applications.get(app_name)
                 if not app or not app.units:
                     continue
@@ -581,31 +765,8 @@ class JujuClient:
                 for ep_data in unit_result.result.relation_data or []:
                     if ep_data.relation_id != relation_id:
                         continue
-                    # Application-level data bag (remote side's app data)
-                    if ep_data.applicationdata:
-                        for k, v in sorted(ep_data.applicationdata.items()):
-                            entries.append(
-                                RelationDataEntry(
-                                    side=other_side,
-                                    unit=other_app_name,
-                                    key=k,
-                                    value=str(v),
-                                    scope="app",
-                                )
-                            )
-                    # Unit-level data bags from the OTHER side's units
-                    for unit_n, rel_data in (ep_data.unit_relation_data or {}).items():
-                        if rel_data and rel_data.unitdata:
-                            for k, v in sorted(rel_data.unitdata.items()):
-                                entries.append(
-                                    RelationDataEntry(
-                                        side=other_side,
-                                        unit=unit_n,
-                                        key=k,
-                                        value=str(v),
-                                        scope="unit",
-                                    )
-                                )
+                    entries.extend(_parse_app_relation_data(ep_data, other_side, other_app_name))
+                    entries.extend(_parse_unit_relation_data(ep_data, other_side))
         finally:
             await model.disconnect()
         logger.debug("Relation data for relation %d: %d entries", relation_id, len(entries))
@@ -618,50 +779,16 @@ class JujuClient:
         try:
             raw = await self._controller.list_offers(model_name)
             model = await self._controller.get_model(model_name)
-            status_counts: dict[str, tuple[int, int]] = {}
             try:
                 status = await model.get_status()
-                for name, offer_st in (status.offers or {}).items():
-                    if offer_st is None:
-                        continue
-                    status_counts[name] = (
-                        offer_st.active_connected_count or 0,
-                        offer_st.total_connected_count or 0,
-                    )
+                status_counts = _offer_status_counts(status)
             finally:
                 await model.disconnect()
-            _access_rank = {"admin": 3, "consume": 2, "read": 1}
             for offer in raw.results or []:
                 if (offer.offer_name or "") != offer_name:
                     continue
-                endpoints = [
-                    OfferEndpoint(
-                        name=ep.name or "",
-                        interface=ep.interface or "",
-                        role=ep.role or "",
-                    )
-                    for ep in (offer.endpoints or [])
-                ]
-                active, total = status_counts.get(offer_name, (0, 0))
-                users = offer.users or []
-                access = max(
-                    (getattr(u, "access", "") or "" for u in users),
-                    key=lambda a: _access_rank.get(a, 0),
-                    default="",
-                )
-                return ControllerOfferInfo(
-                    model=model_name,
-                    name=offer_name,
-                    offer_url=offer.offer_url or "",
-                    application=offer.application_name or "",
-                    charm=offer.charm_url or "",
-                    description=offer.application_description or "",
-                    access=access,
-                    endpoints=endpoints,
-                    active_connections=active,
-                    total_connections=total,
-                )
-        except Exception:
+                return _build_controller_offer_info(offer, model_name, status_counts)
+        except JujuError:
             logger.warning(
                 "Could not fetch offer detail for '%s' in model '%s'", offer_name, model_name
             )
@@ -675,52 +802,15 @@ class JujuClient:
             try:
                 raw = await self._controller.list_offers(model_name)
                 # Get reliable connection counts from model status (same source as `juju status`).
-                status_counts: dict[str, tuple[int, int]] = {}
                 model = await self._controller.get_model(model_name)
                 try:
                     status = await model.get_status()
-                    for offer_name, offer_st in (status.offers or {}).items():
-                        if offer_st is None:
-                            continue
-                        status_counts[offer_name] = (
-                            offer_st.active_connected_count or 0,
-                            offer_st.total_connected_count or 0,
-                        )
+                    status_counts = _offer_status_counts(status)
                 finally:
                     await model.disconnect()
                 for offer in raw.results or []:
-                    endpoints = [
-                        OfferEndpoint(
-                            name=ep.name or "",
-                            interface=ep.interface or "",
-                            role=ep.role or "",
-                        )
-                        for ep in (offer.endpoints or [])
-                    ]
-                    active, total = status_counts.get(offer.offer_name or "", (0, 0))
-                    # Determine access level: pick the highest from the users list.
-                    _access_rank = {"admin": 3, "consume": 2, "read": 1}
-                    users = offer.users or []
-                    access = max(
-                        (getattr(u, "access", "") or "" for u in users),
-                        key=lambda a: _access_rank.get(a, 0),
-                        default="",
-                    )
-                    result.append(
-                        ControllerOfferInfo(
-                            model=model_name,
-                            name=offer.offer_name or "",
-                            offer_url=offer.offer_url or "",
-                            application=offer.application_name or "",
-                            charm=offer.charm_url or "",
-                            description=offer.application_description or "",
-                            access=access,
-                            endpoints=endpoints,
-                            active_connections=active,
-                            total_connections=total,
-                        )
-                    )
-            except Exception:
+                    result.append(_build_controller_offer_info(offer, model_name, status_counts))
+            except JujuError:
                 logger.warning("Could not list offers for model '%s'", model_name)
         logger.debug("Controller offers: %d total", len(result))
         return result
@@ -743,51 +833,17 @@ class JujuClient:
             model_name: Model to stream logs from.
             level: Minimum log level — TRACE, DEBUG, INFO, WARNING, ERROR.
         """
-        uuids = await self._controller.model_uuids()
-        uuid = uuids.get(model_name)
-        if not uuid:
-            raise JujuClientError(f"Model '{model_name}' not found")
-
-        conn = self._controller.connection()
-        params = conn.connect_params()
-        endpoint = params["endpoint"]
-        if isinstance(endpoint, list):
-            endpoint = endpoint[0]
-        username = conn.username
-        password = params["password"]
-        cacert = params["cacert"]
-
-        if not password:
-            raise JujuClientError("Live log streaming requires username/password authentication")
-
-        url = (
-            f"wss://user-{username}:{password}@{endpoint}"
-            f"/model/{uuid}/log?backlog=100&level={level}"
-        )
-
-        if cacert:
-            ssl_ctx: ssl_module.SSLContext | bool = ssl_module.create_default_context(
-                purpose=ssl_module.Purpose.SERVER_AUTH, cadata=cacert
-            )
-            # Controller certs don't contain the IP/hostname — safe to skip check
-            ssl_ctx.check_hostname = False  # type: ignore[union-attr]
-        else:
-            ssl_ctx = True
+        uuid = await _resolve_model_uuid(self._controller, model_name)
+        endpoint, username, password, cacert = _log_stream_connection_params(self._controller)
+        url = _build_log_stream_url(endpoint, username, password, uuid, level)
+        ssl_ctx = _build_ssl_context(cacert)
 
         while True:
             try:
                 async with websockets.connect(url, ssl=ssl_ctx, ping_interval=None) as ws:
                     async for message in ws:
                         try:
-                            data = json.loads(message)
-                            ts_raw: str = data.get("ts", "")
-                            yield LogEntry(
-                                timestamp=_utc_ts_to_local_hms(ts_raw),
-                                level=data.get("sev", ""),
-                                entity=data.get("tag", ""),
-                                module=data.get("mod", ""),
-                                message=data.get("msg", ""),
-                            )
+                            yield _parse_log_entry(message)
                         except (json.JSONDecodeError, KeyError, IndexError):
                             continue
             except asyncio.CancelledError:

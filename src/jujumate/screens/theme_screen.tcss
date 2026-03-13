@@ -1,0 +1,24 @@
+ThemeScreen {
+    align: center middle;
+}
+ThemeScreen #theme-panel {
+    width: 52;
+    height: auto;
+    max-height: 80%;
+    background: $surface;
+    border: round $accent;
+    border-title-color: $accent;
+    border-title-style: bold;
+    padding: 1 2;
+}
+ThemeScreen ListView {
+    height: auto;
+    max-height: 16;
+    background: transparent;
+}
+ThemeScreen #theme-hint {
+    height: 1;
+    margin-top: 1;
+    color: $text-muted;
+    text-style: italic;
+}

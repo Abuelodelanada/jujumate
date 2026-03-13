@@ -3,6 +3,7 @@
 import asyncio
 import logging
 from collections import deque
+from pathlib import Path
 
 from rich.text import Text
 from textual import work
@@ -20,15 +21,17 @@ logger = logging.getLogger(__name__)
 
 _LEVELS = ["TRACE", "DEBUG", "INFO", "WARNING", "ERROR"]
 
-_LEVEL_COLORS: dict[str, str] = {
-    "TRACE": palette.MUTED,
-    "DEBUG": palette.LINK,
-    "INFO": palette.SUCCESS,
-    "WARNING": palette.WARNING,
-    "ERROR": palette.ERROR,
-    "FATAL": palette.ERROR,
-    "CRITICAL": palette.ERROR,
-}
+
+def _level_color(level: str) -> str:
+    return {
+        "TRACE": palette.LOG_TRACE,
+        "DEBUG": palette.LOG_DEBUG,
+        "INFO": palette.LOG_INFO,
+        "WARNING": palette.LOG_WARNING,
+        "ERROR": palette.LOG_ERROR,
+        "FATAL": palette.LOG_ERROR,
+        "CRITICAL": palette.LOG_ERROR,
+    }.get(level, palette.LOG_TRACE)
 
 
 def _append_highlighted(t: Text, value: str, needle: str, base_style: str) -> None:
@@ -65,82 +68,7 @@ class LogScreen(ModalScreen):
         Binding("enter", "insert_separator", "── separator", show=True),
     ]
 
-    DEFAULT_CSS = """
-    LogScreen {
-        align: center middle;
-    }
-    LogScreen #log-outer {
-        width: 98%;
-        height: 95%;
-        background: $surface;
-        border: round $accent;
-        border-title-color: $accent;
-        border-title-style: bold;
-    }
-    LogScreen #log-header {
-        height: 3;
-        background: $panel;
-        padding: 1 1 0 1;
-    }
-    LogScreen #log-header Label {
-        height: 1;
-    }
-    LogScreen #log-level-label {
-        color: $accent;
-        text-style: bold;
-    }
-    LogScreen #log-model-label {
-        color: $text-muted;
-    }
-    LogScreen #log-live-indicator {
-        width: 1fr;
-        content-align: right middle;
-    }
-    LogScreen #log-divider {
-        color: $accent;
-        margin: 0;
-    }
-    LogScreen #log-filter-bar {
-        height: 1;
-        background: $panel;
-        padding: 0 1;
-        display: none;
-    }
-    LogScreen #log-filter-bar.visible {
-        display: block;
-        height: 3;
-        padding: 0 1;
-    }
-    LogScreen #log-filter {
-        background: $surface;
-        border: solid $accent;
-        height: 3;
-        padding: 0 1;
-    }
-    LogScreen #log-richlog {
-        height: 1fr;
-        background: $surface;
-        padding: 0 1;
-        scrollbar-size-vertical: 0;
-    }
-    LogScreen #log-hint {
-        height: 1;
-        background: $panel;
-        padding: 0 1;
-    }
-    LogScreen .hint-key {
-        color: $accent;
-        height: 1;
-    }
-    LogScreen .hint-item {
-        color: $text-muted;
-        height: 1;
-    }
-    LogScreen .hint-sep {
-        color: $accent;
-        height: 1;
-    }
-    """
+    DEFAULT_CSS = (Path(__file__).parent / "log_screen.tcss").read_text()
 
     def __init__(self, controller: str, model: str, **kwargs) -> None:
         super().__init__(**kwargs)
@@ -234,7 +162,7 @@ class LogScreen(ModalScreen):
             self.notify(str(exc), title="Log stream error", severity="error")
 
     def _format_entry(self, entry: LogEntry) -> Text:
-        color = _LEVEL_COLORS.get(entry.level, palette.MUTED)
+        color = _level_color(entry.level)
         needle = self._filter_text
         t = Text(overflow="fold")
         _append_highlighted(t, entry.entity, needle, palette.MUTED)
@@ -256,7 +184,7 @@ class LogScreen(ModalScreen):
 
     def _update_level_label(self) -> None:
         label = self.query_one("#log-level-label", Label)
-        color = _LEVEL_COLORS.get(self._level, palette.MUTED)
+        color = _level_color(self._level)
         label.update(Text(f"  │  Level: {self._level}", style=f"bold {color}"))
 
     def _rerender_buffer(self) -> None:

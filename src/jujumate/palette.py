@@ -21,20 +21,27 @@ if TYPE_CHECKING:
     from textual.theme import Theme
 
 # ── Brand colors ─────────────────────────────────────────────────────────────
-PRIMARY = "#E95420"  # Brand primary   (Ubuntu Orange in ubuntu theme)
-SECONDARY = "#77216F"  # Brand secondary (Aubergine in ubuntu theme)
+PRIMARY = ""
+SECONDARY = ""
 
 # ── Semantic status colors ────────────────────────────────────────────────────
-SUCCESS = "#26A269"  # Active / healthy / admin access
-WARNING = "#EFB73E"  # Warning / maintenance / waiting / peer
-ERROR = "#FF5555"  # Error / blocked / terminated
+SUCCESS = ""
+WARNING = ""
+ERROR = ""
 
 # ── UI accent colors ──────────────────────────────────────────────────────────
-LINK = "#19B6EE"  # URLs, IP addresses, ports, consume access
-MUTED = "#888888"  # Unknown / inactive / read-only
+LINK = ""
+MUTED = ""
 
 # ── Animation ─────────────────────────────────────────────────────────────────
-PULSE_OFF = "#004d26"  # Heartbeat indicator dim state (on state = SUCCESS)
+PULSE_OFF = ""
+
+# ── Log level colors ──────────────────────────────────────────────────────────
+LOG_TRACE = ""
+LOG_DEBUG = ""
+LOG_INFO = ""
+LOG_WARNING = ""
+LOG_ERROR = ""
 
 
 def init(theme: Theme) -> None:
@@ -45,22 +52,23 @@ def init(theme: Theme) -> None:
     and ``variables:`` entries (link, muted, pulse-off) from the theme YAML.
     """
     g = globals()
-
-    if theme.primary:
-        g["PRIMARY"] = theme.primary
-    if theme.secondary:
-        g["SECONDARY"] = theme.secondary
-    if theme.success:
-        g["SUCCESS"] = theme.success
-    if theme.warning:
-        g["WARNING"] = theme.warning
-    if theme.error:
-        g["ERROR"] = theme.error
-
     variables = theme.variables or {}
-    if "link" in variables:
-        g["LINK"] = variables["link"]
-    if "muted" in variables:
-        g["MUTED"] = variables["muted"]
-    if "pulse-off" in variables:
-        g["PULSE_OFF"] = variables["pulse-off"]
+
+    color_map = {
+        "PRIMARY": theme.primary,
+        "SECONDARY": theme.secondary,
+        "SUCCESS": theme.success,
+        "WARNING": theme.warning,
+        "ERROR": theme.error,
+        "LINK": variables.get("link"),
+        "MUTED": variables.get("muted"),
+        "PULSE_OFF": variables.get("pulse-off"),
+        "LOG_TRACE": variables.get("log-trace"),
+        "LOG_DEBUG": variables.get("log-debug"),
+        "LOG_INFO": variables.get("log-info"),
+        "LOG_WARNING": variables.get("log-warning") or theme.warning,
+        "LOG_ERROR": variables.get("log-error") or theme.error,
+    }
+    for global_name, value in color_map.items():
+        if value:
+            g[global_name] = value

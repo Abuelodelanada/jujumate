@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from rich.panel import Panel
@@ -8,8 +9,6 @@ from textual.widget import Widget
 from textual.widgets import Static
 
 from jujumate import palette
-
-_SUBTITLE = "Juju infrastructure TUI"
 
 
 @dataclass
@@ -34,24 +33,7 @@ class HeaderContext:
 class JujuMateHeader(Widget):
     """Header with logo+identity on the left and contextual info on the right."""
 
-    DEFAULT_CSS = """
-    JujuMateHeader {
-        height: 4;
-        dock: top;
-        background: ansi_default;
-        layout: horizontal;
-    }
-    JujuMateHeader #header-left {
-        width: auto;
-        min-width: 30;
-    }
-    JujuMateHeader #header-right {
-        width: 1fr;
-        padding: 0 2;
-        color: $primary;
-        content-align: left middle;
-    }
-    """
+    DEFAULT_CSS = (Path(__file__).parent / "jujumate_header.tcss").read_text()
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
@@ -77,7 +59,7 @@ class JujuMateHeader(Widget):
 
         # Left: bordered panel
         inner = RichText()
-        inner.append(_SUBTITLE, style="dim")
+        inner.append(self.app.sub_title, style="dim")
         inner.append("\n")
         inner.append_text(RichText.from_markup(status))
         sec = palette.SECONDARY

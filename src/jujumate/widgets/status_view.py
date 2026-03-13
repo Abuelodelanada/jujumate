@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Any
 
 from rich.text import Text
@@ -21,23 +22,25 @@ from jujumate.models.entities import (
 )
 from jujumate.widgets.resource_table import Column, ResourceTable
 
-_STATUS_COLORS: dict[str, str] = {
-    "active": palette.SUCCESS,
-    "idle": palette.SUCCESS,
-    "started": palette.SUCCESS,
-    "blocked": palette.ERROR,
-    "error": palette.ERROR,
-    "terminated": palette.ERROR,
-    "maintenance": palette.WARNING,
-    "waiting": palette.WARNING,
-    "executing": palette.WARNING,
-    "unknown": palette.MUTED,
-}
+
+def _status_color(status: str) -> str:
+    return {
+        "active": palette.SUCCESS,
+        "idle": palette.SUCCESS,
+        "started": palette.SUCCESS,
+        "blocked": palette.ERROR,
+        "error": palette.ERROR,
+        "terminated": palette.ERROR,
+        "maintenance": palette.WARNING,
+        "waiting": palette.WARNING,
+        "executing": palette.WARNING,
+        "unknown": palette.MUTED,
+    }.get(status, "")
 
 
 def _colored_status(status: str) -> Text:
     """Return a Rich Text object with the status colored by severity."""
-    color = _STATUS_COLORS.get(status.strip().lower(), "")
+    color = _status_color(status.strip().lower())
     if color:
         return Text.from_markup(f"[{color}]{status}[/]")
     return Text(status)
@@ -204,56 +207,7 @@ class StatusView(Widget):
             super().__init__()
             self.offer = offer
 
-    DEFAULT_CSS = """
-    StatusView {
-        height: 1fr;
-        layout: vertical;
-    }
-    StatusView .section-label {
-        padding: 1 2 0 2;
-        text-style: bold;
-        color: $accent;
-    }
-    StatusView ResourceTable {
-        height: auto;
-        border: solid $accent;
-        border-title-color: $accent;
-        border-title-style: bold;
-        margin-bottom: 0;
-        padding: 1 1 0 1;
-    }
-    StatusView DataTable {
-        height: auto;
-        border: none;
-        scrollbar-size: 0 0;
-        overflow-x: hidden;
-    }
-    StatusView #status-scroll {
-        height: 1fr;
-        scrollbar-size: 0 0;
-    }
-    StatusView #filter-input {
-        display: none;
-        height: 1;
-        border: none;
-        padding: 0 2;
-        background: $boost;
-    }
-    StatusView #msg-bar {
-        height: 1;
-        width: 100%;
-        padding: 0 2;
-        color: $text-muted;
-        text-style: italic;
-    }
-    StatusView #scroll-indicator {
-        height: 1;
-        width: 100%;
-        text-align: center;
-        text-style: dim;
-        color: $text-muted;
-    }
-    """
+    DEFAULT_CSS = (Path(__file__).parent / "status_view.tcss").read_text()
 
     _show_more: reactive[bool] = reactive(False)
     _filter: reactive[str] = reactive("", init=False)

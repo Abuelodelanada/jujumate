@@ -1,5 +1,8 @@
+import asyncio
 import logging
+from pathlib import Path
 
+from juju.errors import JujuError
 from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -14,20 +17,7 @@ logger = logging.getLogger(__name__)
 
 class RelationDataScreen(ModalScreen):
     BINDINGS = [Binding("escape", "dismiss", show=False)]
-    DEFAULT_CSS = """
-    RelationDataScreen {
-        align: center middle;
-    }
-    RelationDataScreen RelationDataView {
-        width: 88%;
-        height: 85%;
-        background: $surface;
-        border: round $accent;
-        border-title-color: $accent;
-        border-title-style: bold;
-        padding: 1 2;
-    }
-    """
+    DEFAULT_CSS = (Path(__file__).parent / "relation_data_screen.tcss").read_text()
 
     def __init__(self, controller_name: str, model_name: str, relation: RelationInfo) -> None:
         super().__init__()
@@ -61,6 +51,6 @@ class RelationDataScreen(ModalScreen):
                     model_name, relation.relation_id, provider_app, requirer_app
                 )
             self.query_one(RelationDataView).update(relation, entries)
-        except Exception as exc:
+        except (JujuError, OSError, asyncio.TimeoutError, KeyError) as exc:
             logger.exception("Failed to fetch relation data for relation %d", relation.relation_id)
             self.query_one(RelationDataView).show_error(relation, str(exc))

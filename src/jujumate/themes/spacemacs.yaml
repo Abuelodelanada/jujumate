@@ -26,6 +26,9 @@ variables:
   link:    "#2aa1ae"      # comment/cyan — URLs, IPs, consume access
   muted:   "#686868"      # base-dim     — unknown / inactive / read-only
   pulse-off: "#294a10"    # Dark Spacemacs green for pulse dim state
+  log-trace:   "#686868"  # base-dim muted
+  log-debug:   "#2aa1ae"  # cyan
+  log-info:    "#67b11d"  # green
 
   block-cursor-background:         "#444155"
   block-cursor-blurred-background: "#444155"
