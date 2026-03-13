@@ -15,10 +15,11 @@
 
   <nav class="nav">
     <div class="nav-inner">
-      <a href="/" class="nav-logo">⬢ JujuMate</a>
+      <a href="/" class="nav-logo"><img src="icon.svg" class="site-icon" alt="JujuMate icon"> JujuMate</a>
       <div class="nav-links">
         <a href="installation/">Docs</a>
         <a href="https://github.com/Abuelodelanada/jujumate" target="_blank" rel="noopener">GitHub ↗</a>
+        <a href="https://snapcraft.io/jujumate" target="_blank" rel="noopener">Snap ↗</a>
         <a href="https://pypi.org/project/jujumate" target="_blank" rel="noopener">PyPI ↗</a>
       </div>
     </div>
@@ -27,7 +28,7 @@
   <section class="hero">
     <div class="hero-inner">
       <div class="badge">v0.1.0 — Now on PyPI</div>
-      <h1>⬢ JujuMate</h1>
+      <h1><img src="icon.svg" class="site-icon hero-icon" alt="JujuMate icon"> JujuMate</h1>
       <p class="hero-subtitle"><em>A mate for Juju</em></p>
       <p class="tagline">
         A terminal UI for <a href="https://juju.is" target="_blank" rel="noopener">Juju</a> —
@@ -47,6 +48,11 @@
         <span class="prompt">$</span>
         <code>uv tool install jujumate</code>
         <button class="copy-btn" onclick="copyInstall(this, 'uv tool install jujumate')" title="Copy to clipboard">⧉</button>
+      </div>
+      <div class="install-box">
+        <span class="prompt">$</span>
+        <code>pipx install jujumate</code>
+        <button class="copy-btn" onclick="copyInstall(this, 'pipx install jujumate')" title="Copy to clipboard">⧉</button>
       </div>
     </div>
   </section>
@@ -135,7 +141,7 @@
   <footer class="footer">
     <div class="container">
       <div class="footer-inner">
-        <span class="footer-logo">⬢ JujuMate</span>
+        <span class="footer-logo"><img src="icon.svg" class="site-icon" alt="JujuMate icon"> JujuMate</span>
         <div class="footer-links">
           <a href="installation/">Docs</a>
           <a href="changelog/">Changelog</a>

@@ -24,6 +24,21 @@ body {
 
 a { color: inherit; }
 
+/* ── Site icon ────────────────────────────────────────────── */
+
+.site-icon {
+  height: 1.2em;
+  width: auto;
+  vertical-align: middle;
+  display: inline-block;
+  position: relative;
+  top: -0.05em;
+}
+
+.hero-icon {
+  height: 0.85em;
+}
+
 /* ── Nav ──────────────────────────────────────────────────── */
 
 .nav {
@@ -124,6 +139,7 @@ a { color: inherit; }
   color: var(--text-muted);
   margin-bottom: 1.25rem;
   font-style: italic;
+  text-align: right;
 }
 
 .tagline {
