@@ -153,13 +153,13 @@ class MainScreen(Screen):
         tc.active = tab_id
         self._refresh_header()
         if widget_id := self._TAB_FOCUS_MAP.get(tab_id):
-            self.set_timer(0.05, self.query_one(widget_id).focus)
+            self.call_after_refresh(self.query_one(widget_id).focus)
 
     def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
         self._refresh_header()
         tab_id = (event.tab.id if event.tab else "") or ""
         if widget_id := self._TAB_FOCUS_MAP.get(tab_id):
-            self.set_timer(0.05, self.query_one(widget_id).focus)
+            self.call_after_refresh(self.query_one(widget_id).focus)
 
     async def action_refresh_data(self) -> None:
         self.notify("Refreshing…")
@@ -323,6 +323,14 @@ class MainScreen(Screen):
             machine_count=len(self._filter_by_model(self._all_machines)),
             is_connected=self._is_connected,
             timestamp=self._last_refresh_ts,
+            juju_version=next(
+                (
+                    c.juju_version
+                    for c in self._all_controllers
+                    if c.name == self._selected_controller
+                ),
+                "",
+            ),
         )
         header.update_context(ctx)
 

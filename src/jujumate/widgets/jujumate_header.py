@@ -28,6 +28,7 @@ class HeaderContext:
     machine_count: int = 0
     is_connected: bool = False
     timestamp: str = ""
+    juju_version: str = ""
 
 
 class JujuMateHeader(Widget):
@@ -91,6 +92,8 @@ class JujuMateHeader(Widget):
             parts.append(f"[{b}]controller:[/{b}] [{w}]{ctx.selected_controller}[/{w}]")
         if ctx.selected_model:
             parts.append(f"[{b}]model:[/{b}] [{w}]{ctx.selected_model}[/{w}]")
+        if ctx.juju_version:
+            parts.append(f"[{b}]juju:[/{b}] [{w}]{ctx.juju_version}[/{w}]")
         sep = " [dim]›[/dim] "
         return sep.join(parts) if parts else ""
 
