@@ -25,7 +25,7 @@ HELP_TEXT = """\
   [bold]L[/bold]       Logs — live log stream (requires model selected)
   [bold]T[/bold]       Theme — switch theme with live preview
   [bold]r[/bold]       Refresh data
-  [bold]y[/bold]       Copy relation data to clipboard
+  [bold]y[/bold]       Copy to clipboard (relation data / status)
   [bold]Esc[/bold]     Clear filter
   [bold]q[/bold]       Quit
 

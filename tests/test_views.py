@@ -849,17 +849,17 @@ async def test_status_view_update_saas_hidden_when_empty(pilot):
 async def test_status_view_filter_activate_and_close(pilot):
 
     view = pilot.app.screen.query_one("#status-view", StatusView)
-    fi = view.query_one("#filter-input", Input)
-    assert fi.display is False
+    bar = view.query_one("#filter-bar")
+    assert "visible" not in bar.classes
 
     view.action_activate_filter()
     await pilot.pause()
-    assert fi.display is True
+    assert "visible" in bar.classes
 
     view._filter = "pg"
     view.action_close_filter()
     await pilot.pause()
-    assert fi.display is False
+    assert "visible" not in bar.classes
     assert view._filter == ""
 
 
@@ -940,16 +940,16 @@ async def test_status_view_row_selected_posts_relation_selected(pilot):
 async def test_status_view_check_action_close_filter(pilot):
 
     view = pilot.app.screen.query_one("#status-view", StatusView)
-    fi = view.query_one("#filter-input", Input)
+    bar = view.query_one("#filter-bar")
 
-    fi.display = False
+    bar.remove_class("visible")
     view._filter = ""
     assert view.check_action("close_filter", ()) is False
 
-    fi.display = True
+    bar.add_class("visible")
     assert view.check_action("close_filter", ()) is True
 
-    fi.display = False
+    bar.remove_class("visible")
     view._filter = "pg"
     assert view.check_action("close_filter", ()) is True
 
@@ -1286,16 +1286,17 @@ async def test_status_view_filter_changed_updates_filter(pilot):
 
 @pytest.mark.asyncio
 async def test_status_view_filter_submitted_hides_input(pilot):
-    """Lines 588-593: Input.Submitted on #filter-input hides the input."""
+    """Input.Submitted on #filter-input hides the filter bar."""
 
     view = pilot.app.screen.query_one("#status-view", StatusView)
     view.action_activate_filter()
     await pilot.pause()
 
-    fi = view.query_one("#filter-input", Input)
-    assert fi.display is True
+    bar = view.query_one("#filter-bar")
+    assert "visible" in bar.classes
 
+    fi = view.query_one("#filter-input", Input)
     view._on_filter_submitted(Input.Submitted(input=fi, value="pg"))
     await pilot.pause()
 
-    assert fi.display is False
+    assert "visible" not in bar.classes
