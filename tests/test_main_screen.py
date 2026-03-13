@@ -440,8 +440,9 @@ async def test_auto_select_navigates_to_status_on_first_refresh(pilot):
     screen.on_models_updated(ModelsUpdated(models=[ModelInfo("dev", "ctrl", "aws", "", "active")]))
     screen.on_apps_updated(AppsUpdated(apps=[AppInfo("pg", "dev", "pg", "14/stable", 1)]))
     screen.on_units_updated(UnitsUpdated(units=[UnitInfo("pg/0", "pg", "0", "active", "idle")]))
-    screen.on_data_refreshed(DataRefreshed(timestamp=datetime(2024, 1, 1, 12, 0, 0)))
-    await pilot.pause()
+    with patch.object(screen, "_fetch_relations"):
+        screen.on_data_refreshed(DataRefreshed(timestamp=datetime(2024, 1, 1, 12, 0, 0)))
+        await pilot.pause()
     assert screen._selected_model == "dev"
     assert screen._selected_controller == "ctrl"
     assert screen.query_one(TabbedContent).active == "tab-status"
@@ -562,17 +563,17 @@ async def test_secrets_screen_row_selected_pushes_detail(pilot):
             updated="2024-01-01",
         )
     ]
-    with patch.object(SecretsScreen, "_fetch"):
+    with patch.object(SecretsScreen, "_fetch"), patch.object(SecretDetailScreen, "_fetch"):
         screen = SecretsScreen("ctrl", "dev")
         await pilot.app.push_screen(screen)
         await pilot.pause()
         screen._populate(secrets)
         await pilot.pause()
-    dt = screen.query_one(DataTable)
-    screen.on_data_table_row_selected(
-        DataTable.RowSelected(data_table=dt, cursor_row=0, row_key=RowKey("0"))
-    )
-    await pilot.pause()
+        dt = screen.query_one(DataTable)
+        screen.on_data_table_row_selected(
+            DataTable.RowSelected(data_table=dt, cursor_row=0, row_key=RowKey("0"))
+        )
+        await pilot.pause()
     assert isinstance(pilot.app.screen, SecretDetailScreen)
 
 
@@ -902,17 +903,17 @@ async def test_offers_screen_row_selected_pushes_detail(pilot):
             total_connections=1,
         )
     ]
-    with patch.object(OffersScreen, "_fetch"):
+    with patch.object(OffersScreen, "_fetch"), patch.object(OfferDetailScreen, "_fetch_consumers"):
         screen = OffersScreen("my-ctrl")
         await pilot.app.push_screen(screen)
         await pilot.pause()
         screen._populate(offers)
         await pilot.pause()
-    dt = screen.query_one(DataTable)
-    screen.on_data_table_row_selected(
-        DataTable.RowSelected(data_table=dt, cursor_row=0, row_key=RowKey("0"))
-    )
-    await pilot.pause()
+        dt = screen.query_one(DataTable)
+        screen.on_data_table_row_selected(
+            DataTable.RowSelected(data_table=dt, cursor_row=0, row_key=RowKey("0"))
+        )
+        await pilot.pause()
     assert isinstance(pilot.app.screen, OfferDetailScreen)
 
 
