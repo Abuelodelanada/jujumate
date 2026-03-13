@@ -111,6 +111,7 @@ a { color: inherit; }
   font-weight: 800;
   letter-spacing: -0.03em;
   line-height: 1;
+  padding-bottom: 0.15em;
   margin-bottom: 0.4rem;
   background: linear-gradient(135deg, #fff 30%, #ccc);
   -webkit-background-clip: text;
