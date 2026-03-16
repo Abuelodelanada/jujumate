@@ -1,5 +1,7 @@
 # ⬢ JujuMate
 
+[![CI](https://github.com/Abuelodelanada/jujumate/actions/workflows/ci.yaml/badge.svg)](https://github.com/Abuelodelanada/jujumate/actions/workflows/ci.yaml)
+[![Coverage](https://codecov.io/gh/Abuelodelanada/jujumate/graph/badge.svg)](https://codecov.io/gh/Abuelodelanada/jujumate)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue?logo=python&logoColor=white)](https://www.python.org/)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![uv](https://img.shields.io/badge/packaged%20with-uv-purple)](https://docs.astral.sh/uv)
