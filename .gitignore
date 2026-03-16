@@ -17,6 +17,7 @@ build/
 # pytest
 .pytest_cache/
 .coverage
+coverage.xml
 htmlcov/
 
 # editors
