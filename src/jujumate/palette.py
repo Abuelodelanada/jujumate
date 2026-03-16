@@ -1,9 +1,8 @@
 """Centralized color palette for JujuMate.
 
-All semantic colors are defined here as module-level constants.
-Call ``palette.init(theme)`` at app startup to override the defaults
-with the active theme's colors (from the theme YAML ``variables:`` section
-and top-level fields).
+All semantic colors are defined here as module-level constants backed by a
+private ``_Palette`` dataclass instance.  Call ``palette.init(theme)`` at app
+startup to populate the defaults with the active theme's colors.
 
 Usage in Python / Rich markup::
 
@@ -15,44 +14,59 @@ Usage in Python / Rich markup::
 
 from __future__ import annotations
 
+from dataclasses import dataclass, fields
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from textual.theme import Theme
 
-# ── Brand colors ─────────────────────────────────────────────────────────────
-PRIMARY = ""
-SECONDARY = ""
-ACCENT = ""
 
-# ── Semantic status colors ────────────────────────────────────────────────────
-SUCCESS = ""
-WARNING = ""
-ERROR = ""
+@dataclass
+class _Palette:
+    # ── Brand colors ─────────────────────────────────────────────────────────
+    PRIMARY: str = ""
+    SECONDARY: str = ""
+    ACCENT: str = ""
 
-# ── UI accent colors ──────────────────────────────────────────────────────────
-LINK = ""
-MUTED = ""
+    # ── Semantic status colors ────────────────────────────────────────────────
+    SUCCESS: str = ""
+    WARNING: str = ""
+    ERROR: str = ""
 
-# ── Animation ─────────────────────────────────────────────────────────────────
-PULSE_OFF = ""
+    # ── UI accent colors ──────────────────────────────────────────────────────
+    LINK: str = ""
+    MUTED: str = ""
 
-# ── Log level colors ──────────────────────────────────────────────────────────
-LOG_TRACE = ""
-LOG_DEBUG = ""
-LOG_INFO = ""
-LOG_WARNING = ""
-LOG_ERROR = ""
+    # ── Animation ─────────────────────────────────────────────────────────────
+    PULSE_OFF: str = ""
+
+    # ── Log level colors ──────────────────────────────────────────────────────
+    LOG_TRACE: str = ""
+    LOG_DEBUG: str = ""
+    LOG_INFO: str = ""
+    LOG_WARNING: str = ""
+    LOG_ERROR: str = ""
+
+
+_palette = _Palette()
+
+# Names exported as module-level constants via __getattr__ (PEP 562).
+_FIELD_NAMES: frozenset[str] = frozenset(f.name for f in fields(_Palette))
+
+
+def __getattr__(name: str) -> str:
+    if name in _FIELD_NAMES:
+        return getattr(_palette, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def init(theme: Theme) -> None:
-    """Override palette globals with the active Textual theme's colors.
+    """Populate palette values from the active Textual theme.
 
     Called once at app startup (``app.on_mount``) after the theme is applied.
     Reads top-level Theme fields (primary, secondary, success, warning, error)
     and ``variables:`` entries (link, muted, pulse-off) from the theme YAML.
     """
-    g = globals()
     variables = theme.variables or {}
 
     color_map = {
@@ -71,6 +85,6 @@ def init(theme: Theme) -> None:
         "LOG_WARNING": variables.get("log-warning") or theme.warning,
         "LOG_ERROR": variables.get("log-error") or theme.error,
     }
-    for global_name, value in color_map.items():
+    for name, value in color_map.items():
         if value:
-            g[global_name] = value
+            setattr(_palette, name, value)

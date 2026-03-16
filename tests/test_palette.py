@@ -17,7 +17,10 @@ def _builtin_theme_names() -> list[str]:
 
 @pytest.mark.parametrize("theme_name", _builtin_theme_names())
 def test_theme_defines_required_top_level_colors(theme_name: str) -> None:
+    # GIVEN a built-in theme
     theme = load_all_themes()[theme_name]
+    # WHEN we inspect each required top-level field
+    # THEN every required field is present and non-empty
     for field in _REQUIRED_TOP_LEVEL:
         value = getattr(theme, field, None)
         assert value, f"Theme '{theme_name}' is missing required field '{field}'"
@@ -25,16 +28,22 @@ def test_theme_defines_required_top_level_colors(theme_name: str) -> None:
 
 @pytest.mark.parametrize("theme_name", _builtin_theme_names())
 def test_theme_defines_required_variables(theme_name: str) -> None:
+    # GIVEN a built-in theme
     theme = load_all_themes()[theme_name]
+    # WHEN we inspect the variables dict
     variables = theme.variables or {}
+    # THEN every required variable key is present
     for key in _REQUIRED_VARIABLES:
         assert key in variables, f"Theme '{theme_name}' is missing required variable '{key}'"
 
 
 @pytest.mark.parametrize("theme_name", _builtin_theme_names())
 def test_palette_init_populates_all_globals(theme_name: str) -> None:
+    # GIVEN a built-in theme
     theme = load_all_themes()[theme_name]
+    # WHEN palette.init() is called with that theme
     palette.init(theme)
+    # THEN all palette globals are non-empty
     assert palette.PRIMARY, f"palette.PRIMARY is empty after init with theme '{theme_name}'"
     assert palette.SECONDARY, f"palette.SECONDARY is empty after init with theme '{theme_name}'"
     assert palette.SUCCESS, f"palette.SUCCESS is empty after init with theme '{theme_name}'"

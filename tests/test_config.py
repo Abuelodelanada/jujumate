@@ -3,35 +3,98 @@ import yaml
 
 from jujumate.config import JujuConfig, JujuConfigError, load_config
 
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _write_controllers(tmp_path, data):
-    controllers_file = tmp_path / "controllers.yaml"
-    controllers_file.write_text(yaml.dump(data))
+    (tmp_path / "controllers.yaml").write_text(yaml.dump(data))
     return tmp_path
 
 
+def _write_models(tmp_path, data):
+    (tmp_path / "models.yaml").write_text(yaml.dump(data))
+
+
+_VALID_CONTROLLERS = {
+    "controllers": {"prod": {}, "staging": {}},
+    "current-controller": "prod",
+}
+
+
+# ── JujuConfig dataclass ──────────────────────────────────────────────────────
+
+
+def test_juju_config_stores_fields():
+    # GIVEN / WHEN
+    config = JujuConfig(current_controller="prod", controllers=["prod", "staging"])
+
+    # THEN
+    assert config.current_controller == "prod"
+    assert len(config.controllers) == 2
+
+
+# ── load_config — happy path ──────────────────────────────────────────────────
+
+
 def test_load_config_returns_current_controller(tmp_path):
-    _write_controllers(
-        tmp_path,
-        {
-            "controllers": {"prod": {}, "staging": {}},
-            "current-controller": "prod",
-        },
-    )
+    # GIVEN
+    _write_controllers(tmp_path, _VALID_CONTROLLERS)
+
+    # WHEN
     config = load_config(tmp_path)
+
+    # THEN
     assert config.current_controller == "prod"
 
 
 def test_load_config_returns_all_controllers(tmp_path):
-    _write_controllers(
-        tmp_path,
-        {
-            "controllers": {"prod": {}, "staging": {}},
-            "current-controller": "prod",
-        },
-    )
+    # GIVEN
+    _write_controllers(tmp_path, _VALID_CONTROLLERS)
+
+    # WHEN
     config = load_config(tmp_path)
+
+    # THEN
     assert set(config.controllers) == {"prod", "staging"}
+
+
+# ── load_config — current_model resolution ───────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "models_data,expected_current_model",
+    [
+        pytest.param(
+            {"controllers": {"prod": {"current-model": "admin/mymodel"}}},
+            "mymodel",
+            id="model-with-owner-prefix",
+        ),
+        pytest.param(
+            {"controllers": {"prod": {"current-model": "mymodel"}}},
+            "mymodel",
+            id="model-without-prefix",
+        ),
+        pytest.param(
+            None,
+            None,
+            id="no-models-file",
+        ),
+    ],
+)
+def test_load_config_current_model(tmp_path, models_data, expected_current_model):
+    # GIVEN
+    _write_controllers(tmp_path, {"controllers": {"prod": {}}, "current-controller": "prod"})
+    if models_data is not None:
+        _write_models(tmp_path, models_data)
+
+    # WHEN
+    config = load_config(tmp_path)
+
+    # THEN
+    assert config.current_model == expected_current_model
+
+
+# ── load_config — error conditions ───────────────────────────────────────────
 
 
 @pytest.mark.parametrize(
@@ -50,48 +113,11 @@ def test_load_config_returns_all_controllers(tmp_path):
         ),
     ],
 )
-def test_load_config_error_conditions(tmp_path, yaml_data, expected_error_fragment):
+def test_load_config_raises_on_invalid_config(tmp_path, yaml_data, expected_error_fragment):
+    # GIVEN
     if yaml_data is not None:
         _write_controllers(tmp_path, yaml_data)
+
+    # WHEN / THEN
     with pytest.raises(JujuConfigError, match=expected_error_fragment):
         load_config(tmp_path)
-
-
-def test_juju_config_dataclass():
-    config = JujuConfig(current_controller="prod", controllers=["prod", "staging"])
-    assert config.current_controller == "prod"
-    assert len(config.controllers) == 2
-
-
-def _write_models(tmp_path, data):
-    models_file = tmp_path / "models.yaml"
-    models_file.write_text(yaml.dump(data))
-
-
-@pytest.mark.parametrize(
-    "model_format,expected_current_model",
-    [
-        pytest.param("admin/mymodel", "mymodel", id="with-prefix"),
-        pytest.param("mymodel", "mymodel", id="without-prefix"),
-    ],
-)
-def test_load_config_current_model(tmp_path, model_format, expected_current_model):
-    _write_controllers(
-        tmp_path,
-        {"controllers": {"prod": {}}, "current-controller": "prod"},
-    )
-    _write_models(
-        tmp_path,
-        {"controllers": {"prod": {"current-model": model_format}}},
-    )
-    config = load_config(tmp_path)
-    assert config.current_model == expected_current_model
-
-
-def test_load_config_no_models_file_gives_none(tmp_path):
-    _write_controllers(
-        tmp_path,
-        {"controllers": {"prod": {}}, "current-controller": "prod"},
-    )
-    config = load_config(tmp_path)
-    assert config.current_model is None

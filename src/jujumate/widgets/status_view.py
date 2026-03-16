@@ -671,8 +671,6 @@ class StatusView(Widget):
             lines.append("")
 
         def section(title: str, headers: list[str], rows: list[list[str]]) -> None:
-            if not rows:
-                return
             widths = [len(h) for h in headers]
             for row in rows:
                 for i, cell in enumerate(row):

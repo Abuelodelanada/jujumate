@@ -130,14 +130,14 @@ class LogScreen(ModalScreen):
 
     def _blink_live_indicator(self) -> None:
         self._blink_state = not self._blink_state
-        try:
-            indicator = self.query_one("#log-live-indicator", Label)
-            if self._blink_state:
-                indicator.update(Text("● LIVE", style=f"bold {palette.SUCCESS}"))
-            else:
-                indicator.update(Text("○ LIVE", style=palette.MUTED))
-        except Exception:
-            pass
+        results = self.query("#log-live-indicator")
+        if not results:
+            return
+        indicator = results.first(Label)
+        if self._blink_state:
+            indicator.update(Text("● LIVE", style=f"bold {palette.SUCCESS}"))
+        else:
+            indicator.update(Text("○ LIVE", style=palette.MUTED))
 
     def on_unmount(self) -> None:
         # Workers are automatically cancelled by Textual on unmount
@@ -228,16 +228,22 @@ class LogScreen(ModalScreen):
             return
         self.query_one("#log-richlog", RichLog).write(Text(""))
 
+    def _get_selected_text(self, richlog: RichLog) -> str | None:
+        """Return selected text from the RichLog, or None if no selection."""
+        sel = richlog.text_selection
+        if sel is None:
+            return None
+        result = richlog.get_selection(sel)
+        return result[0] if result is not None else None
+
     def action_copy_logs(self) -> None:
         """Copy selected text (or all visible log lines) to clipboard."""
         richlog = self.query_one("#log-richlog", RichLog)
-        sel = richlog.text_selection
-        if sel is not None:
-            result = richlog.get_selection(sel)
-            if result is not None:
-                self.app.copy_to_clipboard(result[0])
-                self.notify("Selection copied to clipboard")
-                return
+        selected = self._get_selected_text(richlog)
+        if selected is not None:
+            self.app.copy_to_clipboard(selected)
+            self.notify("Selection copied to clipboard")
+            return
         lines = [
             f"{e.entity} {e.timestamp} {e.level} {e.module} {e.message}"
             for e in self._buffer

@@ -127,6 +127,29 @@ Use `●` colored dots for status: green = active, yellow = waiting/maintenance,
 - **Line length**: 100 characters max (configured in ruff).
 - **Type hints**: Required on all public functions and methods.
 
+## Testing conventions
+
+- **Structure**: Every test must follow the **GIVEN / WHEN / THEN** pattern, expressed as inline comments that divide the test body into three clearly labelled sections:
+
+  ```python
+  async def test_something(pilot):
+      # GIVEN
+      view = pilot.app.screen.query_one(MyWidget)
+      view.update(some_data)
+      await pilot.pause()
+
+      # WHEN
+      view.do_action()
+      await pilot.pause()
+
+      # THEN
+      assert view.something == expected
+  ```
+
+- **One behaviour per test**: Each test covers exactly one scenario. Split edge cases into separate tests rather than asserting multiple unrelated things in sequence.
+- **Descriptive names**: Test function names must read like a sentence: `test_filter_hides_non_matching_rows`, not `test_filter`.
+- **No bare `except`**: Catch only the specific exception expected; never silence errors with `except Exception` or `except:` in test code.
+
 ## Distribution target
 
 - **PyPI** (MVP): `pipx install jujumate` / `uv tool install jujumate`
