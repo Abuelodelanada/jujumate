@@ -52,67 +52,56 @@ def mock_target():
 
 
 @pytest.mark.asyncio
-async def test_poll_once_posts_clouds(mock_target):
+@pytest.mark.parametrize(
+    "expected_type",
+    [
+        pytest.param(CloudsUpdated, id="clouds"),
+        pytest.param(ControllersUpdated, id="controllers"),
+        pytest.param(ModelsUpdated, id="models"),
+        pytest.param(AppsUpdated, id="apps"),
+        pytest.param(UnitsUpdated, id="units"),
+        pytest.param(DataRefreshed, id="data_refreshed"),
+    ],
+)
+async def test_poll_once_posts_expected_message_types(mock_target, expected_type):
+    # GIVEN a poller connected to a mock client that returns realistic data
     with patch("jujumate.client.watcher.JujuClient", return_value=make_mock_client()):
         poller = JujuPoller(controller_names=["prod"], target=mock_target)
+
+        # WHEN poll_once is called
         await poller.poll_once()
+
+    # THEN the expected message type is among the posted messages
     calls = [type(c.args[0]) for c in mock_target.post_message.call_args_list]
-    assert CloudsUpdated in calls
-
-
-@pytest.mark.asyncio
-async def test_poll_once_posts_controllers(mock_target):
-    with patch("jujumate.client.watcher.JujuClient", return_value=make_mock_client()):
-        poller = JujuPoller(controller_names=["prod"], target=mock_target)
-        await poller.poll_once()
-    calls = [type(c.args[0]) for c in mock_target.post_message.call_args_list]
-    assert ControllersUpdated in calls
-
-
-@pytest.mark.asyncio
-async def test_poll_once_posts_models(mock_target):
-    with patch("jujumate.client.watcher.JujuClient", return_value=make_mock_client()):
-        poller = JujuPoller(controller_names=["prod"], target=mock_target)
-        await poller.poll_once()
-    calls = [type(c.args[0]) for c in mock_target.post_message.call_args_list]
-    assert ModelsUpdated in calls
-
-
-@pytest.mark.asyncio
-async def test_poll_once_posts_apps_and_units(mock_target):
-    with patch("jujumate.client.watcher.JujuClient", return_value=make_mock_client()):
-        poller = JujuPoller(controller_names=["prod"], target=mock_target)
-        await poller.poll_once()
-    calls = [type(c.args[0]) for c in mock_target.post_message.call_args_list]
-    assert AppsUpdated in calls
-    assert UnitsUpdated in calls
-
-
-@pytest.mark.asyncio
-async def test_poll_once_posts_data_refreshed(mock_target):
-    with patch("jujumate.client.watcher.JujuClient", return_value=make_mock_client()):
-        poller = JujuPoller(controller_names=["prod"], target=mock_target)
-        await poller.poll_once()
-    calls = [type(c.args[0]) for c in mock_target.post_message.call_args_list]
-    assert DataRefreshed in calls
+    assert expected_type in calls
 
 
 @pytest.mark.asyncio
 async def test_poll_once_posts_connection_failed_when_no_controllers(mock_target):
+    # GIVEN a poller with an empty controller list
     poller = JujuPoller(controller_names=[], target=mock_target)
+
+    # WHEN poll_once is called
     await poller.poll_once()
+
+    # THEN a ConnectionFailed message is posted
     calls = [type(c.args[0]) for c in mock_target.post_message.call_args_list]
     assert ConnectionFailed in calls
 
 
 @pytest.mark.asyncio
 async def test_poll_once_posts_connection_failed_when_all_controllers_fail(mock_target):
+    # GIVEN a poller where all controllers raise an exception on connect
     failing_client = AsyncMock()
     failing_client.__aenter__ = AsyncMock(side_effect=Exception("refused"))
     failing_client.__aexit__ = AsyncMock(return_value=None)
     with patch("jujumate.client.watcher.JujuClient", return_value=failing_client):
         poller = JujuPoller(controller_names=["prod", "staging"], target=mock_target)
+
+        # WHEN poll_once is called
         await poller.poll_once()
+
+    # THEN a ConnectionFailed message is posted
     calls = [type(c.args[0]) for c in mock_target.post_message.call_args_list]
     assert ConnectionFailed in calls
 
@@ -120,6 +109,7 @@ async def test_poll_once_posts_connection_failed_when_all_controllers_fail(mock_
 @pytest.mark.asyncio
 async def test_poll_once_aggregates_multiple_controllers(mock_target):
     """Two controllers with distinct models → all models reported."""
+    # GIVEN two controllers each with one distinct model
     client_a = make_mock_client()
     client_a.list_model_names.return_value = ["dev"]
     client_a.get_model_snapshot.return_value = (
@@ -140,8 +130,11 @@ async def test_poll_once_aggregates_multiple_controllers(mock_target):
     clients = iter([client_a, client_b])
     with patch("jujumate.client.watcher.JujuClient", side_effect=lambda **_: next(clients)):
         poller = JujuPoller(controller_names=["ctrl-a", "ctrl-b"], target=mock_target)
+
+        # WHEN poll_once is called
         await poller.poll_once()
 
+    # THEN the ModelsUpdated message contains both models
     models_msg = next(
         c.args[0]
         for c in mock_target.post_message.call_args_list
@@ -153,14 +146,18 @@ async def test_poll_once_aggregates_multiple_controllers(mock_target):
 @pytest.mark.asyncio
 async def test_poll_once_deduplicates_clouds(mock_target):
     """Two controllers sharing the same cloud → cloud appears only once."""
+    # GIVEN two controllers that both report the same cloud
     client_a = make_mock_client()
     client_b = make_mock_client()  # also returns CloudInfo("aws", "ec2")
 
     clients = iter([client_a, client_b])
     with patch("jujumate.client.watcher.JujuClient", side_effect=lambda **_: next(clients)):
         poller = JujuPoller(controller_names=["ctrl-a", "ctrl-b"], target=mock_target)
+
+        # WHEN poll_once is called
         await poller.poll_once()
 
+    # THEN CloudsUpdated contains only one cloud entry
     clouds_msg = next(
         c.args[0]
         for c in mock_target.post_message.call_args_list
@@ -170,24 +167,32 @@ async def test_poll_once_deduplicates_clouds(mock_target):
 
 
 def test_data_refreshed_has_timestamp():
+    # GIVEN / WHEN a DataRefreshed message is instantiated
     msg = DataRefreshed()
+    # THEN its timestamp is a datetime instance
     assert isinstance(msg.timestamp, datetime)
 
 
 def test_connection_failed_stores_error():
+    # GIVEN / WHEN a ConnectionFailed message is instantiated with an error string
     msg = ConnectionFailed(error="timeout")
+    # THEN the error is stored correctly
     assert msg.error == "timeout"
 
 
 def test_relations_updated_stores_model_and_relations():
+    # GIVEN a RelationInfo and a RelationsUpdated message
     rel = RelationInfo("dev", "postgresql:db", "wordpress:db", "pgsql", "regular")
+    # WHEN the message is instantiated
     msg = RelationsUpdated(model="dev", relations=[rel])
+    # THEN the model and relations are stored correctly
     assert msg.model == "dev"
     assert len(msg.relations) == 1
     assert msg.relations[0].provider == "postgresql:db"
 
 
 def test_offers_updated_stores_model_and_offers():
+    # GIVEN an OfferInfo and an OffersUpdated message
     offer = OfferInfo(
         "cos",
         "alertmanager-karma-dashboard",
@@ -199,7 +204,9 @@ def test_offers_updated_stores_model_and_offers():
         "karma_dashboard",
         "provider",
     )
+    # WHEN the message is instantiated
     msg = OffersUpdated(model="cos", offers=[offer])
+    # THEN the model and offers are stored correctly
     assert msg.model == "cos"
     assert len(msg.offers) == 1
     assert msg.offers[0].name == "alertmanager-karma-dashboard"
