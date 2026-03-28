@@ -48,6 +48,7 @@ def test_palette_init_populates_all_globals(theme_name: str) -> None:
     assert palette.SECONDARY, f"palette.SECONDARY is empty after init with theme '{theme_name}'"
     assert palette.SUCCESS, f"palette.SUCCESS is empty after init with theme '{theme_name}'"
     assert palette.WARNING, f"palette.WARNING is empty after init with theme '{theme_name}'"
+    assert palette.BLOCKED, f"palette.BLOCKED is empty after init with theme '{theme_name}'"
     assert palette.ERROR, f"palette.ERROR is empty after init with theme '{theme_name}'"
     assert palette.LINK, f"palette.LINK is empty after init with theme '{theme_name}'"
     assert palette.MUTED, f"palette.MUTED is empty after init with theme '{theme_name}'"

@@ -28,7 +28,7 @@ def _status_color(status: str) -> str:
         "active": palette.SUCCESS,
         "idle": palette.SUCCESS,
         "started": palette.SUCCESS,
-        "blocked": palette.ERROR,
+        "blocked": palette.BLOCKED,
         "error": palette.ERROR,
         "terminated": palette.ERROR,
         "maintenance": palette.WARNING,
@@ -117,7 +117,7 @@ _OFFER_COLUMNS = [
 _REL_COLUMNS = [
     Column("Integration provider", "s-rel-provider"),
     Column("Requirer", "s-rel-requirer"),
-    Column("Interface", "s-rel-iface", width=16),
+    Column("Interface", "s-rel-iface"),
     Column("Type", "s-rel-type", width=10),
 ]
 

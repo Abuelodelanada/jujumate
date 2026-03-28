@@ -16,10 +16,12 @@ HELP_TEXT = """\
   [bold]C[/bold]       Controllers
   [bold]m[/bold]       Models
   [bold]s[/bold]       Status
+  [bold]h[/bold]       Health
 
 [bold cyan]Actions[/bold cyan]
   [bold]Enter[/bold]   Drill-down / view app config or relation data
   [bold]/[/bold]       Filter (Status tab) — Esc to clear
+  [bold]f[/bold]       Toggle unhealthy / all models (Health tab)
   [bold]S[/bold]       Secrets (requires model selected)
   [bold]O[/bold]       Offers — all offers across controller
   [bold]L[/bold]       Logs — live log stream (requires model selected)
