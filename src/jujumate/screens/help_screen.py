@@ -27,6 +27,7 @@ HELP_TEXT = """\
   [bold]r[/bold]       Refresh data
   [bold]y[/bold]       Copy to clipboard (relation data / status)
   [bold]p[/bold]       Toggle peer relations (Status → Integrations)
+  [bold]u[/bold]       Toggle units per machine (Status → Machines)
   [bold]Esc[/bold]     Clear filter
   [bold]q[/bold]       Quit
 

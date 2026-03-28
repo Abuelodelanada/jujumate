@@ -190,6 +190,43 @@ def _group_units(units: list) -> list[tuple]:
     return result
 
 
+def _group_units_by_machine(
+    machines: list[MachineInfo], units: list[UnitInfo]
+) -> list[tuple[MachineInfo | UnitInfo, str]]:
+    """Return (item, tree_prefix) tuples: each machine followed by its nested units.
+
+    Structure per machine:
+      Machine           → prefix ""
+      ├─ principal/0   → "├─ "  (non-last principal)
+      │  └─ sub/0      → "│  └─ " (last sub under non-last principal)
+      └─ principal/1   → "└─ "  (last principal)
+         └─ sub/1      → "   └─ " (last sub under last principal)
+    """
+    principals_by_machine: dict[str, list[UnitInfo]] = {}
+    subs_by_principal: dict[str, list[UnitInfo]] = {}
+    for u in units:
+        if u.subordinate_of:
+            subs_by_principal.setdefault(u.subordinate_of, []).append(u)
+        elif u.machine:
+            principals_by_machine.setdefault(u.machine, []).append(u)
+
+    result: list[tuple[MachineInfo | UnitInfo, str]] = []
+    for m in machines:
+        result.append((m, ""))
+        principals = sorted(principals_by_machine.get(m.id, []), key=lambda u: u.name)
+        for pi, principal in enumerate(principals):
+            is_last_principal = pi == len(principals) - 1
+            p_prefix = "└─ " if is_last_principal else "├─ "
+            result.append((principal, p_prefix))
+            subs = sorted(subs_by_principal.get(principal.name, []), key=lambda u: u.name)
+            continuation = "   " if is_last_principal else "│  "
+            for si, sub in enumerate(subs):
+                is_last_sub = si == len(subs) - 1
+                s_prefix = continuation + ("└─ " if is_last_sub else "├─ ")
+                result.append((sub, s_prefix))
+    return result
+
+
 class _TrackedScroll(VerticalScroll, can_focus=False):
     """VerticalScroll that notifies its parent when scroll_y changes."""
 
@@ -206,6 +243,7 @@ class StatusView(Widget):
         Binding("escape", "close_filter", show=False),
         Binding("y", "copy_to_clipboard", "Copy status", show=False),
         Binding("p", "toggle_peer_relations", "Toggle peer relations", show=False),
+        Binding("u", "toggle_units_in_machines", "Toggle units in machines", show=False),
     ]
 
     class RelationSelected(Message):
@@ -234,6 +272,7 @@ class StatusView(Widget):
     _show_more: reactive[bool] = reactive(False)
     _filter: reactive[str] = reactive("", init=False)
     _show_peer_relations: reactive[bool] = reactive(False)
+    _show_units_in_machines: reactive[bool] = reactive(False)
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
@@ -287,6 +326,7 @@ class StatusView(Widget):
         self.query_one("#status-machines-table").display = False
         self.query_one("#status-rels-table").display = False
         self._update_rels_border_title()
+        self._update_machines_border_title()
         self._update_scroll_indicator()
 
     def update_context(self, cloud: str, controller: str, model: str, juju_version: str) -> None:
@@ -492,19 +532,52 @@ class StatusView(Widget):
         ]
         rows = []
         full_msgs = []
-        for m in filtered:
-            rows.append(
-                (
-                    _highlight(m.id, self._filter),
-                    _colored_status(m.state),
-                    _colored_ip(m.address),
-                    _highlight(m.instance_id, self._filter),
-                    _highlight(m.base, self._filter),
-                    _highlight(m.az, self._filter),
-                    _highlight(_trunc_msg(m.message), self._filter),
+        if self._show_units_in_machines:
+            items = _group_units_by_machine(filtered, self._all_units)
+            for item, prefix in items:
+                if isinstance(item, MachineInfo):
+                    rows.append(
+                        (
+                            _highlight(item.id, self._filter),
+                            _colored_status(item.state),
+                            _colored_ip(item.address),
+                            _highlight(item.instance_id, self._filter),
+                            _highlight(item.base, self._filter),
+                            _highlight(item.az, self._filter),
+                            _highlight(_trunc_msg(item.message), self._filter),
+                        )
+                    )
+                    full_msgs.append(item.message)
+                else:
+                    name = Text()
+                    name.append(prefix, style=palette.MUTED)
+                    name.append_text(_highlight(item.name, self._filter))
+                    rows.append(
+                        (
+                            name,
+                            _colored_status(item.workload_status),
+                            _colored_ip(item.public_address or item.address),
+                            Text(""),
+                            Text(""),
+                            Text(""),
+                            _highlight(_trunc_msg(item.message), self._filter),
+                        )
+                    )
+                    full_msgs.append(item.message)
+        else:
+            for m in filtered:
+                rows.append(
+                    (
+                        _highlight(m.id, self._filter),
+                        _colored_status(m.state),
+                        _colored_ip(m.address),
+                        _highlight(m.instance_id, self._filter),
+                        _highlight(m.base, self._filter),
+                        _highlight(m.az, self._filter),
+                        _highlight(_trunc_msg(m.message), self._filter),
+                    )
                 )
-            )
-            full_msgs.append(m.message)
+                full_msgs.append(m.message)
         self._row_messages["status-machines-table"] = full_msgs
         self.query_one("#status-machines-table", ResourceTable).update_rows(rows)
         self._restore_cursor("status-machines-table", len(full_msgs))
@@ -667,6 +740,18 @@ class StatusView(Widget):
         self._show_peer_relations = not self._show_peer_relations
         self._update_rels_border_title()
         self._render_relations()
+
+    def _update_machines_border_title(self) -> None:
+        table = self.query_one("#status-machines-table", ResourceTable)
+        if self._show_units_in_machines:
+            table.border_title = f"Machines  [{palette.SUCCESS}]units: On[/]"
+        else:
+            table.border_title = f"Machines  [{palette.ERROR}]units: Off[/]"
+
+    def action_toggle_units_in_machines(self) -> None:
+        self._show_units_in_machines = not self._show_units_in_machines
+        self._update_machines_border_title()
+        self._render_machines()
 
     @on(Input.Changed, "#filter-input")
     def _on_filter_changed(self, event: Input.Changed) -> None:
