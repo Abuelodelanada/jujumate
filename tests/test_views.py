@@ -1158,6 +1158,131 @@ async def test_status_view_filter_filters_relations(pilot):
 
 
 @pytest.mark.asyncio
+async def test_status_view_peer_relations_hidden_by_default(pilot):
+    # GIVEN a StatusView with one peer and one regular relation
+    view = pilot.app.screen.query_one("#status-view", StatusView)
+    view.update_relations(
+        [
+            RelationInfo("dev", "pg:pg", "pg:pg", "pgsql", "peer"),
+            RelationInfo("dev", "pg:db", "wp:db", "pgsql", "regular"),
+        ]
+    )
+    await pilot.pause()
+
+    # WHEN no toggle has been pressed (default state)
+    # THEN only the regular relation is shown
+    assert view._show_peer_relations is False
+    assert view.query_one("#status-rels-table DataTable").row_count == 1
+
+
+@pytest.mark.asyncio
+async def test_status_view_action_toggle_peer_relations_shows_and_hides(pilot):
+    # GIVEN a StatusView with one peer and one regular relation
+    view = pilot.app.screen.query_one("#status-view", StatusView)
+    view.update_relations(
+        [
+            RelationInfo("dev", "pg:pg", "pg:pg", "pgsql", "peer"),
+            RelationInfo("dev", "pg:db", "wp:db", "pgsql", "regular"),
+        ]
+    )
+    await pilot.pause()
+    dt = view.query_one("#status-rels-table DataTable")
+    assert dt.row_count == 1
+
+    # WHEN action_toggle_peer_relations is called
+    view.action_toggle_peer_relations()
+    await pilot.pause()
+
+    # THEN both relations are shown
+    assert dt.row_count == 2
+    assert view._show_peer_relations is True
+
+    # WHEN action_toggle_peer_relations is called again
+    view.action_toggle_peer_relations()
+    await pilot.pause()
+
+    # THEN peer relations are hidden again
+    assert dt.row_count == 1
+    assert view._show_peer_relations is False
+
+
+@pytest.mark.asyncio
+async def test_status_view_units_in_machines_hidden_by_default(pilot):
+    # GIVEN a StatusView with one machine and one unit
+    view = pilot.app.screen.query_one("#status-view", StatusView)
+    view.update_machines(
+        [MachineInfo("dev", "0", "running", "10.0.0.1", "i-abc", "ubuntu@22.04", "us-east-1a")],
+        is_kubernetes=False,
+    )
+    view.update_units([UnitInfo("pg/0", "pg", "0", "active", "idle")], is_kubernetes=False)
+    await pilot.pause()
+
+    # WHEN no toggle has been pressed (default state)
+    # THEN the machines table shows only 1 row (the machine, not the unit)
+    assert view._show_units_in_machines is False
+    assert view.query_one("#status-machines-table DataTable").row_count == 1
+
+
+@pytest.mark.asyncio
+async def test_status_view_action_toggle_units_in_machines_shows_and_hides(pilot):
+    # GIVEN a StatusView with one machine and two units assigned to it
+    view = pilot.app.screen.query_one("#status-view", StatusView)
+    view.update_machines(
+        [MachineInfo("dev", "0", "running", "10.0.0.1", "i-abc", "ubuntu@22.04", "us-east-1a")],
+        is_kubernetes=False,
+    )
+    view.update_units(
+        [
+            UnitInfo("pg/0", "pg", "0", "active", "idle"),
+            UnitInfo("wp/0", "wordpress", "0", "active", "idle"),
+        ],
+        is_kubernetes=False,
+    )
+    await pilot.pause()
+    dt = view.query_one("#status-machines-table DataTable")
+    assert dt.row_count == 1
+
+    # WHEN action_toggle_units_in_machines is called
+    view.action_toggle_units_in_machines()
+    await pilot.pause()
+
+    # THEN the machine row plus its two units are shown (3 rows total)
+    assert dt.row_count == 3
+    assert view._show_units_in_machines is True
+
+    # WHEN action_toggle_units_in_machines is called again
+    view.action_toggle_units_in_machines()
+    await pilot.pause()
+
+    # THEN only the machine row is shown again
+    assert dt.row_count == 1
+    assert view._show_units_in_machines is False
+
+
+@pytest.mark.asyncio
+async def test_status_view_units_in_machines_excludes_subordinates(pilot):
+    # GIVEN a machine with one principal and one subordinate unit
+    view = pilot.app.screen.query_one("#status-view", StatusView)
+    view.update_machines(
+        [MachineInfo("dev", "0", "running", "10.0.0.1", "i-abc", "ubuntu@22.04", "us-east-1a")],
+        is_kubernetes=False,
+    )
+    view.update_units(
+        [
+            UnitInfo("pg/0", "pg", "0", "active", "idle"),
+            UnitInfo("nrpe/0", "nrpe", "0", "active", "idle", subordinate_of="pg/0"),
+        ],
+        is_kubernetes=False,
+    )
+    view._show_units_in_machines = True
+    view._render_machines()
+    await pilot.pause()
+
+    # THEN only the machine + principal unit appear (subordinate is excluded)
+    assert view.query_one("#status-machines-table DataTable").row_count == 2
+
+
+@pytest.mark.asyncio
 async def test_status_view_row_selected_posts_app_selected(pilot):
     # GIVEN a StatusView with one app
     view = pilot.app.screen.query_one("#status-view", StatusView)

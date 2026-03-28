@@ -190,6 +190,29 @@ def _group_units(units: list) -> list[tuple]:
     return result
 
 
+def _group_units_by_machine(
+    machines: list[MachineInfo], units: list[UnitInfo]
+) -> list[tuple[MachineInfo | UnitInfo, str]]:
+    """Return (item, tree_prefix) tuples: each machine followed by its nested units.
+
+    Machines appear with prefix "". Units appear with "├─ " or "└─ " prefix.
+    Only principal units (non-subordinates) are nested directly under machines.
+    """
+    units_by_machine: dict[str, list[UnitInfo]] = {}
+    for u in units:
+        if u.machine and not u.subordinate_of:
+            units_by_machine.setdefault(u.machine, []).append(u)
+
+    result: list[tuple[MachineInfo | UnitInfo, str]] = []
+    for m in machines:
+        result.append((m, ""))
+        machine_units = sorted(units_by_machine.get(m.id, []), key=lambda u: u.name)
+        for i, u in enumerate(machine_units):
+            prefix = "└─ " if i == len(machine_units) - 1 else "├─ "
+            result.append((u, prefix))
+    return result
+
+
 class _TrackedScroll(VerticalScroll, can_focus=False):
     """VerticalScroll that notifies its parent when scroll_y changes."""
 
@@ -205,6 +228,8 @@ class StatusView(Widget):
         Binding("/", "activate_filter", show=False),
         Binding("escape", "close_filter", show=False),
         Binding("y", "copy_to_clipboard", "Copy status", show=False),
+        Binding("p", "toggle_peer_relations", "Toggle peer relations", show=False),
+        Binding("u", "toggle_units_in_machines", "Toggle units in machines", show=False),
     ]
 
     class RelationSelected(Message):
@@ -232,6 +257,8 @@ class StatusView(Widget):
 
     _show_more: reactive[bool] = reactive(False)
     _filter: reactive[str] = reactive("", init=False)
+    _show_peer_relations: reactive[bool] = reactive(False)
+    _show_units_in_machines: reactive[bool] = reactive(False)
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
@@ -272,7 +299,6 @@ class StatusView(Widget):
             t.border_title = "Offers"
             yield t
             t = ResourceTable(columns=_REL_COLUMNS, id="status-rels-table")
-            t.border_title = "Integrations"
             yield t
         with Horizontal(id="filter-bar"):
             yield Label("Filter: ")
@@ -285,6 +311,8 @@ class StatusView(Widget):
         self.query_one("#status-offers-table").display = False
         self.query_one("#status-machines-table").display = False
         self.query_one("#status-rels-table").display = False
+        self._update_rels_border_title()
+        self._update_machines_border_title()
         self._update_scroll_indicator()
 
     def update_context(self, cloud: str, controller: str, model: str, juju_version: str) -> None:
@@ -490,19 +518,52 @@ class StatusView(Widget):
         ]
         rows = []
         full_msgs = []
-        for m in filtered:
-            rows.append(
-                (
-                    _highlight(m.id, self._filter),
-                    _colored_status(m.state),
-                    _colored_ip(m.address),
-                    _highlight(m.instance_id, self._filter),
-                    _highlight(m.base, self._filter),
-                    _highlight(m.az, self._filter),
-                    _highlight(_trunc_msg(m.message), self._filter),
+        if self._show_units_in_machines:
+            items = _group_units_by_machine(filtered, self._all_units)
+            for item, prefix in items:
+                if isinstance(item, MachineInfo):
+                    rows.append(
+                        (
+                            _highlight(item.id, self._filter),
+                            _colored_status(item.state),
+                            _colored_ip(item.address),
+                            _highlight(item.instance_id, self._filter),
+                            _highlight(item.base, self._filter),
+                            _highlight(item.az, self._filter),
+                            _highlight(_trunc_msg(item.message), self._filter),
+                        )
+                    )
+                    full_msgs.append(item.message)
+                else:
+                    name = Text()
+                    name.append(prefix, style=palette.MUTED)
+                    name.append_text(_highlight(item.name, self._filter))
+                    rows.append(
+                        (
+                            name,
+                            _colored_status(item.workload_status),
+                            _colored_ip(item.public_address or item.address),
+                            Text(""),
+                            Text(""),
+                            Text(""),
+                            _highlight(_trunc_msg(item.message), self._filter),
+                        )
+                    )
+                    full_msgs.append(item.message)
+        else:
+            for m in filtered:
+                rows.append(
+                    (
+                        _highlight(m.id, self._filter),
+                        _colored_status(m.state),
+                        _colored_ip(m.address),
+                        _highlight(m.instance_id, self._filter),
+                        _highlight(m.base, self._filter),
+                        _highlight(m.az, self._filter),
+                        _highlight(_trunc_msg(m.message), self._filter),
+                    )
                 )
-            )
-            full_msgs.append(m.message)
+                full_msgs.append(m.message)
         self._row_messages["status-machines-table"] = full_msgs
         self.query_one("#status-machines-table", ResourceTable).update_rows(rows)
         self._restore_cursor("status-machines-table", len(full_msgs))
@@ -566,7 +627,8 @@ class StatusView(Widget):
             (
                 r
                 for r in self._all_relations
-                if _matches_filter(self._filter, r.provider, r.requirer, r.interface, r.type)
+                if (self._show_peer_relations or r.type != "peer")
+                and _matches_filter(self._filter, r.provider, r.requirer, r.interface, r.type)
             ),
             key=lambda r: (r.type, r.provider, r.requirer),
         )
@@ -652,6 +714,30 @@ class StatusView(Widget):
         self._filter = ""
         self.query_one("#filter-bar").remove_class("visible")
         self._rerender_all()
+
+    def _update_rels_border_title(self) -> None:
+        table = self.query_one("#status-rels-table", ResourceTable)
+        if self._show_peer_relations:
+            table.border_title = f"Integrations  [{palette.SUCCESS}]peers: On[/]"
+        else:
+            table.border_title = f"Integrations  [{palette.ERROR}]peers: Off[/]"
+
+    def action_toggle_peer_relations(self) -> None:
+        self._show_peer_relations = not self._show_peer_relations
+        self._update_rels_border_title()
+        self._render_relations()
+
+    def _update_machines_border_title(self) -> None:
+        table = self.query_one("#status-machines-table", ResourceTable)
+        if self._show_units_in_machines:
+            table.border_title = f"Machines  [{palette.SUCCESS}]units: On[/]"
+        else:
+            table.border_title = f"Machines  [{palette.ERROR}]units: Off[/]"
+
+    def action_toggle_units_in_machines(self) -> None:
+        self._show_units_in_machines = not self._show_units_in_machines
+        self._update_machines_border_title()
+        self._render_machines()
 
     @on(Input.Changed, "#filter-input")
     def _on_filter_changed(self, event: Input.Changed) -> None:
