@@ -4,12 +4,10 @@ from pathlib import Path
 
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Center, Middle
 from textual.screen import ModalScreen
 from textual.widgets import Static
 
 HELP_TEXT = """\
-[bold]Keyboard Shortcuts[/bold]
 
 [bold cyan]Navigation[/bold cyan]
   [bold]c[/bold]       Clouds
@@ -28,6 +26,7 @@ HELP_TEXT = """\
   [bold]T[/bold]       Theme — switch theme with live preview
   [bold]r[/bold]       Refresh data
   [bold]y[/bold]       Copy to clipboard (relation data / status)
+  [bold]p[/bold]       Toggle peer relations (Status → Integrations)
   [bold]Esc[/bold]     Clear filter
   [bold]q[/bold]       Quit
 
@@ -47,5 +46,6 @@ class HelpScreen(ModalScreen):
     DEFAULT_CSS = (Path(__file__).parent / "help_screen.tcss").read_text()
 
     def compose(self) -> ComposeResult:
-        with Middle(), Center():
-            yield Static(HELP_TEXT, id="help-panel")
+        panel = Static(HELP_TEXT, id="help-panel")
+        panel.border_title = "Keyboard Shortcuts"
+        yield panel
