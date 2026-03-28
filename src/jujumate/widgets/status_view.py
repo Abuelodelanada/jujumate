@@ -205,6 +205,7 @@ class StatusView(Widget):
         Binding("/", "activate_filter", show=False),
         Binding("escape", "close_filter", show=False),
         Binding("y", "copy_to_clipboard", "Copy status", show=False),
+        Binding("p", "toggle_peer_relations", "Toggle peer relations", show=False),
     ]
 
     class RelationSelected(Message):
@@ -232,6 +233,7 @@ class StatusView(Widget):
 
     _show_more: reactive[bool] = reactive(False)
     _filter: reactive[str] = reactive("", init=False)
+    _show_peer_relations: reactive[bool] = reactive(False)
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
@@ -272,7 +274,6 @@ class StatusView(Widget):
             t.border_title = "Offers"
             yield t
             t = ResourceTable(columns=_REL_COLUMNS, id="status-rels-table")
-            t.border_title = "Integrations"
             yield t
         with Horizontal(id="filter-bar"):
             yield Label("Filter: ")
@@ -285,6 +286,7 @@ class StatusView(Widget):
         self.query_one("#status-offers-table").display = False
         self.query_one("#status-machines-table").display = False
         self.query_one("#status-rels-table").display = False
+        self._update_rels_border_title()
         self._update_scroll_indicator()
 
     def update_context(self, cloud: str, controller: str, model: str, juju_version: str) -> None:
@@ -566,7 +568,8 @@ class StatusView(Widget):
             (
                 r
                 for r in self._all_relations
-                if _matches_filter(self._filter, r.provider, r.requirer, r.interface, r.type)
+                if (self._show_peer_relations or r.type != "peer")
+                and _matches_filter(self._filter, r.provider, r.requirer, r.interface, r.type)
             ),
             key=lambda r: (r.type, r.provider, r.requirer),
         )
@@ -652,6 +655,18 @@ class StatusView(Widget):
         self._filter = ""
         self.query_one("#filter-bar").remove_class("visible")
         self._rerender_all()
+
+    def _update_rels_border_title(self) -> None:
+        table = self.query_one("#status-rels-table", ResourceTable)
+        if self._show_peer_relations:
+            table.border_title = f"Integrations  [{palette.SUCCESS}]peers: On[/]"
+        else:
+            table.border_title = f"Integrations  [{palette.ERROR}]peers: Off[/]"
+
+    def action_toggle_peer_relations(self) -> None:
+        self._show_peer_relations = not self._show_peer_relations
+        self._update_rels_border_title()
+        self._render_relations()
 
     @on(Input.Changed, "#filter-input")
     def _on_filter_changed(self, event: Input.Changed) -> None:

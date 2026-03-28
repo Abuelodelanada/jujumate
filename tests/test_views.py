@@ -1158,7 +1158,53 @@ async def test_status_view_filter_filters_relations(pilot):
 
 
 @pytest.mark.asyncio
-async def test_status_view_row_selected_posts_app_selected(pilot):
+async def test_status_view_peer_relations_hidden_by_default(pilot):
+    # GIVEN a StatusView with one peer and one regular relation
+    view = pilot.app.screen.query_one("#status-view", StatusView)
+    view.update_relations(
+        [
+            RelationInfo("dev", "pg:pg", "pg:pg", "pgsql", "peer"),
+            RelationInfo("dev", "pg:db", "wp:db", "pgsql", "regular"),
+        ]
+    )
+    await pilot.pause()
+
+    # WHEN no toggle has been pressed (default state)
+    # THEN only the regular relation is shown
+    assert view._show_peer_relations is False
+    assert view.query_one("#status-rels-table DataTable").row_count == 1
+
+
+@pytest.mark.asyncio
+async def test_status_view_action_toggle_peer_relations_shows_and_hides(pilot):
+    # GIVEN a StatusView with one peer and one regular relation
+    view = pilot.app.screen.query_one("#status-view", StatusView)
+    view.update_relations(
+        [
+            RelationInfo("dev", "pg:pg", "pg:pg", "pgsql", "peer"),
+            RelationInfo("dev", "pg:db", "wp:db", "pgsql", "regular"),
+        ]
+    )
+    await pilot.pause()
+    dt = view.query_one("#status-rels-table DataTable")
+    assert dt.row_count == 1
+
+    # WHEN action_toggle_peer_relations is called
+    view.action_toggle_peer_relations()
+    await pilot.pause()
+
+    # THEN both relations are shown
+    assert dt.row_count == 2
+    assert view._show_peer_relations is True
+
+    # WHEN action_toggle_peer_relations is called again
+    view.action_toggle_peer_relations()
+    await pilot.pause()
+
+    # THEN peer relations are hidden again
+    assert dt.row_count == 1
+    assert view._show_peer_relations is False
+
     # GIVEN a StatusView with one app
     view = pilot.app.screen.query_one("#status-view", StatusView)
     view.update_apps([AppInfo("pg", "dev", "pg", "14/stable", 1)])
