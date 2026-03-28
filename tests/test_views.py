@@ -50,6 +50,7 @@ from jujumate.widgets.status_view import (
     StatusView,
     _colored_relation,
     _group_units,
+    _group_units_by_machine,
     _TrackedScroll,
     _trunc_msg,
 )
@@ -1260,7 +1261,7 @@ async def test_status_view_action_toggle_units_in_machines_shows_and_hides(pilot
 
 
 @pytest.mark.asyncio
-async def test_status_view_units_in_machines_excludes_subordinates(pilot):
+async def test_status_view_units_in_machines_includes_subordinates_nested(pilot):
     # GIVEN a machine with one principal and one subordinate unit
     view = pilot.app.screen.query_one("#status-view", StatusView)
     view.update_machines(
@@ -1278,8 +1279,28 @@ async def test_status_view_units_in_machines_excludes_subordinates(pilot):
     view._render_machines()
     await pilot.pause()
 
-    # THEN only the machine + principal unit appear (subordinate is excluded)
-    assert view.query_one("#status-machines-table DataTable").row_count == 2
+    # THEN machine + principal + subordinate all appear (3 rows total)
+    assert view.query_one("#status-machines-table DataTable").row_count == 3
+
+
+def test_group_units_by_machine_tree_prefixes():
+    # GIVEN one machine with two principals: pg/0 (has sub nrpe/0) and wp/0 (no subs)
+    m0 = MachineInfo("dev", "0", "running", "", "", "", "")
+    pg = UnitInfo("pg/0", "pg", "0", "active", "idle")
+    nrpe = UnitInfo("nrpe/0", "nrpe", "0", "active", "idle", subordinate_of="pg/0")
+    wp = UnitInfo("wp/0", "wordpress", "0", "active", "idle")
+
+    # WHEN _group_units_by_machine is called
+    result = _group_units_by_machine([m0], [pg, nrpe, wp])
+
+    # THEN: machine / pg/0 (├─, non-last) / nrpe/0 (│  └─) / wp/0 (└─, last, no subs)
+    items = [(type(item).__name__, prefix) for item, prefix in result]
+    assert items == [
+        ("MachineInfo", ""),
+        ("UnitInfo", "├─ "),  # pg/0, non-last principal
+        ("UnitInfo", "│  └─ "),  # nrpe/0, last sub under non-last principal
+        ("UnitInfo", "└─ "),  # wp/0, last principal (no subs)
+    ]
 
 
 @pytest.mark.asyncio

@@ -195,21 +195,35 @@ def _group_units_by_machine(
 ) -> list[tuple[MachineInfo | UnitInfo, str]]:
     """Return (item, tree_prefix) tuples: each machine followed by its nested units.
 
-    Machines appear with prefix "". Units appear with "├─ " or "└─ " prefix.
-    Only principal units (non-subordinates) are nested directly under machines.
+    Structure per machine:
+      Machine           → prefix ""
+      ├─ principal/0   → "├─ "  (non-last principal)
+      │  └─ sub/0      → "│  └─ " (last sub under non-last principal)
+      └─ principal/1   → "└─ "  (last principal)
+         └─ sub/1      → "   └─ " (last sub under last principal)
     """
-    units_by_machine: dict[str, list[UnitInfo]] = {}
+    principals_by_machine: dict[str, list[UnitInfo]] = {}
+    subs_by_principal: dict[str, list[UnitInfo]] = {}
     for u in units:
-        if u.machine and not u.subordinate_of:
-            units_by_machine.setdefault(u.machine, []).append(u)
+        if u.subordinate_of:
+            subs_by_principal.setdefault(u.subordinate_of, []).append(u)
+        elif u.machine:
+            principals_by_machine.setdefault(u.machine, []).append(u)
 
     result: list[tuple[MachineInfo | UnitInfo, str]] = []
     for m in machines:
         result.append((m, ""))
-        machine_units = sorted(units_by_machine.get(m.id, []), key=lambda u: u.name)
-        for i, u in enumerate(machine_units):
-            prefix = "└─ " if i == len(machine_units) - 1 else "├─ "
-            result.append((u, prefix))
+        principals = sorted(principals_by_machine.get(m.id, []), key=lambda u: u.name)
+        for pi, principal in enumerate(principals):
+            is_last_principal = pi == len(principals) - 1
+            p_prefix = "└─ " if is_last_principal else "├─ "
+            result.append((principal, p_prefix))
+            subs = sorted(subs_by_principal.get(principal.name, []), key=lambda u: u.name)
+            continuation = "   " if is_last_principal else "│  "
+            for si, sub in enumerate(subs):
+                is_last_sub = si == len(subs) - 1
+                s_prefix = continuation + ("└─ " if is_last_sub else "├─ ")
+                result.append((sub, s_prefix))
     return result
 
 
