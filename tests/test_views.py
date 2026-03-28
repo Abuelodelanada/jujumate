@@ -1206,6 +1206,7 @@ async def test_status_view_action_toggle_peer_relations_shows_and_hides(pilot):
     assert dt.row_count == 1
     assert view._show_peer_relations is False
 
+
 @pytest.mark.asyncio
 async def test_status_view_units_in_machines_hidden_by_default(pilot):
     # GIVEN a StatusView with one machine and one unit
