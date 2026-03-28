@@ -473,6 +473,15 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#health-tab" class="md-nav__link">
+    <span class="md-ellipsis">
+      Health tab
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#modals" class="md-nav__link">
     <span class="md-ellipsis">
       Modals
@@ -509,6 +518,15 @@
   <a href="#status" class="md-nav__link">
     <span class="md-ellipsis">
       Status
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#health" class="md-nav__link">
+    <span class="md-ellipsis">
+      Health
     </span>
   </a>
   
@@ -711,6 +729,15 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#health-tab" class="md-nav__link">
+    <span class="md-ellipsis">
+      Health tab
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#modals" class="md-nav__link">
     <span class="md-ellipsis">
       Modals
@@ -747,6 +774,15 @@
   <a href="#status" class="md-nav__link">
     <span class="md-ellipsis">
       Status
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#health" class="md-nav__link">
+    <span class="md-ellipsis">
+      Health
     </span>
   </a>
   
@@ -858,6 +894,10 @@
 <td>Go to Status tab</td>
 </tr>
 <tr>
+<td><code>h</code></td>
+<td>Go to Health tab</td>
+</tr>
+<tr>
 <td><code>r</code></td>
 <td>Force refresh</td>
 </tr>
@@ -912,6 +952,14 @@
 <td>Clear filter</td>
 </tr>
 <tr>
+<td><code>p</code></td>
+<td>Toggle peer relations in the Integrations panel</td>
+</tr>
+<tr>
+<td><code>u</code></td>
+<td>Toggle units-per-machine in the Machines panel</td>
+</tr>
+<tr>
 <td><code>Enter</code> on app</td>
 <td>Open App Config viewer</td>
 </tr>
@@ -922,6 +970,21 @@
 <tr>
 <td><code>Enter</code> on relation</td>
 <td>Open Relation Data inspector</td>
+</tr>
+</tbody>
+</table>
+<h3 id="health-tab">Health tab</h3>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>f</code></td>
+<td>Toggle unhealthy-only filter (hide active models)</td>
 </tr>
 </tbody>
 </table>
@@ -1005,9 +1068,13 @@
 <li><strong>Machines</strong> — id, state, address, instance, base, AZ <em>(IaaS models only)</em></li>
 <li><strong>SAAS</strong> — consumed remote offers and their status</li>
 <li><strong>Offers</strong> — cross-model offers with active/total connection counts</li>
-<li><strong>Integrations</strong> — all relations (peer, regular and cross-model)</li>
+<li><strong>Integrations</strong> — all relations (peer hidden by default; press <code>p</code> to show/hide)</li>
 </ul>
 <p>Press <code>Enter</code> on any app to open its <a href="#app-config-viewer">Config viewer</a>, or on any relation to open the <a href="#relation-data-inspector">Relation Data inspector</a>.</p>
+<p>In the <strong>Machines</strong> panel, press <code>u</code> to expand each machine and see which units (including subordinates) are running on it.</p>
+<h3 id="health">Health</h3>
+<p>A cross-model health dashboard showing all models across all controllers, sorted by worst status (error → blocked → maintenance → waiting → active). Select a model to see its affected units on the right panel.</p>
+<p>Press <code>f</code> to toggle the unhealthy-only filter and hide models where everything is active.</p>
 <h3 id="offers-browser-shifto">Offers browser (<code>Shift+O</code>)</h3>
 <p>Lists all offers across every model in the current controller. Select an offer to see:</p>
 <ul>
