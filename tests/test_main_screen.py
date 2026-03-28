@@ -832,9 +832,23 @@ async def test_status_view_offer_selected_calls_open_offer_detail(pilot):
     mock_open.assert_called_once_with("ctrl", offer.model, offer.name)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Early-return guards: no selection
-# ─────────────────────────────────────────────────────────────────────────────
+@pytest.mark.asyncio
+async def test_open_offer_detail_logs_and_returns_on_connection_error(pilot):
+    # GIVEN get_offer_detail raises JujuError (model gone / connection error)
+    screen = pilot.app.screen
+    with patch("jujumate.screens.main_screen.JujuClient") as MockClient:
+        instance = AsyncMock()
+        instance.get_offer_detail = AsyncMock(side_effect=JujuError("gone"))
+        MockClient.return_value.__aenter__ = AsyncMock(return_value=instance)
+        MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        # WHEN _open_offer_detail is called
+        screen._open_offer_detail("ctrl", "dev", "pg-offer")
+        for _ in range(10):
+            await pilot.pause()
+
+    # THEN no screen is pushed (method returns gracefully)
+    assert pilot.app.screen is screen
 
 
 def _call_app_selected_no_ctrl(screen) -> None:
