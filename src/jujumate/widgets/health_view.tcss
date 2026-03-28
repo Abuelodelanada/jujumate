@@ -1,0 +1,57 @@
+HealthView {
+    height: 1fr;
+    layout: horizontal;
+}
+
+#health-left-panel {
+    width: 42;
+    border: solid $accent;
+    border-title-color: $accent;
+    border-title-style: bold;
+    padding: 0 1;
+}
+
+#health-right-panel {
+    width: 1fr;
+    border: solid $accent;
+    border-title-color: $accent;
+    border-title-style: bold;
+    padding: 0 1;
+}
+
+#health-summary {
+    height: 1;
+    dock: bottom;
+    padding: 0 0;
+    color: $text-muted;
+    text-style: italic;
+}
+
+HealthView DataTable {
+    height: 1fr;
+    border: none;
+    background: ansi_default;
+    scrollbar-size: 0 0;
+    overflow-x: hidden;
+}
+
+HealthView DataTable > .datatable--header {
+    background: ansi_default;
+}
+
+HealthView DataTable > .datatable--even-row {
+    background: ansi_default;
+}
+
+HealthView DataTable > .datatable--odd-row {
+    background: ansi_default;
+}
+
+HealthView DataTable > .datatable--cursor {
+    background: ansi_default;
+}
+
+HealthView DataTable:focus > .datatable--cursor {
+    background: $block-cursor-background;
+    text-style: bold;
+}

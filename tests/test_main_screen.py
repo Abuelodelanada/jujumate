@@ -394,9 +394,11 @@ def test_asyncio_exception_handler(context, should_suppress):
 
 @pytest.mark.asyncio
 async def test_relations_updated_populates_status_view(pilot):
-    # GIVEN a model is selected
+    # GIVEN a model is selected and the Status tab is active
     screen = pilot.app.screen
     screen._selected_model = "dev"
+    screen.action_switch_tab("tab-status")
+    await pilot.pause()
     # WHEN a RelationsUpdated message is posted
     screen.on_relations_updated(
         RelationsUpdated(
@@ -439,9 +441,11 @@ async def test_relations_updated_replaces_existing_for_same_model(pilot):
 
 @pytest.mark.asyncio
 async def test_offers_updated_populates_status_view(pilot):
-    # GIVEN a model is selected
+    # GIVEN a model is selected and the Status tab is active
     screen = pilot.app.screen
     screen._selected_model = "cos"
+    screen.action_switch_tab("tab-status")
+    await pilot.pause()
     # WHEN an OffersUpdated message is posted
     screen.on_offers_updated(
         OffersUpdated(
@@ -469,10 +473,12 @@ async def test_offers_updated_populates_status_view(pilot):
 
 @pytest.mark.asyncio
 async def test_machines_updated_populates_status_view(pilot):
-    # GIVEN a model is selected
+    # GIVEN a model is selected and the Status tab is active
     screen = pilot.app.screen
     screen._selected_model = "dev"
     screen._all_models = [ModelInfo("dev", "prod", "aws", "us-east-1", "available")]
+    screen.action_switch_tab("tab-status")
+    await pilot.pause()
     # WHEN a MachinesUpdated message is posted
     screen.on_machines_updated(
         MachinesUpdated(
@@ -642,6 +648,59 @@ async def test_tab_activated_with_mapped_tab_calls_focus(pilot):
         screen.on_tabbed_content_tab_activated(event)
     # THEN call_after_refresh is invoked
     mock_car.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_tab_activated_status_schedules_refresh(pilot):
+    # GIVEN the main screen is active
+    screen = pilot.app.screen
+
+    # WHEN on_tabbed_content_tab_activated fires for "tab-status"
+    tab = MagicMock()
+    tab.id = "tab-status"
+    event = MagicMock()
+    event.tab = tab
+    calls = []
+    with patch.object(screen, "call_after_refresh", side_effect=calls.append):
+        screen.on_tabbed_content_tab_activated(event)
+
+    # THEN call_after_refresh is called twice (focus + refresh_status_view)
+    assert len(calls) == 2
+    assert screen._refresh_status_view in calls
+
+
+@pytest.mark.asyncio
+async def test_active_tab_returns_empty_string_when_not_mounted(pilot):
+    # GIVEN a MainScreen whose TabbedContent raises NoMatches
+    screen = pilot.app.screen
+
+    # WHEN _active_tab is called and query_one raises NoMatches
+    from textual.css.query import NoMatches
+
+    with patch.object(screen, "query_one", side_effect=NoMatches()):
+        result = screen._active_tab()
+
+    # THEN the method returns an empty string instead of raising
+    assert result == ""
+
+
+@pytest.mark.asyncio
+async def test_action_toggle_health_filter_delegates_to_health_view(pilot):
+    # GIVEN the Health tab is active
+    screen = pilot.app.screen
+    screen.action_switch_tab("tab-health")
+    await pilot.pause()
+
+    # WHEN action_toggle_health_filter is called
+    from jujumate.widgets.health_view import HealthView
+
+    hv = screen.query_one("#health-view", HealthView)
+    assert hv._show_all is False
+    screen.action_toggle_health_filter()
+    await pilot.pause()
+
+    # THEN the health view's _show_all is toggled
+    assert hv._show_all is True
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -2098,3 +2157,79 @@ async def test_offer_detail_fetch_consumers_config_error_fallback(pilot):
     # THEN worker completed normally (fallback to single controller, no consumers found)
     conn_dt = screen.query_one("#connections-table", DataTable)
     assert conn_dt.row_count == 0
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# on_models_updated / on_units_updated — health tab branch
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_models_updated_refreshes_health_view_when_health_tab_active(pilot):
+    # GIVEN the Health tab is active and there is a blocked model
+    screen = pilot.app.screen
+    screen.action_switch_tab("tab-health")
+    await pilot.pause()
+
+    # WHEN on_models_updated is received
+    screen.on_models_updated(
+        ModelsUpdated(models=[ModelInfo("broken", "ctrl", "aws", "", "blocked")])
+    )
+    await pilot.pause()
+
+    # THEN the health view data is updated
+    assert any(m.name == "broken" for m in screen._all_models)
+
+
+@pytest.mark.asyncio
+async def test_models_updated_refreshes_status_view_when_status_tab_active(pilot):
+    # GIVEN the Status tab is active
+    screen = pilot.app.screen
+    screen.action_switch_tab("tab-status")
+    await pilot.pause()
+
+    # WHEN on_models_updated is received
+    screen.on_models_updated(
+        ModelsUpdated(models=[ModelInfo("my-model", "ctrl", "aws", "", "active")])
+    )
+    await pilot.pause()
+
+    # THEN the model list is updated
+    assert any(m.name == "my-model" for m in screen._all_models)
+
+
+@pytest.mark.asyncio
+async def test_units_updated_refreshes_health_view_when_health_tab_active(pilot):
+    # GIVEN the Health tab is active with a model that has an unhealthy unit
+    screen = pilot.app.screen
+    screen._all_models = [ModelInfo("dev", "ctrl", "aws", "", "active")]
+    screen._all_apps = [AppInfo("pg", "dev", "pg", "14/stable", 1, controller="ctrl", status="blocked")]
+    screen.action_switch_tab("tab-health")
+    await pilot.pause()
+
+    # WHEN on_units_updated is received
+    screen.on_units_updated(
+        UnitsUpdated(units=[UnitInfo("pg/0", "pg", "0", "blocked", "idle", controller="ctrl", model="dev")])
+    )
+    await pilot.pause()
+
+    # THEN the units are stored and health view was refreshed
+    assert any(u.name == "pg/0" for u in screen._all_units)
+
+
+@pytest.mark.asyncio
+async def test_units_updated_refreshes_status_view_when_status_tab_active(pilot):
+    # GIVEN the Status tab is active
+    screen = pilot.app.screen
+    screen.action_switch_tab("tab-status")
+    await pilot.pause()
+
+    # WHEN on_units_updated is received
+    screen.on_units_updated(
+        UnitsUpdated(units=[UnitInfo("pg/0", "pg", "0", "active", "idle", controller="ctrl", model="dev")])
+    )
+    await pilot.pause()
+
+    # THEN the units are stored
+    assert any(u.name == "pg/0" for u in screen._all_units)
+

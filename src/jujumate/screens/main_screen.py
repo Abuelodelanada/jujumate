@@ -49,6 +49,7 @@ from jujumate.screens.theme_screen import ThemeScreen
 from jujumate.settings import AppSettings, load_settings
 from jujumate.widgets.clouds_view import CloudsView
 from jujumate.widgets.controllers_view import ControllersView
+from jujumate.widgets.health_view import HealthView
 from jujumate.widgets.jujumate_header import HeaderContext, JujuMateHeader
 from jujumate.widgets.models_view import ModelsView
 from jujumate.widgets.status_view import StatusView
@@ -64,6 +65,8 @@ class MainScreen(Screen):
         Binding("C", "switch_tab('tab-controllers')", "Controllers"),
         Binding("m", "switch_tab('tab-models')", "Models"),
         Binding("s", "switch_tab('tab-status')", "Status"),
+        Binding("h", "switch_tab('tab-health')", "Health"),
+        Binding("f", "toggle_health_filter", "Toggle health filter", show=False),
         Binding("S", "show_secrets", "Secrets", show=False),
         Binding("O", "show_offers", "Offers", show=False),
         Binding("T", "show_themes", "Theme", show=False),
@@ -78,6 +81,8 @@ class MainScreen(Screen):
         "tab-clouds": "#clouds-table",
         "tab-controllers": "#controllers-table",
         "tab-models": "#models-table",
+        "tab-status": "#status-apps-table DataTable",
+        "tab-health": "#health-models-table",
     }
 
     def __init__(self, settings: AppSettings | None = None, **kwargs) -> None:
@@ -116,6 +121,8 @@ class MainScreen(Screen):
                 yield ModelsView(id="models-view")
             with TabPane("Status", id="tab-status"):
                 yield StatusView(id="status-view")
+            with TabPane("Health", id="tab-health"):
+                yield HealthView(id="health-view")
 
     def on_mount(self) -> None:
         self.run_worker(self._connect_and_poll(), exclusive=True)
@@ -135,11 +142,11 @@ class MainScreen(Screen):
         self._poll_timer = self.set_interval(self._settings.refresh_interval, self._periodic_poll)
 
     async def _periodic_poll(self) -> None:
-        """Timer callback: only poll if the Status tab is currently active."""
+        """Timer callback: only poll if the Status or Health tab is currently active."""
         if not self._poller:
             return
         active_tab = self.query_one(TabbedContent).active
-        if active_tab == "tab-status":
+        if active_tab in ("tab-status", "tab-health"):
             await self._poller.poll_once()
             if self._selected_controller and self._selected_model:
                 self._fetch_relations(self._selected_controller, self._selected_model)
@@ -160,6 +167,19 @@ class MainScreen(Screen):
         tab_id = (event.tab.id if event.tab else "") or ""
         if widget_id := self._TAB_FOCUS_MAP.get(tab_id):
             self.call_after_refresh(self.query_one(widget_id).focus)
+        # Re-render the newly visible tab with current cached data (no new API call).
+        # Use call_after_refresh so the tab pane is fully mounted before populating.
+        if tab_id == "tab-status":
+            self.call_after_refresh(self._refresh_status_view)
+        elif tab_id == "tab-health":
+            self.call_after_refresh(self._refresh_health_view)
+
+    def _active_tab(self) -> str:
+        """Return the id of the currently active tab (empty string if not mounted yet)."""
+        try:
+            return self.query_one(TabbedContent).active or ""
+        except NoMatches:
+            return ""
 
     async def action_refresh_data(self) -> None:
         self.notify("Refreshing…")
@@ -207,6 +227,10 @@ class MainScreen(Screen):
             self.notify("Select a model first", severity="warning")
             return
         self.app.push_screen(LogScreen(self._selected_controller, self._selected_model))
+
+    def action_toggle_health_filter(self) -> None:
+        if self._active_tab() == "tab-health":
+            self.query_one("#health-view", HealthView).action_toggle_filter()
 
     # ── Filter helpers ────────────────────────────────────────────────────────
 
@@ -284,6 +308,13 @@ class MainScreen(Screen):
         status_view.update_saas(saas)
         status_view.update_offers(offers)
         status_view.update_relations(relations)
+
+    def _refresh_health_view(self) -> None:
+        self.query_one("#health-view", HealthView).update(
+            self._all_models,
+            self._all_apps,
+            self._all_units,
+        )
 
     def _effective_cloud(self) -> str | None:
         """Return the effective cloud: explicit selection, or derived from the selected model."""
@@ -384,22 +415,35 @@ class MainScreen(Screen):
 
         self._all_models = message.models
         self._refresh_models_view()
-        self._refresh_status_view()
+        active = self._active_tab()
+        if active == "tab-status":
+            self._refresh_status_view()
+        elif active == "tab-health":
+            self._refresh_health_view()
         self._refresh_header()
 
     def on_apps_updated(self, message: AppsUpdated) -> None:
         self._all_apps = message.apps
-        self._refresh_status_view()
+        active = self._active_tab()
+        if active == "tab-status":
+            self._refresh_status_view()
+        elif active == "tab-health":
+            self._refresh_health_view()
         self._refresh_header()
 
     def on_units_updated(self, message: UnitsUpdated) -> None:
         self._all_units = message.units
-        self._refresh_status_view()
+        active = self._active_tab()
+        if active == "tab-status":
+            self._refresh_status_view()
+        elif active == "tab-health":
+            self._refresh_health_view()
         self._refresh_header()
 
     def on_machines_updated(self, message: MachinesUpdated) -> None:
         self._all_machines = message.machines
-        self._refresh_status_view()
+        if self._active_tab() == "tab-status":
+            self._refresh_status_view()
 
     def on_relations_updated(self, message: RelationsUpdated) -> None:
         # Replace relations for this (controller, model) pair (keep other models' relations intact)
@@ -408,7 +452,8 @@ class MainScreen(Screen):
             for r in self._all_relations
             if not (r.model == message.model and r.controller == message.controller)
         ] + message.relations
-        self._refresh_status_view()
+        if self._active_tab() == "tab-status":
+            self._refresh_status_view()
         self._refresh_header()
         logger.debug("Relations updated for model '%s': %d", message.model, len(message.relations))
 
@@ -419,7 +464,8 @@ class MainScreen(Screen):
             for o in self._all_offers
             if not (o.model == message.model and o.controller == message.controller)
         ] + message.offers
-        self._refresh_status_view()
+        if self._active_tab() == "tab-status":
+            self._refresh_status_view()
         self._refresh_header()
         logger.debug("Offers updated for model '%s': %d", message.model, len(message.offers))
 
@@ -430,7 +476,8 @@ class MainScreen(Screen):
             for s in self._all_saas
             if not (s.model == message.model and s.controller == message.controller)
         ] + message.saas
-        self._refresh_status_view()
+        if self._active_tab() == "tab-status":
+            self._refresh_status_view()
         logger.debug("SAAS updated for model '%s': %d", message.model, len(message.saas))
 
     def on_data_refreshed(self, message: DataRefreshed) -> None:
@@ -506,6 +553,14 @@ class MainScreen(Screen):
         self._refresh_status_view()
         if self._selected_controller:
             self._fetch_relations(self._selected_controller, self._selected_model)
+        self._refresh_header()
+        self.action_switch_tab("tab-status")
+
+    def on_health_view_model_drill_down(self, message: HealthView.ModelDrillDown) -> None:
+        self._selected_controller = message.controller
+        self._selected_model = message.model
+        self._refresh_status_view()
+        self._fetch_relations(message.controller, message.model)
         self._refresh_header()
         self.action_switch_tab("tab-status")
 

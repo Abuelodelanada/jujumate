@@ -31,6 +31,7 @@ class _Palette:
     # ── Semantic status colors ────────────────────────────────────────────────
     SUCCESS: str = ""
     WARNING: str = ""
+    BLOCKED: str = ""
     ERROR: str = ""
 
     # ── UI accent colors ──────────────────────────────────────────────────────
@@ -75,6 +76,7 @@ def init(theme: Theme) -> None:
         "ACCENT": theme.accent,
         "SUCCESS": theme.success,
         "WARNING": theme.warning,
+        "BLOCKED": variables.get("blocked") or "#FF8800",
         "ERROR": theme.error,
         "LINK": variables.get("link"),
         "MUTED": variables.get("muted"),
