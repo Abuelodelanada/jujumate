@@ -10,6 +10,7 @@
 | `C` | Go to Controllers tab |
 | `m` | Go to Models tab |
 | `s` | Go to Status tab |
+| `h` | Go to Health tab |
 | `r` | Force refresh |
 | `Esc` | Clear cloud/controller drill-down filter |
 | `?` | Toggle help overlay |
@@ -28,9 +29,17 @@
 |-----|--------|
 | `/` | Filter by app name, charm, channel or message |
 | `Esc` | Clear filter |
+| `p` | Toggle peer relations in the Integrations panel |
+| `u` | Toggle units-per-machine in the Machines panel |
 | `Enter` on app | Open App Config viewer |
 | `Enter` on offer | Open Offer detail |
 | `Enter` on relation | Open Relation Data inspector |
+
+### Health tab
+
+| Key | Action |
+|-----|--------|
+| `f` | Toggle unhealthy-only filter (hide active models) |
 
 ### Modals
 
@@ -67,9 +76,17 @@ The main view. Displays a full `juju status`-style breakdown of the selected mod
 - **Machines** — id, state, address, instance, base, AZ *(IaaS models only)*
 - **SAAS** — consumed remote offers and their status
 - **Offers** — cross-model offers with active/total connection counts
-- **Integrations** — all relations (peer, regular and cross-model)
+- **Integrations** — all relations (peer hidden by default; press `p` to show/hide)
 
 Press `Enter` on any app to open its [Config viewer](#app-config-viewer), or on any relation to open the [Relation Data inspector](#relation-data-inspector).
+
+In the **Machines** panel, press `u` to expand each machine and see which units (including subordinates) are running on it.
+
+### Health
+
+A cross-model health dashboard showing all models across all controllers, sorted by worst status (error → blocked → maintenance → waiting → active). Select a model to see its affected units on the right panel.
+
+Press `f` to toggle the unhealthy-only filter and hide models where everything is active.
 
 ### Offers browser (`Shift+O`)
 
