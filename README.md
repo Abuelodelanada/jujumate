@@ -17,15 +17,19 @@
 - 🔄 **Auto-refresh** — status updates automatically every few seconds; logs stream live via WebSocket
 - ☁️ **Full resource tree** — clouds, controllers, models, applications, units, machines
 - 📊 **Status view** — apps, units, offers, integrations, SAAS and machines in one screen
+- 🏥 **Health view** — shows only unhealthy models by default; toggle to see all with `f`
 - 🔍 **Drill-down navigation** — select a controller → filter models; select a model → see its full status
-- 🔎 **Inline filtering** — press `/` in Status to search across apps, charms, channels and messages
+- 🔎 **Inline filtering** — press `/` in Status or Logs to search with live highlight
+- 🔗 **Peer relation toggle** — press `p` to show/hide peer relations in the Integrations panel
+- 🖥️ **Units-per-machine toggle** — press `u` to show units (and their subordinates) nested under each machine
+- 📋 **Copy to clipboard** — press `y` in Status or Relation Data to copy the full content
 - 🔐 **Secrets browser** — list and inspect Juju secrets per model (`Shift+S`)
 - 📦 **Offers browser** — browse all cross-model offers in a controller, with endpoint details and live consumer tracking across controllers (`Shift+O`)
 - 📋 **Relation databag inspector** — examine raw relation data for any relation (`Enter` on a relation)
 - ⚙️ **App config viewer** — inspect application configuration (`Enter` on an app)
 - 🎨 **Themeable** — built-in `ubuntu` and `dark` themes; fully customisable via YAML
 - 🪟 **Terminal transparency** — respects your terminal background (no forced black background)
-- ⌨️ **K9s-style help overlay** — press `?` to see all keybindings at any time
+- ⌨️ **K9s-style help overlay** — press `?` to see all keybindings at any time (full-screen)
 
 ---
 
@@ -67,6 +71,7 @@ On first launch JujuMate connects to your current Juju controller and auto-selec
 | `C` | Go to Controllers tab |
 | `m` | Go to Models tab |
 | `s` | Go to Status tab |
+| `h` | Go to Health tab |
 | `r` | Force refresh |
 | `Esc` | Clear cloud/controller drill-down filter |
 | `?` | Toggle help overlay |
@@ -83,11 +88,20 @@ On first launch JujuMate connects to your current Juju controller and auto-selec
 
 | Key | Action |
 |-----|--------|
-| `/` | Filter by app name, charm, channel or message |
+| `/` | Filter by app name, charm, channel or message (with live highlight) |
 | `Esc` | Clear filter |
+| `p` | Toggle peer relations in the Integrations panel |
+| `u` | Toggle units (and subordinates) nested under each machine |
+| `y` | Copy full status to clipboard (includes cloud, controller, model and Juju version) |
 | `Enter` on app | Open App Config viewer |
 | `Enter` on offer | Open Offer detail |
 | `Enter` on relation | Open Relation Data inspector |
+
+### Health tab
+
+| Key | Action |
+|-----|--------|
+| `f` | Toggle between unhealthy-only (default) and all models |
 
 ### Modals
 
@@ -108,11 +122,14 @@ On first launch JujuMate connects to your current Juju controller and auto-selec
 ### Status
 The main view. Displays a full `juju status`-style breakdown of the selected model:
 - **Applications** — name, charm, channel, revision, units, status and workload message
-- **Units** — workload/agent status, machine or pod, address, ports
-- **Machines** — id, state, address, instance, base, AZ *(IaaS models only)*
+- **Units** — workload/agent status, machine or pod, address, ports; subordinates shown nested under their principal
+- **Machines** — id, state, address, instance, base, AZ *(IaaS models only)*; press `u` to expand units and their subordinates inline
 - **SAAS** — consumed remote offers and their status
 - **Offers** — cross-model offers with active/total connection counts
-- **Integrations** — all relations (peer, regular and cross-model)
+- **Integrations** — regular and cross-model relations (peer relations hidden by default; press `p` to toggle)
+
+### Health
+Shows a summary of all models across all controllers, highlighting those with errors or blocked units. Unhealthy models are shown by default; press `f` to toggle between unhealthy-only and all models.
 
 ### Offers browser (`Shift+O`)
 Lists all offers across every model in the current controller. Select an offer to see:
@@ -123,8 +140,11 @@ Lists all offers across every model in the current controller. Select an offer t
 ### Secrets browser (`Shift+S`)
 Lists all secrets visible in the current model. Select a secret to see its metadata (owner, revision, rotation policy, timestamps).
 
+### Log viewer (`Shift+L`)
+Streams live log entries from the current model. Use `/` to filter by text.
+
 ### Relation Data inspector
-Press `Enter` on any relation in the Status tab to open a databag viewer showing the application-level and unit-level relation data for both sides of the relation.
+Press `Enter` on any relation in the Status tab to open a databag viewer showing the application-level and unit-level relation data for both sides of the relation. Press `y` to copy the full content to clipboard.
 
 ### App Config viewer
 Press `Enter` on any application in the Status tab to inspect its current configuration values.
