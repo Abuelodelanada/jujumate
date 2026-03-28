@@ -2203,13 +2203,17 @@ async def test_units_updated_refreshes_health_view_when_health_tab_active(pilot)
     # GIVEN the Health tab is active with a model that has an unhealthy unit
     screen = pilot.app.screen
     screen._all_models = [ModelInfo("dev", "ctrl", "aws", "", "active")]
-    screen._all_apps = [AppInfo("pg", "dev", "pg", "14/stable", 1, controller="ctrl", status="blocked")]
+    screen._all_apps = [
+        AppInfo("pg", "dev", "pg", "14/stable", 1, controller="ctrl", status="blocked")
+    ]
     screen.action_switch_tab("tab-health")
     await pilot.pause()
 
     # WHEN on_units_updated is received
     screen.on_units_updated(
-        UnitsUpdated(units=[UnitInfo("pg/0", "pg", "0", "blocked", "idle", controller="ctrl", model="dev")])
+        UnitsUpdated(
+            units=[UnitInfo("pg/0", "pg", "0", "blocked", "idle", controller="ctrl", model="dev")]
+        )
     )
     await pilot.pause()
 
@@ -2226,10 +2230,11 @@ async def test_units_updated_refreshes_status_view_when_status_tab_active(pilot)
 
     # WHEN on_units_updated is received
     screen.on_units_updated(
-        UnitsUpdated(units=[UnitInfo("pg/0", "pg", "0", "active", "idle", controller="ctrl", model="dev")])
+        UnitsUpdated(
+            units=[UnitInfo("pg/0", "pg", "0", "active", "idle", controller="ctrl", model="dev")]
+        )
     )
     await pilot.pause()
 
     # THEN the units are stored
     assert any(u.name == "pg/0" for u in screen._all_units)
-
