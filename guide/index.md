@@ -31,6 +31,7 @@
 - 🔄 **Auto-refresh** — status updates automatically every few seconds; logs stream live via WebSocket
 - ☁️ **Full resource tree** — clouds, controllers, models, applications, units, machines
 - 📊 **Status view** — apps, units, offers, integrations, SAAS and machines in one screen
+- 🏥 **Health view** — cross-model health dashboard sorted by severity; filter to unhealthy models only (`f`)
 - 🔍 **Drill-down navigation** — select a controller → filter models; select a model → see its full status
 - 🔎 **Inline filtering** — press `/` in Status to search across apps, charms, channels and messages
 - 🔐 **Secrets browser** — list and inspect Juju secrets per model (`Shift+S`)
