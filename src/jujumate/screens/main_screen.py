@@ -615,7 +615,13 @@ class MainScreen(Screen):
     async def _open_offer_detail(
         self, controller_name: str, model_name: str, offer_name: str
     ) -> None:
-        async with JujuClient(controller_name=controller_name) as client:
-            detail = await client.get_offer_detail(model_name, offer_name)
+        try:
+            async with JujuClient(controller_name=controller_name) as client:
+                detail = await client.get_offer_detail(model_name, offer_name)
+        except (JujuError, OSError, asyncio.TimeoutError, KeyError):
+            logger.exception(
+                "Failed to fetch offer detail for '%s' in model '%s'", offer_name, model_name
+            )
+            return
         if detail:
             self.app.push_screen(OfferDetailScreen(detail, controller_name))

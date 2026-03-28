@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import websockets
+import websockets.exceptions
 from juju.errors import JujuConnectionError, JujuError
 
 from jujumate.client.juju_client import (
@@ -554,6 +555,20 @@ async def test_get_secrets_empty(mock_controller):
     assert result == []
 
 
+@pytest.mark.asyncio
+async def test_get_secrets_raises_juju_error_when_model_gone(mock_controller):
+    # GIVEN the controller raises InvalidStatusCode (model was removed)
+    mock_controller.get_model = AsyncMock(
+        side_effect=websockets.exceptions.InvalidStatusCode(400, None)
+    )
+    client = JujuClient(controller=mock_controller)
+
+    # WHEN get_secrets is called for the removed model
+    # THEN a JujuError is raised instead of crashing
+    with pytest.raises(JujuError, match="no longer available"):
+        await client.get_secrets("removed-model")
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # get_app_config
 # ─────────────────────────────────────────────────────────────────────────────
@@ -634,6 +649,20 @@ async def test_get_app_config_app_not_found(mock_controller):
     result = await client.get_app_config("dev", "missing")
     # THEN an empty list is returned
     assert result == []
+
+
+@pytest.mark.asyncio
+async def test_get_app_config_raises_juju_error_when_model_gone(mock_controller):
+    # GIVEN the controller raises InvalidStatusCode (model was removed)
+    mock_controller.get_model = AsyncMock(
+        side_effect=websockets.exceptions.InvalidStatusCode(400, None)
+    )
+    client = JujuClient(controller=mock_controller)
+
+    # WHEN get_app_config is called for the removed model
+    # THEN a JujuError is raised instead of crashing
+    with pytest.raises(JujuError, match="no longer available"):
+        await client.get_app_config("removed-model", "pg")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -784,6 +813,25 @@ async def test_get_status_details_saas_from_remote_applications(mock_controller)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# get_status_details — model no longer available (InvalidStatusCode)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_get_status_details_raises_juju_error_when_model_gone(mock_controller):
+    # GIVEN the controller raises InvalidStatusCode (model was removed)
+    mock_controller.get_model = AsyncMock(
+        side_effect=websockets.exceptions.InvalidStatusCode(400, None)
+    )
+    client = JujuClient(controller=mock_controller)
+
+    # WHEN get_status_details is called for the removed model
+    # THEN a JujuError is raised instead of crashing the app
+    with pytest.raises(JujuError, match="no longer available"):
+        await client.get_status_details("removed-model")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # get_relation_data — peer, empty results, error result, unit-level data
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -927,6 +975,20 @@ async def test_get_controller_offers_uses_status_counts(mock_controller):
     info: ControllerOfferInfo = results[0]
     assert info.active_connections == 1
     assert info.total_connections == 1
+
+
+@pytest.mark.asyncio
+async def test_get_relation_data_raises_juju_error_when_model_gone(mock_controller):
+    # GIVEN the controller raises InvalidStatusCode (model was removed)
+    mock_controller.get_model = AsyncMock(
+        side_effect=websockets.exceptions.InvalidStatusCode(400, None)
+    )
+    client = JujuClient(controller=mock_controller)
+
+    # WHEN get_relation_data is called for the removed model
+    # THEN a JujuError is raised instead of crashing
+    with pytest.raises(JujuError, match="no longer available"):
+        await client.get_relation_data("removed-model", 1, "pg", "wp")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1275,6 +1337,20 @@ async def test_get_secret_content_skips_missing_data(mock_controller, secret_val
     assert result == {}
 
 
+@pytest.mark.asyncio
+async def test_get_secret_content_raises_juju_error_when_model_gone(mock_controller):
+    # GIVEN the controller raises InvalidStatusCode (model was removed)
+    mock_controller.get_model = AsyncMock(
+        side_effect=websockets.exceptions.InvalidStatusCode(400, None)
+    )
+    client = JujuClient(controller=mock_controller)
+
+    # WHEN get_secret_content is called for the removed model
+    # THEN a JujuError is raised instead of crashing
+    with pytest.raises(JujuError, match="no longer available"):
+        await client.get_secret_content("removed-model", "secret:abc123")
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # get_saas
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1361,6 +1437,23 @@ async def test_get_offer_detail_returns_none_on_juju_error(mock_controller):
     assert result is None
 
 
+@pytest.mark.asyncio
+async def test_get_offer_detail_returns_none_when_model_gone(mock_controller):
+    # GIVEN list_offers succeeds but get_model raises InvalidStatusCode
+    raw = MagicMock()
+    raw.results = []
+    mock_controller.list_offers = AsyncMock(return_value=raw)
+    mock_controller.get_model = AsyncMock(
+        side_effect=websockets.exceptions.InvalidStatusCode(400, None)
+    )
+    client = JujuClient(controller=mock_controller)
+
+    # WHEN get_offer_detail is called for the removed model
+    # THEN None is returned instead of crashing
+    result = await client.get_offer_detail("removed-model", "pg-offer")
+    assert result is None
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # get_controller_offers — JujuError per-model fallback
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1395,6 +1488,42 @@ async def test_get_controller_offers_skips_model_on_juju_error(mock_controller):
     client = JujuClient(controller=mock_controller)
     results = await client.get_controller_offers()
     # THEN the broken model is skipped and the ok model's offer is returned
+    assert len(results) == 1
+    assert results[0].name == "pg-offer"
+
+
+@pytest.mark.asyncio
+async def test_get_controller_offers_skips_model_when_model_gone(mock_controller):
+    # GIVEN two models where the first raises InvalidStatusCode on get_model
+    mock_controller.list_models = AsyncMock(return_value=["gone", "ok"])
+    ep = MagicMock()
+    ep.name = "db"
+    ep.interface = "pgsql"
+    ep.role = "provider"
+    offer = MagicMock()
+    offer.offer_name = "pg-offer"
+    offer.offer_url = "admin/ok.pg-offer"
+    offer.application_name = "postgresql"
+    offer.charm_url = "ch:postgresql"
+    offer.application_description = ""
+    offer.endpoints = [ep]
+    offer.users = []
+    raw = MagicMock()
+    raw.results = [offer]
+    mock_controller.list_offers = AsyncMock(return_value=raw)
+    status = MagicMock()
+    status.offers = {}
+    ok_model = AsyncMock()
+    ok_model.get_status = AsyncMock(return_value=status)
+    ok_model.disconnect = AsyncMock()
+    mock_controller.get_model = AsyncMock(
+        side_effect=[websockets.exceptions.InvalidStatusCode(400, None), ok_model]
+    )
+    client = JujuClient(controller=mock_controller)
+
+    # WHEN get_controller_offers is called
+    # THEN the gone model is skipped and the ok model's offer is returned
+    results = await client.get_controller_offers()
     assert len(results) == 1
     assert results[0].name == "pg-offer"
 

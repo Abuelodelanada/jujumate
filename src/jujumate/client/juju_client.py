@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import Any
 
 import websockets
+import websockets.exceptions
 from juju.client import client as juju_client
 from juju.controller import Controller
 from juju.errors import JujuError
@@ -597,7 +598,10 @@ class JujuClient:
         self, model_name: str
     ) -> tuple[list[RelationInfo], list[OfferInfo], list[SAASInfo]]:
         """Fetch relations, offers and SAAS for a model in a single connection."""
-        model = await self._controller.get_model(model_name)
+        try:
+            model = await self._controller.get_model(model_name)
+        except websockets.exceptions.InvalidStatusCode as exc:
+            raise JujuError(f"Model '{model_name}' is no longer available: {exc}") from exc
         try:
             status = await model.get_status()
             app_statuses = status.applications or {}
@@ -642,7 +646,10 @@ class JujuClient:
     async def get_secrets(self, model_name: str) -> list[SecretInfo]:
         """Fetch all secrets visible in the given model."""
         secrets: list[SecretInfo] = []
-        model = await self._controller.get_model(model_name)
+        try:
+            model = await self._controller.get_model(model_name)
+        except websockets.exceptions.InvalidStatusCode as exc:
+            raise JujuError(f"Model '{model_name}' is no longer available: {exc}") from exc
         try:
             results = await model.list_secrets()
             for s in results or []:
@@ -669,7 +676,10 @@ class JujuClient:
 
     async def get_secret_content(self, model_name: str, secret_uri: str) -> dict[str, str]:
         """Fetch the key-value content of a secret by URI (requires show_secrets=True)."""
-        model = await self._controller.get_model(model_name)
+        try:
+            model = await self._controller.get_model(model_name)
+        except websockets.exceptions.InvalidStatusCode as exc:
+            raise JujuError(f"Model '{model_name}' is no longer available: {exc}") from exc
         try:
             results = await model.list_secrets(show_secrets=True)
             for s in results or []:
@@ -692,7 +702,10 @@ class JujuClient:
     async def get_app_config(self, model_name: str, app_name: str) -> list[AppConfigEntry]:
         """Fetch configuration entries for an application."""
         entries: list[AppConfigEntry] = []
-        model = await self._controller.get_model(model_name)
+        try:
+            model = await self._controller.get_model(model_name)
+        except websockets.exceptions.InvalidStatusCode as exc:
+            raise JujuError(f"Model '{model_name}' is no longer available: {exc}") from exc
         try:
             app = model.applications.get(app_name)
             if not app:
@@ -744,7 +757,10 @@ class JujuClient:
         provider unit we get: provider app-level data + requirer units' data.
         From the requirer unit we get: requirer app-level data + provider units' data.
         """
-        model = await self._controller.get_model(model_name)
+        try:
+            model = await self._controller.get_model(model_name)
+        except websockets.exceptions.InvalidStatusCode as exc:
+            raise JujuError(f"Model '{model_name}' is no longer available: {exc}") from exc
         try:
             facade = juju_client.ApplicationFacade.from_connection(model.connection())
             entries: list[RelationDataEntry] = []
@@ -788,7 +804,7 @@ class JujuClient:
                 if (offer.offer_name or "") != offer_name:
                     continue
                 return _build_controller_offer_info(offer, model_name, status_counts)
-        except JujuError:
+        except (JujuError, websockets.exceptions.InvalidStatusCode):
             logger.warning(
                 "Could not fetch offer detail for '%s' in model '%s'", offer_name, model_name
             )
@@ -810,7 +826,7 @@ class JujuClient:
                     await model.disconnect()
                 for offer in raw.results or []:
                     result.append(_build_controller_offer_info(offer, model_name, status_counts))
-            except JujuError:
+            except (JujuError, websockets.exceptions.InvalidStatusCode):
                 logger.warning("Could not list offers for model '%s'", model_name)
         logger.debug("Controller offers: %d total", len(result))
         return result
