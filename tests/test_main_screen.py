@@ -46,6 +46,7 @@ from jujumate.screens.main_screen import MainScreen
 from jujumate.screens.offers_screen import OfferDetailScreen, OffersScreen, _ConsumerEntry
 from jujumate.screens.relation_data_screen import RelationDataScreen
 from jujumate.screens.secrets_screen import SecretDetailScreen, SecretsScreen
+from jujumate.screens.settings_screen import SettingsScreen
 from jujumate.screens.theme_screen import ThemeScreen
 from jujumate.settings import AppSettings
 from jujumate.widgets.app_config_view import AppConfigView
@@ -759,19 +760,72 @@ async def test_action_show_screen_with_selection_pushes_screen(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# action_show_themes
+# action_show_settings
 # ─────────────────────────────────────────────────────────────────────────────
 
 
 @pytest.mark.asyncio
-async def test_action_show_themes_pushes_theme_screen(pilot):
+async def test_action_show_settings_pushes_settings_screen(pilot):
     # GIVEN the main screen is active
     screen = pilot.app.screen
-    # WHEN action_show_themes is called
-    screen.action_show_themes()
+    # WHEN action_show_settings is called
+    screen.action_show_settings()
     await pilot.pause()
-    # THEN ThemeScreen is pushed
-    assert isinstance(pilot.app.screen, ThemeScreen)
+    # THEN SettingsScreen is pushed
+    assert isinstance(pilot.app.screen, SettingsScreen)
+
+
+@pytest.mark.asyncio
+async def test_action_show_settings_apply_callback_with_none_does_nothing(pilot):
+    # GIVEN the main screen with a known refresh_interval
+    main = pilot.app.screen
+    original_interval = main._settings.refresh_interval
+
+    # WHEN action_show_settings is called (push_screen mocked to avoid stack side effects)
+    with patch.object(pilot.app, "push_screen") as mock_push:
+        main.action_show_settings()
+        await pilot.pause()
+
+    # Extract the _apply callback from the push_screen call
+    _apply = mock_push.call_args[0][1]
+    _apply(None)
+
+    # THEN settings remain unchanged
+    assert main._settings.refresh_interval == original_interval
+
+
+@pytest.mark.asyncio
+async def test_action_show_settings_apply_callback_restarts_timer_on_interval_change(pilot):
+    # GIVEN the main screen with refresh_interval=5 and a running timer
+    main = pilot.app.screen
+    main._settings.refresh_interval = 5
+    mock_timer = MagicMock()
+    main._poll_timer = mock_timer  # simulate a running timer
+
+    with patch.object(pilot.app, "push_screen") as mock_push:
+        main.action_show_settings()
+        await pilot.pause()
+
+    _apply = mock_push.call_args[0][1]
+
+    # WHEN _apply is called with settings that have a different refresh_interval
+    from jujumate.settings import AppSettings
+
+    new_settings = AppSettings(
+        refresh_interval=10,
+        default_controller=main._settings.default_controller,
+        juju_data_dir=main._settings.juju_data_dir,
+        log_file=main._settings.log_file,
+        log_level=main._settings.log_level,
+        theme=main._settings.theme,
+    )
+    with patch.object(main, "set_interval", return_value=MagicMock()) as mock_interval:
+        _apply(new_settings)
+
+    # THEN the old timer is stopped, a new one started, and settings updated
+    mock_timer.stop.assert_called_once()
+    mock_interval.assert_called_once_with(10, main._periodic_poll)
+    assert main._settings.refresh_interval == 10
 
 
 # ─────────────────────────────────────────────────────────────────────────────

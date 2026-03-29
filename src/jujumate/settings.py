@@ -40,6 +40,24 @@ def save_theme(theme_name: str, config_file: Path = CONFIG_FILE) -> None:
         yaml.safe_dump(data, f, default_flow_style=False)
 
 
+def save_settings(settings: AppSettings, config_file: Path = CONFIG_FILE) -> None:
+    """Persist all settings to the config file, preserving unmanaged keys."""
+    data: dict = {}
+    if config_file.exists():
+        with config_file.open() as f:
+            data = yaml.safe_load(f) or {}
+    data["theme"] = settings.theme
+    data["refresh_interval"] = settings.refresh_interval
+    data["log_level"] = logging.getLevelName(settings.log_level)
+    if settings.default_controller:
+        data["default_controller"] = settings.default_controller
+    else:
+        data.pop("default_controller", None)
+    config_file.parent.mkdir(parents=True, exist_ok=True)
+    with config_file.open("w") as f:
+        yaml.safe_dump(data, f, default_flow_style=False)
+
+
 def load_settings(config_file: Path = CONFIG_FILE) -> AppSettings:
     if not config_file.exists():
         return AppSettings()

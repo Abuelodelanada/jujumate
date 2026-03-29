@@ -11,7 +11,6 @@ HELP_TEXT = """\
 
 [bold cyan]Navigation[/bold cyan]
   [bold]c[/bold]       Clouds
-  [bold]C[/bold]       Controllers
   [bold]m[/bold]       Models
   [bold]s[/bold]       Status
   [bold]h[/bold]       Health
@@ -23,7 +22,7 @@ HELP_TEXT = """\
   [bold]S[/bold]       Secrets (requires model selected)
   [bold]O[/bold]       Offers — all offers across controller
   [bold]L[/bold]       Logs — live log stream (requires model selected)
-  [bold]T[/bold]       Theme — switch theme with live preview
+  [bold]C[/bold]       Settings — appearance, behaviour & diagnostics
   [bold]r[/bold]       Refresh data
   [bold]y[/bold]       Copy to clipboard (relation data / status)
   [bold]p[/bold]       Toggle peer relations (Status → Integrations)

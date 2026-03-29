@@ -46,7 +46,7 @@ from jujumate.screens.machine_detail_screen import MachineDetailScreen
 from jujumate.screens.offers_screen import OfferDetailScreen, OffersScreen
 from jujumate.screens.relation_data_screen import RelationDataScreen
 from jujumate.screens.secrets_screen import SecretsScreen
-from jujumate.screens.theme_screen import ThemeScreen
+from jujumate.screens.settings_screen import SettingsScreen
 from jujumate.settings import AppSettings, load_settings
 from jujumate.widgets.clouds_view import CloudsView
 from jujumate.widgets.controllers_view import ControllersView
@@ -63,14 +63,13 @@ _T = TypeVar("_T")
 class MainScreen(Screen):
     BINDINGS = [
         Binding("c", "switch_tab('tab-clouds')", "Clouds"),
-        Binding("C", "switch_tab('tab-controllers')", "Controllers"),
         Binding("m", "switch_tab('tab-models')", "Models"),
         Binding("s", "switch_tab('tab-status')", "Status"),
         Binding("h", "switch_tab('tab-health')", "Health"),
         Binding("f", "toggle_health_filter", "Toggle health filter", show=False),
         Binding("S", "show_secrets", "Secrets", show=False),
         Binding("O", "show_offers", "Offers", show=False),
-        Binding("T", "show_themes", "Theme", show=False),
+        Binding("C", "show_settings", "Settings", show=False),
         Binding("L", "show_logs", "Logs", show=False),
         Binding("r", "refresh_data", "Refresh"),
         Binding("escape", "clear_filter", "Clear filter", show=False),
@@ -220,8 +219,22 @@ class MainScreen(Screen):
             return
         self.app.push_screen(OffersScreen(self._selected_controller))
 
-    def action_show_themes(self) -> None:
-        self.app.push_screen(ThemeScreen())
+    def action_show_settings(self) -> None:
+        controller_names = [c.name for c in self._all_controllers]
+
+        def _apply(new_settings: AppSettings | None) -> None:
+            if new_settings is None:
+                return
+            old_interval = self._settings.refresh_interval
+            self._settings = new_settings
+            if new_settings.refresh_interval != old_interval:
+                if self._poll_timer is not None:
+                    self._poll_timer.stop()
+                self._poll_timer = self.set_interval(
+                    new_settings.refresh_interval, self._periodic_poll
+                )
+
+        self.app.push_screen(SettingsScreen(self._settings, controller_names), _apply)
 
     def action_show_logs(self) -> None:
         if not self._selected_controller or not self._selected_model:

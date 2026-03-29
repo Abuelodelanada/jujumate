@@ -28,7 +28,8 @@
 - 📋 **Relation databag inspector** — examine raw relation data for any relation (`Enter` on a relation)
 - ⚙️ **App config viewer** — inspect application configuration (`Enter` on an app)
 - 🖥️ **Machine detail modal** — press `Enter` on any machine to see hardware specs, status timestamps and network interfaces
-- 🎨 **Themeable** — built-in `ubuntu` and `dark` themes; fully customisable via YAML
+- 🎨 **Themeable** — five built-in themes; fully customisable via YAML
+- ⚙️ **Settings modal** — change theme, refresh interval, default controller and log level at runtime (`Shift+C`)
 - 🪟 **Terminal transparency** — respects your terminal background (no forced black background)
 - ⌨️ **K9s-style help overlay** — press `?` to see all keybindings at any time (full-screen)
 
@@ -69,7 +70,6 @@ On first launch JujuMate connects to your current Juju controller and auto-selec
 | Key | Action |
 |-----|--------|
 | `c` | Go to Clouds tab |
-| `C` | Go to Controllers tab |
 | `m` | Go to Models tab |
 | `s` | Go to Status tab |
 | `h` | Go to Health tab |
@@ -112,7 +112,7 @@ On first launch JujuMate connects to your current Juju controller and auto-selec
 | `Shift+S` | Open Secrets browser for the current model |
 | `Shift+O` | Open Offers browser for the current controller |
 | `Shift+L` | Open live Log viewer for the current model |
-| `T` | Open theme switcher |
+| `Shift+C` | Open Settings modal (appearance, behaviour, diagnostics) |
 | `Enter` | Open detail view |
 | `y` | Copy value to clipboard (Relation Data / Secrets) |
 | `Esc` | Close modal |
@@ -181,13 +181,15 @@ log_file: ~/.local/state/jujumate/jujumate.log
 log_level: INFO             # DEBUG | INFO | WARNING | ERROR | CRITICAL
 ```
 
+Most settings can also be changed at runtime — press `Shift+C` to open the **Settings modal**, which lets you change the theme (with live preview), refresh interval, default controller and log level without editing the file manually. Changes are saved immediately.
+
 ---
 
 ## Themes
 
 JujuMate ships with five built-in themes: **`ubuntu`** (default), **`dark`**, **`monokai`**, **`solarized-dark`** and **`spacemacs`**.
 
-Press `T` at any time to open the live theme switcher and preview themes before applying them.
+Press `Shift+C` to open the Settings modal, then select a theme in the **Appearance** section to preview it live before it's applied.
 
 To create a custom theme, add a YAML file to `~/.config/jujumate/themes/`:
 

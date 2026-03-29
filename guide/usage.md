@@ -7,7 +7,6 @@
 | Key | Action |
 |-----|--------|
 | `c` | Go to Clouds tab |
-| `C` | Go to Controllers tab |
 | `m` | Go to Models tab |
 | `s` | Go to Status tab |
 | `h` | Go to Health tab |
@@ -49,7 +48,7 @@
 | `Shift+S` | Open Secrets browser for the current model |
 | `Shift+O` | Open Offers browser for the current controller |
 | `Shift+L` | Open live Log viewer for the current model |
-| `T` | Open theme switcher |
+| `Shift+C` | Open Settings modal (appearance, behaviour, diagnostics) |
 | `y` | Copy value to clipboard (Relation Data / Secrets) |
 | `Esc` | Close modal |
 
@@ -114,6 +113,16 @@ Streams model logs in real time via WebSocket — equivalent to `juju debug-log`
 ### Relation Data inspector
 
 Press `Enter` on any relation in the Status tab to open a databag viewer showing the application-level and unit-level relation data for both sides of the relation.
+
+### Settings modal (`Shift+C`)
+
+Press `Shift+C` to open the unified Settings modal with three sections:
+
+- **Appearance** — switch theme with live preview (changes apply instantly)
+- **Behaviour** — refresh interval (2 s / 5 s / 10 s) and default controller
+- **Diagnostics** — log level (DEBUG / INFO / WARNING / ERROR / CRITICAL)
+
+All changes are persisted to `~/.config/jujumate/config.yaml` immediately on selection. Press `Esc` to close.
 
 ### Machine detail modal
 
