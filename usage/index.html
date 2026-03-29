@@ -569,6 +569,15 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#machine-detail-modal" class="md-nav__link">
+    <span class="md-ellipsis">
+      Machine detail modal
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#app-config-viewer" class="md-nav__link">
     <span class="md-ellipsis">
       App Config viewer
@@ -825,6 +834,15 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#machine-detail-modal" class="md-nav__link">
+    <span class="md-ellipsis">
+      Machine detail modal
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#app-config-viewer" class="md-nav__link">
     <span class="md-ellipsis">
       App Config viewer
@@ -971,6 +989,10 @@
 <td><code>Enter</code> on relation</td>
 <td>Open Relation Data inspector</td>
 </tr>
+<tr>
+<td><code>Enter</code> on machine</td>
+<td>Open Machine detail modal</td>
+</tr>
 </tbody>
 </table>
 <h3 id="health-tab">Health tab</h3>
@@ -1070,7 +1092,7 @@
 <li><strong>Offers</strong> — cross-model offers with active/total connection counts</li>
 <li><strong>Integrations</strong> — all relations (peer hidden by default; press <code>p</code> to show/hide)</li>
 </ul>
-<p>Press <code>Enter</code> on any app to open its <a href="#app-config-viewer">Config viewer</a>, or on any relation to open the <a href="#relation-data-inspector">Relation Data inspector</a>.</p>
+<p>Press <code>Enter</code> on any app to open its <a href="#app-config-viewer">Config viewer</a>, or on any relation to open the <a href="#relation-data-inspector">Relation Data inspector</a>, or on any machine to open the <a href="#machine-detail-modal">Machine detail modal</a>.</p>
 <p>In the <strong>Machines</strong> panel, press <code>u</code> to expand each machine and see which units (including subordinates) are running on it.</p>
 <h3 id="health">Health</h3>
 <p>A cross-model health dashboard showing all models across all controllers, sorted by worst status (error → blocked → maintenance → waiting → active). Select a model to see its affected units on the right panel.</p>
@@ -1095,6 +1117,14 @@
 </ul>
 <h3 id="relation-data-inspector">Relation Data inspector</h3>
 <p>Press <code>Enter</code> on any relation in the Status tab to open a databag viewer showing the application-level and unit-level relation data for both sides of the relation.</p>
+<h3 id="machine-detail-modal">Machine detail modal</h3>
+<p>Press <code>Enter</code> on any machine row in the <strong>Machines</strong> panel to open a modal with:</p>
+<ul>
+<li><strong>Hardware</strong> — architecture, CPU cores, RAM, disk size and virtualisation type</li>
+<li><strong>Status</strong> — agent state and instance state, each with a relative timestamp (e.g. <em>2h ago</em>) and the exact formatted time</li>
+<li><strong>Network interfaces</strong> — per-interface name, all assigned IPv4 and IPv6 addresses, MAC address and Juju space</li>
+</ul>
+<p>Press <code>Esc</code> to close the modal.</p>
 <h3 id="app-config-viewer">App Config viewer</h3>
 <p>Press <code>Enter</code> on any application in the Status tab to inspect its current configuration values.</p>
 <hr />
