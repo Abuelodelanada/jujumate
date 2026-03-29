@@ -569,6 +569,15 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#settings-modal-shiftc" class="md-nav__link">
+    <span class="md-ellipsis">
+      Settings modal (Shift+C)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#machine-detail-modal" class="md-nav__link">
     <span class="md-ellipsis">
       Machine detail modal
@@ -834,6 +843,15 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#settings-modal-shiftc" class="md-nav__link">
+    <span class="md-ellipsis">
+      Settings modal (Shift+C)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#machine-detail-modal" class="md-nav__link">
     <span class="md-ellipsis">
       Machine detail modal
@@ -898,10 +916,6 @@
 <tr>
 <td><code>c</code></td>
 <td>Go to Clouds tab</td>
-</tr>
-<tr>
-<td><code>C</code></td>
-<td>Go to Controllers tab</td>
 </tr>
 <tr>
 <td><code>m</code></td>
@@ -1032,8 +1046,8 @@
 <td>Open live Log viewer for the current model</td>
 </tr>
 <tr>
-<td><code>T</code></td>
-<td>Open theme switcher</td>
+<td><code>Shift+C</code></td>
+<td>Open Settings modal (appearance, behaviour, diagnostics)</td>
 </tr>
 <tr>
 <td><code>y</code></td>
@@ -1117,6 +1131,14 @@
 </ul>
 <h3 id="relation-data-inspector">Relation Data inspector</h3>
 <p>Press <code>Enter</code> on any relation in the Status tab to open a databag viewer showing the application-level and unit-level relation data for both sides of the relation.</p>
+<h3 id="settings-modal-shiftc">Settings modal (<code>Shift+C</code>)</h3>
+<p>Press <code>Shift+C</code> to open the unified Settings modal with three sections:</p>
+<ul>
+<li><strong>Appearance</strong> — switch theme with live preview (changes apply instantly)</li>
+<li><strong>Behaviour</strong> — refresh interval (2 s / 5 s / 10 s) and default controller</li>
+<li><strong>Diagnostics</strong> — log level (DEBUG / INFO / WARNING / ERROR / CRITICAL)</li>
+</ul>
+<p>All changes are persisted to <code>~/.config/jujumate/config.yaml</code> immediately on selection. Press <code>Esc</code> to close.</p>
 <h3 id="machine-detail-modal">Machine detail modal</h3>
 <p>Press <code>Enter</code> on any machine row in the <strong>Machines</strong> panel to open a modal with:</p>
 <ul>
