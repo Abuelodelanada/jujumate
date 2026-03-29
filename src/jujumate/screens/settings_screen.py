@@ -85,9 +85,14 @@ class SettingsScreen(ModalScreen[AppSettings]):
                 )
             with Horizontal(classes="setting-row"):
                 yield Label("Default controller", classes="setting-label")
+                ctrl_value = (
+                    self._settings.default_controller
+                    if self._settings.default_controller in self._controller_names
+                    else _NO_CONTROLLER
+                )
                 yield Select(
                     controller_options,
-                    value=self._settings.default_controller or _NO_CONTROLLER,
+                    value=ctrl_value,
                     id="select-controller",
                 )
             # ── Diagnostics ───────────────────────────────────────────────

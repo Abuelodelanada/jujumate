@@ -47,7 +47,7 @@ from jujumate.screens.offers_screen import OfferDetailScreen, OffersScreen
 from jujumate.screens.relation_data_screen import RelationDataScreen
 from jujumate.screens.secrets_screen import SecretsScreen
 from jujumate.screens.settings_screen import SettingsScreen
-from jujumate.settings import AppSettings, load_settings
+from jujumate.settings import AppSettings, load_settings, save_settings
 from jujumate.widgets.clouds_view import CloudsView
 from jujumate.widgets.controllers_view import ControllersView
 from jujumate.widgets.health_view import HealthView
@@ -135,9 +135,16 @@ class MainScreen(Screen):
             return
 
         self._poller = JujuPoller(controller_names=juju_config.controllers, target=self)
-        if juju_config.current_model:
-            self._auto_select_model = juju_config.current_model
-            logger.info("Will auto-select model '%s' after first poll", juju_config.current_model)
+        effective_controller = self._settings.default_controller or juju_config.current_controller
+        if effective_controller:
+            current_model = juju_config.controller_models.get(effective_controller)
+            if current_model:
+                self._auto_select_model = current_model
+                logger.info(
+                    "Will auto-select model '%s' on controller '%s' after first poll",
+                    current_model,
+                    effective_controller,
+                )
         await self._poller.poll_once()
         self._poll_timer = self.set_interval(self._settings.refresh_interval, self._periodic_poll)
 
@@ -564,6 +571,9 @@ class MainScreen(Screen):
             self._selected_model = parts[1]
         else:
             self._selected_model = message.name
+        if self._selected_controller:
+            self._settings.default_controller = self._selected_controller
+            save_settings(self._settings)
         self._refresh_status_view()
         if self._selected_controller:
             self._fetch_relations(self._selected_controller, self._selected_model)
@@ -573,6 +583,8 @@ class MainScreen(Screen):
     def on_health_view_model_drill_down(self, message: HealthView.ModelDrillDown) -> None:
         self._selected_controller = message.controller
         self._selected_model = message.model
+        self._settings.default_controller = message.controller
+        save_settings(self._settings)
         self._refresh_status_view()
         self._fetch_relations(message.controller, message.model)
         self._refresh_header()

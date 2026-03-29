@@ -52,6 +52,7 @@ from jujumate.settings import AppSettings
 from jujumate.widgets.app_config_view import AppConfigView
 from jujumate.widgets.clouds_view import CloudsView
 from jujumate.widgets.controllers_view import ControllersView
+from jujumate.widgets.health_view import HealthView
 from jujumate.widgets.models_view import ModelsView
 from jujumate.widgets.navigable_table import NavigableTable
 from jujumate.widgets.relation_data_view import RelationDataView
@@ -73,15 +74,25 @@ def _make_juju_client_mock(**method_returns) -> AsyncMock:
 
 
 async def _run_connect_and_poll(
-    screen: MainScreen, current_model: str | None = None
+    screen: MainScreen,
+    current_model: str | None = None,
+    controller_models: dict[str, str] | None = None,
+    default_controller: str | None = None,
 ) -> tuple[AsyncMock, MagicMock]:
     """Call _connect_and_poll with mocked load_config and JujuPoller.
 
     Returns (mock_poller, MockPoller) for assertions.
     """
     config = JujuConfig(
-        current_controller="prod", controllers=["prod"], current_model=current_model
+        current_controller="prod",
+        controllers=["prod"],
+        current_model=current_model,
+        controller_models=controller_models
+        if controller_models is not None
+        else ({"prod": current_model} if current_model else {}),
     )
+    # Always reset default_controller for test isolation (avoids stale disk config leaking in)
+    screen._settings.default_controller = default_controller
     with (
         patch("jujumate.screens.main_screen.load_config", return_value=config),
         patch("jujumate.screens.main_screen.JujuPoller") as MockPoller,
@@ -226,12 +237,41 @@ async def test_connect_and_poll_success(pilot):
 
 @pytest.mark.asyncio
 async def test_connect_and_poll_sets_auto_select_from_config(pilot):
-    # GIVEN load_config returns a config with current_model set
+    # GIVEN load_config returns a config with a current model for 'prod'
     screen = pilot.app.screen
-    # WHEN _connect_and_poll is called
-    await _run_connect_and_poll(screen, current_model="mymodel")
-    # THEN _auto_select_model is set to the current_model from config
+    # WHEN _connect_and_poll is called with controller_models populated
+    await _run_connect_and_poll(screen, controller_models={"prod": "mymodel"})
+    # THEN _auto_select_model is set to the model of the Juju current controller
     assert screen._auto_select_model == "mymodel"
+
+
+@pytest.mark.asyncio
+async def test_connect_and_poll_uses_settings_default_controller(pilot):
+    # GIVEN settings has default_controller pointing to 'staging'
+    screen = pilot.app.screen
+    # WHEN _connect_and_poll is called; Juju current is 'prod' but settings says 'staging'
+    await _run_connect_and_poll(
+        screen,
+        controller_models={"prod": "prod-model", "staging": "staging-model"},
+        default_controller="staging",
+    )
+    # THEN _auto_select_model uses staging's model, not prod's
+    assert screen._auto_select_model == "staging-model"
+
+
+@pytest.mark.asyncio
+async def test_connect_and_poll_no_default_controller_skips_auto_select(pilot):
+    # GIVEN neither settings nor Juju config has a default controller
+    screen = pilot.app.screen
+    config = JujuConfig(current_controller=None, controllers=["prod", "staging"])
+    with (
+        patch("jujumate.screens.main_screen.load_config", return_value=config),
+        patch("jujumate.screens.main_screen.JujuPoller") as MockPoller,
+    ):
+        MockPoller.return_value = AsyncMock()
+        await screen._connect_and_poll()
+    # THEN no model is auto-selected (app stays on Clouds tab)
+    assert screen._auto_select_model is None
 
 
 @pytest.mark.asyncio
@@ -303,7 +343,10 @@ async def test_model_selected_switches_to_status_and_filters(pilot):
         AppInfo("mysql", "prod", "mysql", "8/stable", 1, controller="other-ctrl"),
     ]
     mock_client = _make_juju_client_mock(get_status_details=([], [], []))
-    with patch("jujumate.screens.main_screen.JujuClient", return_value=mock_client):
+    with (
+        patch("jujumate.screens.main_screen.JujuClient", return_value=mock_client),
+        patch("jujumate.screens.main_screen.save_settings"),
+    ):
         screen._selected_controller = "ctrl"
         # WHEN a model with a controller prefix is selected
         screen.on_models_view_model_selected(ModelsView.ModelSelected(name="ctrl/dev"))
@@ -325,6 +368,46 @@ async def test_model_selected_without_slash_sets_model_only(pilot):
     await pilot.pause()
     # THEN _selected_model is set to the plain name
     assert screen._selected_model == "mymodel"
+
+
+@pytest.mark.asyncio
+async def test_model_selected_saves_default_controller_to_settings(pilot):
+    # GIVEN a model is selected via drill-down
+    screen = pilot.app.screen
+    screen._settings.default_controller = None
+    mock_client = _make_juju_client_mock(get_status_details=([], [], []))
+    with (
+        patch("jujumate.screens.main_screen.JujuClient", return_value=mock_client),
+        patch("jujumate.screens.main_screen.save_settings") as mock_save,
+    ):
+        # WHEN on_models_view_model_selected is called with a controller/model name
+        screen.on_models_view_model_selected(ModelsView.ModelSelected(name="ck8s/monitoring"))
+        await pilot.pause()
+        await pilot.pause()
+    # THEN the selected controller is persisted as default_controller
+    assert screen._settings.default_controller == "ck8s"
+    mock_save.assert_called_once_with(screen._settings)
+
+
+@pytest.mark.asyncio
+async def test_health_drill_down_saves_default_controller_to_settings(pilot):
+    # GIVEN a model is selected from the health view
+    screen = pilot.app.screen
+    screen._settings.default_controller = None
+    mock_client = _make_juju_client_mock(get_status_details=([], [], []))
+    with (
+        patch("jujumate.screens.main_screen.JujuClient", return_value=mock_client),
+        patch("jujumate.screens.main_screen.save_settings") as mock_save,
+    ):
+        # WHEN on_health_view_model_drill_down fires
+        screen.on_health_view_model_drill_down(
+            HealthView.ModelDrillDown(controller="lxd", model="default")
+        )
+        await pilot.pause()
+        await pilot.pause()
+    # THEN the controller from the health event is persisted
+    assert screen._settings.default_controller == "lxd"
+    mock_save.assert_called_once_with(screen._settings)
 
 
 @pytest.mark.asyncio
@@ -694,8 +777,6 @@ async def test_action_toggle_health_filter_delegates_to_health_view(pilot):
     await pilot.pause()
 
     # WHEN action_toggle_health_filter is called
-    from jujumate.widgets.health_view import HealthView
-
     hv = screen.query_one("#health-view", HealthView)
     assert hv._show_all is False
     screen.action_toggle_health_filter()
