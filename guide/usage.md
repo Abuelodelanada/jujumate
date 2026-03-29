@@ -34,6 +34,7 @@
 | `Enter` on app | Open App Config viewer |
 | `Enter` on offer | Open Offer detail |
 | `Enter` on relation | Open Relation Data inspector |
+| `Enter` on machine | Open Machine detail modal |
 
 ### Health tab
 
@@ -78,7 +79,7 @@ The main view. Displays a full `juju status`-style breakdown of the selected mod
 - **Offers** — cross-model offers with active/total connection counts
 - **Integrations** — all relations (peer hidden by default; press `p` to show/hide)
 
-Press `Enter` on any app to open its [Config viewer](#app-config-viewer), or on any relation to open the [Relation Data inspector](#relation-data-inspector).
+Press `Enter` on any app to open its [Config viewer](#app-config-viewer), or on any relation to open the [Relation Data inspector](#relation-data-inspector), or on any machine to open the [Machine detail modal](#machine-detail-modal).
 
 In the **Machines** panel, press `u` to expand each machine and see which units (including subordinates) are running on it.
 
@@ -113,6 +114,16 @@ Streams model logs in real time via WebSocket — equivalent to `juju debug-log`
 ### Relation Data inspector
 
 Press `Enter` on any relation in the Status tab to open a databag viewer showing the application-level and unit-level relation data for both sides of the relation.
+
+### Machine detail modal
+
+Press `Enter` on any machine row in the **Machines** panel to open a modal with:
+
+- **Hardware** — architecture, CPU cores, RAM, disk size and virtualisation type
+- **Status** — agent state and instance state, each with a relative timestamp (e.g. *2h ago*) and the exact formatted time
+- **Network interfaces** — per-interface name, all assigned IPv4 and IPv6 addresses, MAC address and Juju space
+
+Press `Esc` to close the modal.
 
 ### App Config viewer
 

@@ -2080,3 +2080,52 @@ async def test_status_view_format_for_clipboard_iaas_units(pilot):
     # THEN the IaaS units section is included with Machine column header
     assert "Units" in result
     assert "Machine" in result
+
+
+@pytest.mark.asyncio
+async def test_status_view_row_selected_posts_machine_selected(pilot):
+    # GIVEN a StatusView with one machine loaded
+    view = pilot.app.screen.query_one("#status-view", StatusView)
+    machine = MachineInfo(
+        "dev", "0", "started", "10.0.0.1", "i-abc123", "ubuntu@22.04", "us-east-1a"
+    )
+    view.update_machines([machine], is_kubernetes=False)
+    await pilot.pause()
+
+    posted: list = []
+    with patch.object(view, "post_message", side_effect=posted.append):
+        # WHEN a row is selected in the machines table
+        dt = view.query_one("#status-machines-table DataTable", DataTable)
+        view.on_data_table_row_selected(
+            DataTable.RowSelected(data_table=dt, cursor_row=0, row_key=RowKey("k"))
+        )
+
+    # THEN a MachineSelected message is posted with the correct machine id
+    assert len(posted) == 1
+    assert isinstance(posted[0], StatusView.MachineSelected)
+    assert posted[0].machine.id == "0"
+
+
+@pytest.mark.asyncio
+async def test_status_view_row_selected_on_unit_row_does_not_post_machine_selected(pilot):
+    # GIVEN a StatusView in units-per-machine mode with one machine and one unit
+    view = pilot.app.screen.query_one("#status-view", StatusView)
+    machine = MachineInfo(
+        "dev", "0", "started", "10.0.0.1", "i-abc123", "ubuntu@22.04", "us-east-1a"
+    )
+    view.update_machines([machine], is_kubernetes=False)
+    view.update_units([UnitInfo("pg/0", "pg", "0", "active", "idle")], is_kubernetes=False)
+    view._show_units_in_machines = True
+    view._render_machines()
+    await pilot.pause()
+
+    posted: list = []
+    with patch.object(view, "post_message", side_effect=posted.append):
+        # WHEN a row is selected that corresponds to a unit (row index 1)
+        dt = view.query_one("#status-machines-table DataTable", DataTable)
+        view.on_data_table_row_selected(
+            DataTable.RowSelected(data_table=dt, cursor_row=1, row_key=RowKey("k"))
+        )
+
+    # THEN no message is posted (unit rows are not selectable as machines)
+    assert len(posted) == 0

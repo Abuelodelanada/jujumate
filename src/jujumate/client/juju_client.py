@@ -5,7 +5,7 @@ import json
 import logging
 import re
 import ssl as ssl_module
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Callable
 from datetime import datetime
 from typing import Any
 
@@ -24,6 +24,7 @@ from jujumate.models.entities import (
     LogEntry,
     MachineInfo,
     ModelInfo,
+    NetworkInterface,
     OfferEndpoint,
     OfferInfo,
     RelationDataEntry,
@@ -165,16 +166,60 @@ def _parse_subordinate(
     )
 
 
+_HW_PARSERS: dict[str, Callable[[str], Any]] = {
+    "arch": lambda v: v,
+    "cores": lambda v: int(v),
+    "mem": lambda v: int(v.rstrip("M")),
+    "root-disk": lambda v: int(v.rstrip("M")),
+    "virt-type": lambda v: v,
+    "availability-zone": lambda v: v,
+}
+
+
+def _parse_hw(hardware: str) -> dict[str, Any]:
+    """Parse a Juju hardware string into a dict keyed by field name."""
+    result: dict[str, Any] = {}
+    for part in hardware.split():
+        key, _, val = part.partition("=")
+        if key in _HW_PARSERS:
+            try:
+                result[key] = _HW_PARSERS[key](val)
+            except ValueError:
+                pass
+    return result
+
+
+def _since_to_iso(since: Any) -> str:
+    """Return an ISO-8601 string from a datetime-like *since* value, or '' if absent."""
+    if not since:
+        return ""
+    try:
+        return since.isoformat()
+    except AttributeError:
+        return _s(since)
+
+
 def _parse_machine_info(m_id: str, m_st: Any, model_name: str, controller_name: str) -> MachineInfo:
     base_str = ""
     if m_st.base:
         base_str = f"{_s(m_st.base.name)}@{_s(m_st.base.channel)}" if m_st.base.name else ""
-    az = ""
-    if m_st.hardware:
-        for part in _s(m_st.hardware).split():
-            if part.startswith("availability-zone="):
-                az = part.split("=", 1)[1]
-                break
+
+    hw = _parse_hw(_s(m_st.hardware)) if m_st.hardware else {}
+
+    nics: list[NetworkInterface] = []
+    if m_st.network_interfaces:
+        for iface_name, iface in m_st.network_interfaces.items():
+            ip_list = getattr(iface, "ip_addresses", None) or []
+            ips = [_s(a) for a in ip_list if a]
+            nics.append(
+                NetworkInterface(
+                    name=iface_name,
+                    ips=ips,
+                    mac=_s(getattr(iface, "mac_address", "")),
+                    space=_s(getattr(iface, "space", "")),
+                )
+            )
+
     return MachineInfo(
         model=model_name,
         id=m_id,
@@ -182,9 +227,18 @@ def _parse_machine_info(m_id: str, m_st: Any, model_name: str, controller_name: 
         address=_s(m_st.dns_name),
         instance_id=_s(m_st.instance_id),
         base=base_str,
-        az=az,
+        az=hw.get("availability-zone", ""),
         message=_s(m_st.instance_status.info) if m_st.instance_status else "",
         controller=controller_name,
+        hardware_arch=hw.get("arch", ""),
+        hardware_cores=hw.get("cores", 0),
+        hardware_mem_mib=hw.get("mem", 0),
+        hardware_disk_mib=hw.get("root-disk", 0),
+        hardware_virt_type=hw.get("virt-type", ""),
+        agent_since=_since_to_iso(m_st.agent_status.since if m_st.agent_status else None),
+        instance_status=_s(m_st.instance_status.status) if m_st.instance_status else "",
+        instance_since=_since_to_iso(m_st.instance_status.since if m_st.instance_status else None),
+        network_interfaces=nics,
     )
 
 

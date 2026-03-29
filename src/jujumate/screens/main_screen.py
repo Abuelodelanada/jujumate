@@ -42,6 +42,7 @@ from jujumate.models.entities import (
 from jujumate.screens.app_config_screen import AppConfigScreen
 from jujumate.screens.help_screen import HelpScreen
 from jujumate.screens.log_screen import LogScreen
+from jujumate.screens.machine_detail_screen import MachineDetailScreen
 from jujumate.screens.offers_screen import OfferDetailScreen, OffersScreen
 from jujumate.screens.relation_data_screen import RelationDataScreen
 from jujumate.screens.secrets_screen import SecretsScreen
@@ -610,6 +611,9 @@ class MainScreen(Screen):
         if not self._selected_controller:
             return
         self._open_offer_detail(self._selected_controller, offer.model, offer.name)
+
+    def on_status_view_machine_selected(self, message: StatusView.MachineSelected) -> None:
+        self.app.push_screen(MachineDetailScreen(message.machine))
 
     @work
     async def _open_offer_detail(

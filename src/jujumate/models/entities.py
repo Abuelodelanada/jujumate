@@ -151,6 +151,14 @@ class UnitInfo:
 
 
 @dataclass
+class NetworkInterface:
+    name: str
+    ips: list[str]
+    mac: str
+    space: str = ""
+
+
+@dataclass
 class MachineInfo:
     model: str
     id: str
@@ -161,6 +169,16 @@ class MachineInfo:
     az: str
     message: str = ""
     controller: str = ""
+    # Extended fields — populated for the detail modal
+    hardware_arch: str = ""
+    hardware_cores: int = 0
+    hardware_mem_mib: int = 0
+    hardware_disk_mib: int = 0
+    hardware_virt_type: str = ""
+    agent_since: str = ""
+    instance_status: str = ""
+    instance_since: str = ""
+    network_interfaces: list[NetworkInterface] = field(default_factory=list)
 
 
 @dataclass

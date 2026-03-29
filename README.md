@@ -27,6 +27,7 @@
 - 📦 **Offers browser** — browse all cross-model offers in a controller, with endpoint details and live consumer tracking across controllers (`Shift+O`)
 - 📋 **Relation databag inspector** — examine raw relation data for any relation (`Enter` on a relation)
 - ⚙️ **App config viewer** — inspect application configuration (`Enter` on an app)
+- 🖥️ **Machine detail modal** — press `Enter` on any machine to see hardware specs, status timestamps and network interfaces
 - 🎨 **Themeable** — built-in `ubuntu` and `dark` themes; fully customisable via YAML
 - 🪟 **Terminal transparency** — respects your terminal background (no forced black background)
 - ⌨️ **K9s-style help overlay** — press `?` to see all keybindings at any time (full-screen)
@@ -96,6 +97,7 @@ On first launch JujuMate connects to your current Juju controller and auto-selec
 | `Enter` on app | Open App Config viewer |
 | `Enter` on offer | Open Offer detail |
 | `Enter` on relation | Open Relation Data inspector |
+| `Enter` on machine | Open Machine detail modal (hardware, status, network) |
 
 ### Health tab
 
@@ -123,7 +125,12 @@ On first launch JujuMate connects to your current Juju controller and auto-selec
 The main view. Displays a full `juju status`-style breakdown of the selected model:
 - **Applications** — name, charm, channel, revision, units, status and workload message
 - **Units** — workload/agent status, machine or pod, address, ports; subordinates shown nested under their principal
-- **Machines** — id, state, address, instance, base, AZ *(IaaS models only)*; press `u` to expand units and their subordinates inline
+- **Machines** — id, state, address, instance, base, AZ *(IaaS models only)*; press `u` to expand units and their subordinates inline; press `Enter` on a machine to open its detail modal
+
+Press `Enter` on a machine to see:
+- **Hardware** — architecture, CPU cores, memory, root disk size, virtualisation type
+- **Status** — agent and instance status with relative timestamps (e.g. *2h ago*)
+- **Network interfaces** — name, IP address, MAC address and Juju space for each NIC
 - **SAAS** — consumed remote offers and their status
 - **Offers** — cross-model offers with active/total connection counts
 - **Integrations** — regular and cross-model relations (peer relations hidden by default; press `p` to toggle)
@@ -148,6 +155,15 @@ Press `Enter` on any relation in the Status tab to open a databag viewer showing
 
 ### App Config viewer
 Press `Enter` on any application in the Status tab to inspect its current configuration values.
+
+### Machine detail modal
+Press `Enter` on any machine row in the Machines panel to open a modal showing:
+- Instance ID, address, base OS, availability zone, controller and model
+- **Hardware** — architecture, CPU cores, memory, root disk size and virtualisation type (parsed from Juju's hardware string)
+- **Status** — agent and instance status with relative timestamps (e.g. *started 2h ago*)
+- **Network interfaces** — name, IP address, MAC address and Juju space for each NIC
+
+Section titles adapt to the active theme's accent colour. Press `Esc` to close.
 
 ---
 

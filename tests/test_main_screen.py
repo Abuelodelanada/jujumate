@@ -41,6 +41,7 @@ from jujumate.models.entities import (
 )
 from jujumate.screens.app_config_screen import AppConfigScreen
 from jujumate.screens.log_screen import LogScreen
+from jujumate.screens.machine_detail_screen import MachineDetailScreen
 from jujumate.screens.main_screen import MainScreen
 from jujumate.screens.offers_screen import OfferDetailScreen, OffersScreen, _ConsumerEntry
 from jujumate.screens.relation_data_screen import RelationDataScreen
@@ -2252,3 +2253,24 @@ async def test_units_updated_refreshes_status_view_when_status_tab_active(pilot)
 
     # THEN the units are stored
     assert any(u.name == "pg/0" for u in screen._all_units)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# on_status_view_machine_selected
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_status_view_machine_selected_pushes_machine_detail_screen(pilot):
+    # GIVEN a machine with basic info
+    screen = pilot.app.screen
+    machine = MachineInfo(
+        "dev", "0", "started", "10.0.0.1", "i-abc123", "ubuntu@22.04", "us-east-1a"
+    )
+
+    # WHEN on_status_view_machine_selected is called
+    screen.on_status_view_machine_selected(StatusView.MachineSelected(machine=machine))
+    await pilot.pause()
+
+    # THEN MachineDetailScreen is pushed
+    assert isinstance(pilot.app.screen, MachineDetailScreen)

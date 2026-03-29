@@ -14,7 +14,6 @@ from jujumate.widgets.health_view import (
     _colored_status,
     _model_worst_status,
     _rank,
-    _status_color,
 )
 from jujumate.widgets.status_view import StatusView
 
@@ -104,7 +103,7 @@ def test_rank_ignores_surrounding_whitespace() -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Pure function tests: _status_color
+# Pure function tests: palette.status_color
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -123,18 +122,18 @@ def test_rank_ignores_surrounding_whitespace() -> None:
 )
 def test_status_color_maps_to_correct_palette_attribute(status: str, expected_attr: str) -> None:
     # GIVEN a status string and its expected palette attribute
-    # WHEN _status_color is called
-    result = _status_color(status)
+    # WHEN palette.status_color is called
+    result = palette.status_color(status)
     # THEN the returned color matches the palette value
     assert result == getattr(palette, expected_attr)
 
 
-def test_status_color_unknown_returns_muted() -> None:
+def test_status_color_unknown_returns_empty_string() -> None:
     # GIVEN an unrecognized status
-    # WHEN _status_color is called
-    result = _status_color("something-weird")
-    # THEN it returns the muted palette color
-    assert result == palette.MUTED
+    # WHEN palette.status_color is called
+    result = palette.status_color("something-weird")
+    # THEN it returns an empty string (caller renders plain text)
+    assert result == ""
 
 
 # ─────────────────────────────────────────────────────────────────────────────
