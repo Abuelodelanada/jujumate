@@ -38,6 +38,19 @@ def _colored_ip(address: str) -> Text:
     return Text(address)
 
 
+def _unit_name_text(u: UnitInfo, tree_prefix: str, filter_text: str) -> Text:
+    """Build the Rich Text for a unit's name cell, with tree prefix and leader marker."""
+    if tree_prefix:
+        name = Text()
+        name.append(tree_prefix, style=palette.MUTED)
+        name.append_text(_highlight(u.name, filter_text))
+    else:
+        name = _highlight(u.name, filter_text)
+    if u.is_leader:
+        name.append("*", style=palette.SUCCESS)
+    return name
+
+
 def _colored_relation(endpoint: str) -> Text:
     """Color the :rel_name part of an APP:REL endpoint."""
     if ":" in endpoint:
@@ -431,12 +444,7 @@ class StatusView(Widget):
         if self._is_kubernetes:
             table.reset_columns(_UNIT_COLUMNS_K8S)
             for u, tree_prefix in ordered:
-                if tree_prefix:
-                    name = Text()
-                    name.append(tree_prefix, style=palette.MUTED)
-                    name.append_text(_highlight(u.name, self._filter))
-                else:
-                    name = _highlight(u.name, self._filter)
+                name = _unit_name_text(u, tree_prefix, self._filter)
                 rows.append(
                     (
                         name,
@@ -451,12 +459,7 @@ class StatusView(Widget):
         else:
             table.reset_columns(_UNIT_COLUMNS_IAAS)
             for u, tree_prefix in ordered:
-                if tree_prefix:
-                    name = Text()
-                    name.append(tree_prefix, style=palette.MUTED)
-                    name.append_text(_highlight(u.name, self._filter))
-                else:
-                    name = _highlight(u.name, self._filter)
+                name = _unit_name_text(u, tree_prefix, self._filter)
                 machine = "" if u.subordinate_of else u.machine
                 rows.append(
                     (
@@ -544,9 +547,7 @@ class StatusView(Widget):
                     full_msgs.append(item.message)
                     displayed_machines.append(item)
                 else:
-                    name = Text()
-                    name.append(prefix, style=palette.MUTED)
-                    name.append_text(_highlight(item.name, self._filter))
+                    name = _unit_name_text(item, prefix, self._filter)
                     rows.append(
                         (
                             name,

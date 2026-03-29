@@ -137,6 +137,7 @@ def _parse_unit_info(
         public_address=_s(unit_st.public_address),
         ports=ports_str,
         message=_s(unit_st.workload_status.info) if unit_st.workload_status else "",
+        is_leader=bool(unit_st.leader),
         controller=controller_name,
     )
 
