@@ -53,6 +53,7 @@ from jujumate.widgets.status_view import (
     _group_units_by_machine,
     _TrackedScroll,
     _trunc_msg,
+    _unit_name_text,
 )
 from jujumate.widgets.units_view import UnitsView
 
@@ -320,6 +321,40 @@ async def test_status_view_update_units_with_subordinate_prefix(pilot, is_kubern
     # THEN two rows are rendered in the units table
     table = view.query_one("#status-units-table", ResourceTable)
     assert table.query_one("DataTable").row_count == 2
+
+
+def test_unit_name_text_leader_appends_star():
+    # GIVEN a leader unit
+    unit = UnitInfo("pg/0", "pg", "0", "active", "idle", is_leader=True)
+
+    # WHEN _unit_name_text is called
+    name = _unit_name_text(unit, "", "")
+
+    # THEN the rendered plain text ends with '*'
+    assert name.plain.endswith("*"), f"Expected '*' suffix, got: {name.plain!r}"
+
+
+def test_unit_name_text_non_leader_has_no_star():
+    # GIVEN a non-leader unit
+    unit = UnitInfo("pg/1", "pg", "0", "active", "idle", is_leader=False)
+
+    # WHEN _unit_name_text is called
+    name = _unit_name_text(unit, "", "")
+
+    # THEN the rendered text does not contain '*'
+    assert "*" not in name.plain
+
+
+def test_unit_name_text_leader_with_tree_prefix():
+    # GIVEN a leader subordinate unit with a tree prefix
+    unit = UnitInfo("nrpe/0", "nrpe", "0", "active", "idle", is_leader=True, subordinate_of="pg/0")
+
+    # WHEN _unit_name_text is called with a prefix
+    name = _unit_name_text(unit, "└─ ", "")
+
+    # THEN the text contains both the prefix and the '*' suffix
+    assert "└─ " in name.plain
+    assert name.plain.endswith("*")
 
 
 @pytest.mark.asyncio

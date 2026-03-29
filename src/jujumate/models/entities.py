@@ -145,6 +145,7 @@ class UnitInfo:
     public_address: str = ""
     ports: str = ""
     message: str = ""
+    is_leader: bool = False
     subordinate_of: str = ""  # principal unit name, empty if this is a principal
     model: str = ""
     controller: str = ""
