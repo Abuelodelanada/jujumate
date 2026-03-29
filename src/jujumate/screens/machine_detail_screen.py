@@ -79,69 +79,99 @@ class MachineDetailScreen(ModalScreen):
         panel.border_title = f"Machine {self._machine.id}"
         yield panel
 
-    def _build_content(self) -> str:
+    def _render_section(self, title: str, rows: list[tuple[str, str]]) -> list[str]:
+        """Render a titled section with a separator and uniformly formatted rows."""
+        lines: list[str] = [
+            "",
+            f"  [bold {palette.ACCENT}]{title}[/]",
+            f"  [{palette.MUTED}]{'─' * 44}[/]",
+        ]
+        lines += [_row(label, value) for label, value in rows]
+        return lines
+
+    def _section_meta(self) -> list[str]:
         m = self._machine
-        lines: list[str] = []
+        address = f"[{palette.LINK}]{m.address}[/]" if m.address else "—"
+        return [
+            _row("Instance ID", m.instance_id or "—"),
+            _row("Address", address),
+            _row("Base", m.base or "—"),
+            _row("AZ", m.az or "—"),
+            _row("Controller", m.controller or "—"),
+            _row("Model", m.model or "—"),
+        ]
 
-        lines.append(_row("Instance ID", m.instance_id or "—"))
-        lines.append(_row("Address", m.address or "—"))
-        lines.append(_row("Base", m.base or "—"))
-        lines.append(_row("AZ", m.az or "—"))
-        lines.append(_row("Controller", m.controller or "—"))
-        lines.append(_row("Model", m.model or "—"))
+    def _section_hardware(self) -> list[str]:
+        m = self._machine
+        rows: list[tuple[str, str]] = []
+        if m.hardware_arch:
+            rows.append(("Arch", m.hardware_arch))
+        if m.hardware_cores:
+            rows.append(("CPU Cores", str(m.hardware_cores)))
+        if m.hardware_mem_mib:
+            mem = f"{m.hardware_mem_mib} MiB  ({m.hardware_mem_mib / 1024:.1f} GiB)"
+            rows.append(("Memory", mem))
+        if m.hardware_disk_mib:
+            disk = f"{m.hardware_disk_mib} MiB  ({m.hardware_disk_mib / 1024:.1f} GiB)"
+            rows.append(("Root Disk", disk))
+        if m.hardware_virt_type:
+            rows.append(("Virt Type", m.hardware_virt_type))
+        if not rows:
+            return []
+        return self._render_section("Hardware", rows)
 
-        has_hw = any(
-            [
-                m.hardware_arch,
-                m.hardware_cores,
-                m.hardware_mem_mib,
-                m.hardware_disk_mib,
-                m.hardware_virt_type,
-            ]
-        )
-        if has_hw:
-            lines.append("")
-            lines.append(f"  [bold {palette.ACCENT}]Hardware[/]")
-            lines.append(f"  [{palette.MUTED}]{'─' * 44}[/]")
-            if m.hardware_arch:
-                lines.append(_row("Arch", m.hardware_arch))
-            if m.hardware_cores:
-                lines.append(_row("CPU Cores", str(m.hardware_cores)))
-            if m.hardware_mem_mib:
-                mem = f"{m.hardware_mem_mib} MiB  ({m.hardware_mem_mib / 1024:.1f} GiB)"
-                lines.append(_row("Memory", mem))
-            if m.hardware_disk_mib:
-                disk = f"{m.hardware_disk_mib} MiB  ({m.hardware_disk_mib / 1024:.1f} GiB)"
-                lines.append(_row("Root Disk", disk))
-            if m.hardware_virt_type:
-                lines.append(_row("Virt Type", m.hardware_virt_type))
-
-        lines.append("")
-        lines.append(f"  [bold {palette.ACCENT}]Status[/]")
-        lines.append(f"  [{palette.MUTED}]{'─' * 44}[/]")
+    def _section_status(self) -> list[str]:
+        m = self._machine
         agent_ago = _time_ago(m.agent_since)
         inst_ago = _time_ago(m.instance_since)
-        agent_ts = _fmt_ts(m.agent_since)
-        inst_ts = _fmt_ts(m.instance_since)
-        agent_parts = [m.state, agent_ts, f"({agent_ago})" if agent_ago else ""]
-        inst_parts = [(m.instance_status or "—"), inst_ts, f"({inst_ago})" if inst_ago else ""]
-        lines.append(_row("Agent", "  ".join(p for p in agent_parts if p)))
-        lines.append(_row("Instance", "  ".join(p for p in inst_parts if p)))
+
+        def _colored(s: str) -> str:
+            color = palette.status_color(s)
+            return f"[{color}]{s}[/]" if color else s
+
+        agent_parts = [
+            _colored(m.state),
+            _fmt_ts(m.agent_since),
+            f"({agent_ago})" if agent_ago else "",
+        ]
+        inst_parts = [
+            _colored(m.instance_status or "—"),
+            _fmt_ts(m.instance_since),
+            f"({inst_ago})" if inst_ago else "",
+        ]
+        rows: list[tuple[str, str]] = [
+            ("Agent", "  ".join(p for p in agent_parts if p)),
+            ("Instance", "  ".join(p for p in inst_parts if p)),
+        ]
         if m.message:
-            lines.append(_row("Message", m.message))
+            rows.append(("Message", m.message))
+        return self._render_section("Status", rows)
 
-        if m.network_interfaces:
-            lines.append("")
-            lines.append(f"  [bold {palette.ACCENT}]Network Interfaces[/]")
-            lines.append(f"  [{palette.MUTED}]{'─' * 44}[/]")
-            for iface in m.network_interfaces:
-                lines.append(f"  [{palette.MUTED}]── {iface.name}[/]")
-                for i, ip in enumerate(iface.ips):
-                    lines.append(_row("IPs" if i == 0 else "", ip))
-                if not iface.ips:
-                    lines.append(_row("IPs", "—"))
-                lines.append(_row("MAC", iface.mac or "—"))
-                if iface.space:
-                    lines.append(_row("Space", iface.space))
+    def _section_network(self) -> list[str]:
+        m = self._machine
+        if not m.network_interfaces:
+            return []
+        lines: list[str] = [
+            "",
+            f"  [bold {palette.ACCENT}]Network Interfaces[/]",
+            f"  [{palette.MUTED}]{'─' * 44}[/]",
+        ]
+        for iface in m.network_interfaces:
+            lines.append(f"  [{palette.MUTED}]── {iface.name}[/]")
+            for i, ip in enumerate(iface.ips):
+                lines.append(_row("IPs" if i == 0 else "", ip))
+            if not iface.ips:
+                lines.append(_row("IPs", "—"))
+            lines.append(_row("MAC", iface.mac or "—"))
+            if iface.space:
+                lines.append(_row("Space", iface.space))
+        return lines
 
-        return "\n".join(lines)
+    def _build_content(self) -> str:
+        sections = [
+            self._section_meta(),
+            self._section_hardware(),
+            self._section_status(),
+            self._section_network(),
+        ]
+        return "\n".join(line for section in sections for line in section)

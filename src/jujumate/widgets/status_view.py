@@ -23,24 +23,9 @@ from jujumate.models.entities import (
 from jujumate.widgets.resource_table import Column, ResourceTable
 
 
-def _status_color(status: str) -> str:
-    return {
-        "active": palette.SUCCESS,
-        "idle": palette.SUCCESS,
-        "started": palette.SUCCESS,
-        "blocked": palette.BLOCKED,
-        "error": palette.ERROR,
-        "terminated": palette.ERROR,
-        "maintenance": palette.WARNING,
-        "waiting": palette.WARNING,
-        "executing": palette.WARNING,
-        "unknown": palette.MUTED,
-    }.get(status, "")
-
-
 def _colored_status(status: str) -> Text:
     """Return a Rich Text object with the status colored by severity."""
-    color = _status_color(status.strip().lower())
+    color = palette.status_color(status)
     if color:
         return Text.from_markup(f"[{color}]{status}[/]")
     return Text(status)

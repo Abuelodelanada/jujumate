@@ -281,6 +281,31 @@ def test_machine_detail_screen_build_content_network_interfaces():
     assert "fe80::1" in content
 
 
+def test_machine_detail_screen_build_content_network_interface_with_no_ips():
+    # GIVEN a machine with a network interface that has no IP addresses assigned
+    machine = MachineInfo(
+        model="dev",
+        id="3b",
+        state="started",
+        address="",
+        instance_id="",
+        base="",
+        az="",
+        network_interfaces=[
+            NetworkInterface("eth0", [], "52:54:00:aa:bb:cc", ""),
+        ],
+    )
+    screen = MachineDetailScreen(machine)
+
+    # WHEN _build_content is called
+    content = screen._build_content()
+
+    # THEN the IPs row shows a dash placeholder
+    assert "eth0" in content
+    assert "IPs" in content
+    assert "—" in content
+
+
 def test_machine_detail_screen_build_content_status_section_always_present():
     # GIVEN a machine with instance status, timestamps and message
     machine = MachineInfo(
@@ -326,3 +351,159 @@ async def test_machine_detail_screen_compose_sets_border_title(pilot):
     # THEN the panel's border_title includes the machine id
     panel = pilot.app.screen.query_one("#machine-detail-panel", Static)
     assert "5" in (panel.border_title or "")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Individual section methods
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _minimal_machine(**kwargs: object) -> MachineInfo:
+    defaults = dict(model="m", id="0", state="started", address="", instance_id="", base="", az="")
+    defaults.update(kwargs)
+    return MachineInfo(**defaults)  # type: ignore[arg-type]
+
+
+def test_section_meta_returns_all_six_rows():
+    # GIVEN a machine with all meta fields populated
+    machine = _minimal_machine(
+        instance_id="i-abc",
+        address="10.0.0.1",
+        base="ubuntu@22.04",
+        az="us-east-1a",
+        controller="ctrl",
+        model="prod",
+    )
+    # WHEN _section_meta is called
+    lines = MachineDetailScreen(machine)._section_meta()
+    joined = "\n".join(lines)
+    # THEN all six fields appear
+    assert "i-abc" in joined
+    assert "10.0.0.1" in joined
+    assert "ubuntu@22.04" in joined
+    assert "us-east-1a" in joined
+    assert "ctrl" in joined
+    assert "prod" in joined
+
+
+def test_section_meta_uses_dash_for_missing_fields():
+    # GIVEN a machine with no optional meta fields
+    machine = _minimal_machine()
+    # WHEN _section_meta is called
+    lines = MachineDetailScreen(machine)._section_meta()
+    joined = "\n".join(lines)
+    # THEN missing fields are shown as —
+    assert "—" in joined
+
+
+def test_section_hardware_returns_empty_when_no_hardware():
+    # GIVEN a machine with no hardware fields
+    machine = _minimal_machine()
+    # WHEN _section_hardware is called
+    lines = MachineDetailScreen(machine)._section_hardware()
+    # THEN an empty list is returned
+    assert lines == []
+
+
+def test_section_hardware_includes_all_fields():
+    # GIVEN a machine with all hardware fields
+    machine = _minimal_machine(
+        hardware_arch="amd64",
+        hardware_cores=8,
+        hardware_mem_mib=8192,
+        hardware_disk_mib=20480,
+        hardware_virt_type="kvm",
+    )
+    # WHEN _section_hardware is called
+    lines = MachineDetailScreen(machine)._section_hardware()
+    joined = "\n".join(lines)
+    # THEN all fields and the section title appear
+    assert "Hardware" in joined
+    assert "amd64" in joined
+    assert "8" in joined
+    assert "8192" in joined
+    assert "8.0 GiB" in joined
+    assert "20480" in joined
+    assert "kvm" in joined
+
+
+def test_section_status_includes_agent_and_instance():
+    # GIVEN a machine with agent/instance status and timestamps
+    machine = _minimal_machine(
+        state="started",
+        instance_status="running",
+        agent_since="2024-06-01T12:00:00+00:00",
+        instance_since="2024-06-01T11:00:00+00:00",
+    )
+    # WHEN _section_status is called
+    lines = MachineDetailScreen(machine)._section_status()
+    joined = "\n".join(lines)
+    # THEN Status section contains both rows with formatted timestamps
+    assert "Status" in joined
+    assert "started" in joined
+    assert "running" in joined
+    assert "2024-06-01 12:00:00" in joined
+    assert "2024-06-01 11:00:00" in joined
+
+
+def test_section_status_omits_message_row_when_empty():
+    # GIVEN a machine with no message
+    machine = _minimal_machine(state="started")
+    # WHEN _section_status is called
+    lines = MachineDetailScreen(machine)._section_status()
+    joined = "\n".join(lines)
+    # THEN no Message row appears
+    assert "Message" not in joined
+
+
+def test_section_status_includes_message_when_set():
+    # GIVEN a machine with a workload message
+    machine = _minimal_machine(state="started", message="hook failed")
+    # WHEN _section_status is called
+    lines = MachineDetailScreen(machine)._section_status()
+    joined = "\n".join(lines)
+    # THEN the Message row appears with the message text
+    assert "Message" in joined
+    assert "hook failed" in joined
+
+
+def test_section_network_returns_empty_when_no_interfaces():
+    # GIVEN a machine with no network interfaces
+    machine = _minimal_machine()
+    # WHEN _section_network is called
+    lines = MachineDetailScreen(machine)._section_network()
+    # THEN an empty list is returned
+    assert lines == []
+
+
+def test_section_network_renders_all_interface_fields():
+    # GIVEN a machine with one full interface
+    machine = _minimal_machine(
+        network_interfaces=[NetworkInterface("eth0", ["10.0.0.1", "fe80::1"], "aa:bb:cc", "alpha")]
+    )
+    # WHEN _section_network is called
+    lines = MachineDetailScreen(machine)._section_network()
+    joined = "\n".join(lines)
+    # THEN all interface details appear
+    assert "Network Interfaces" in joined
+    assert "eth0" in joined
+    assert "10.0.0.1" in joined
+    assert "fe80::1" in joined
+    assert "aa:bb:cc" in joined
+    assert "alpha" in joined
+
+
+def test_render_section_produces_title_separator_and_rows():
+    # GIVEN a section with two rows
+    machine = _minimal_machine()
+    screen = MachineDetailScreen(machine)
+    # WHEN _render_section is called
+    lines = screen._render_section("My Section", [("Label", "value"), ("Other", "data")])
+    joined = "\n".join(lines)
+    # THEN the title, separator and both rows appear
+    assert "My Section" in joined
+    assert "─" in joined
+    assert "Label" in joined
+    assert "value" in joined
+    assert "Other" in joined
+    assert "data" in joined

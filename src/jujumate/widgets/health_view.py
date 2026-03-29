@@ -51,34 +51,21 @@ def _rank(status: str) -> int:
     return _STATUS_RANK.get(status.strip().lower(), 3)
 
 
-def _status_color(status: str) -> str:
-    s = status.strip().lower()
-    if s == "error":
-        return palette.ERROR
-    if s == "blocked":
-        return palette.BLOCKED
-    if s in ("maintenance", "waiting", "executing"):
-        return palette.WARNING
-    if s in _HEALTHY:
-        return palette.SUCCESS
-    return palette.MUTED
-
-
 def _colored_dot(status: str) -> Text:
     """Return a colored status symbol."""
     s = status.strip().lower()
     symbol = _STATUS_SYMBOL.get(s, "●")
-    color = _status_color(s)
-    return Text.from_markup(f"[{color}]{symbol}[/]") if color else Text(symbol)
+    color = palette.status_color(s) or palette.MUTED
+    return Text.from_markup(f"[{color}]{symbol}[/]")
 
 
 def _colored_status(status: str) -> Text:
     """Return a colored status label (symbol + text)."""
     s = status.strip().lower()
     symbol = _STATUS_SYMBOL.get(s, "●")
-    color = _status_color(s)
+    color = palette.status_color(s) or palette.MUTED
     label = f"{symbol} {status}" if status else "●"
-    return Text.from_markup(f"[{color}]{label}[/]") if color else Text(label)
+    return Text.from_markup(f"[{color}]{label}[/]")
 
 
 def _model_worst_status(apps: list[AppInfo]) -> str:

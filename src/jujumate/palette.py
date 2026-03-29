@@ -61,6 +61,29 @@ def __getattr__(name: str) -> str:
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
+_STATUS_COLORS: dict[str, str] = {
+    "active": "SUCCESS",
+    "idle": "SUCCESS",
+    "started": "SUCCESS",
+    "blocked": "BLOCKED",
+    "error": "ERROR",
+    "terminated": "ERROR",
+    "maintenance": "WARNING",
+    "waiting": "WARNING",
+    "executing": "WARNING",
+    "unknown": "MUTED",
+}
+
+
+def status_color(status: str) -> str:
+    """Return the palette color string for a given Juju status value.
+
+    Returns an empty string for unrecognised statuses (caller renders plain text).
+    """
+    attr = _STATUS_COLORS.get(status.strip().lower(), "")
+    return getattr(_palette, attr) if attr else ""
+
+
 def init(theme: Theme) -> None:
     """Populate palette values from the active Textual theme.
 

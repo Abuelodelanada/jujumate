@@ -17,16 +17,6 @@ _C_KEY = "bold white"
 _C_META = "dim"
 
 
-def _status_color(status: str) -> str:
-    return {
-        "active": palette.SUCCESS,
-        "blocked": palette.ERROR,
-        "error": palette.ERROR,
-        "waiting": palette.WARNING,
-        "maintenance": palette.WARNING,
-    }.get(status, "")
-
-
 def _meta_markup(app: AppInfo) -> str:
     """Build Rich markup for the metadata header (charm, channel, rev, status)."""
     fields = [
@@ -40,7 +30,7 @@ def _meta_markup(app: AppInfo) -> str:
     for field, value in fields:
         label = f"{field}:".ljust(col_width)
         if field == "Status":
-            color = _status_color(value.strip().lower())
+            color = palette.status_color(value)
             styled = f"[{color}]{value}[/]" if color else value
         else:
             styled = value
