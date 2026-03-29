@@ -267,6 +267,13 @@ class StatusView(Widget):
             super().__init__()
             self.offer = offer
 
+    class MachineSelected(Message):
+        """Posted when the user presses Enter on a machine row."""
+
+        def __init__(self, machine: MachineInfo) -> None:
+            super().__init__()
+            self.machine = machine
+
     DEFAULT_CSS = (Path(__file__).parent / "status_view.tcss").read_text()
 
     _show_more: reactive[bool] = reactive(False)
@@ -289,6 +296,7 @@ class StatusView(Widget):
         self._displayed_apps: list[AppInfo] = []
         self._displayed_relations: list[RelationInfo] = []
         self._displayed_offers: list[OfferInfo] = []
+        self._displayed_machines: list[MachineInfo | None] = []
         self._is_kubernetes: bool = False
         self._ctx_cloud: str = ""
         self._ctx_controller: str = ""
@@ -532,6 +540,7 @@ class StatusView(Widget):
         ]
         rows = []
         full_msgs = []
+        displayed_machines: list[MachineInfo | None] = []
         if self._show_units_in_machines:
             items = _group_units_by_machine(filtered, self._all_units)
             for item, prefix in items:
@@ -548,6 +557,7 @@ class StatusView(Widget):
                         )
                     )
                     full_msgs.append(item.message)
+                    displayed_machines.append(item)
                 else:
                     name = Text()
                     name.append(prefix, style=palette.MUTED)
@@ -564,6 +574,7 @@ class StatusView(Widget):
                         )
                     )
                     full_msgs.append(item.message)
+                    displayed_machines.append(None)
         else:
             for m in filtered:
                 rows.append(
@@ -578,6 +589,8 @@ class StatusView(Widget):
                     )
                 )
                 full_msgs.append(m.message)
+                displayed_machines.append(m)
+        self._displayed_machines = displayed_machines
         self._row_messages["status-machines-table"] = full_msgs
         self.query_one("#status-machines-table", ResourceTable).update_rows(rows)
         self._restore_cursor("status-machines-table", len(full_msgs))
@@ -677,6 +690,11 @@ class StatusView(Widget):
             elif table_id == "status-offers-table":
                 if 0 <= idx < len(self._displayed_offers):
                     self.post_message(StatusView.OfferSelected(self._displayed_offers[idx]))
+            elif table_id == "status-machines-table":
+                if 0 <= idx < len(self._displayed_machines):
+                    machine = self._displayed_machines[idx]
+                    if machine is not None:
+                        self.post_message(StatusView.MachineSelected(machine))
         except Exception:
             pass
 

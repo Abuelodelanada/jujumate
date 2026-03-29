@@ -25,7 +25,7 @@ DataTable > .datatable--odd-row {
     background: ansi_default;
 }
 DataTable > .datatable--hover {
-    background: $primary 20%;
+    background: ansi_default;
 }
 DataTable > .datatable--cursor {
     background: ansi_default;

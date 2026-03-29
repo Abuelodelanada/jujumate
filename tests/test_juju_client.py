@@ -18,11 +18,14 @@ from jujumate.client.juju_client import (
     _log_stream_connection_params,
     _offer_status_counts,
     _parse_app_relation_data,
+    _parse_hw,
     _parse_log_entry,
+    _parse_machine_info,
     _parse_relation,
     _parse_unit_relation_data,
     _resolve_model_uuid,
     _s,
+    _since_to_iso,
     _utc_ts_to_local_hms,
 )
 from jujumate.models.entities import (
@@ -1647,3 +1650,203 @@ async def test_stream_logs_skips_invalid_json_message(mock_controller):
             pass
     # THEN the invalid message is skipped and no entries are yielded
     assert entries == []
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# _parse_machine_info — extended fields
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _make_machine_mock(
+    hardware="arch=amd64 cores=4 mem=16384M root-disk=51200M virt-type=kvm "
+    "availability-zone=us-east-1a",
+    agent_since=None,
+    instance_status="running",
+    instance_since=None,
+    network_interfaces=None,
+):
+    from unittest.mock import MagicMock
+
+    m = MagicMock()
+    m.agent_status.status = "started"
+    m.agent_status.since = agent_since
+    m.dns_name = "10.0.0.1"
+    m.instance_id = "i-abc123"
+    m.base.name = "ubuntu"
+    m.base.channel = "22.04"
+    m.hardware = hardware
+    m.instance_status.status = instance_status
+    m.instance_status.info = "ready"
+    m.instance_status.since = instance_since
+    m.network_interfaces = network_interfaces
+    return m
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# _parse_machine_info — extended fields
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _make_machine_mock_hw(
+    hardware="arch=amd64 cores=4 mem=16384M root-disk=51200M virt-type=kvm "
+    "availability-zone=us-east-1a",
+):
+    from unittest.mock import MagicMock
+
+    m = MagicMock()
+    m.agent_status.status = "started"
+    m.agent_status.since = None
+    m.dns_name = "10.0.0.1"
+    m.instance_id = "i-abc123"
+    m.base.name = "ubuntu"
+    m.base.channel = "22.04"
+    m.hardware = hardware
+    m.instance_status.status = "running"
+    m.instance_status.info = "ready"
+    m.instance_status.since = None
+    m.network_interfaces = None
+    return m
+
+
+def test_parse_machine_info_parses_hardware_fields():
+    # GIVEN a machine mock with a full hardware string
+    m_st = _make_machine_mock()
+
+    # WHEN _parse_machine_info is called
+    result = _parse_machine_info("0", m_st, "dev", "ctrl")
+
+    # THEN all hardware fields are correctly parsed
+    assert result.hardware_arch == "amd64"
+    assert result.hardware_cores == 4
+    assert result.hardware_mem_mib == 16384
+    assert result.hardware_disk_mib == 51200
+    assert result.hardware_virt_type == "kvm"
+    assert result.az == "us-east-1a"
+
+
+def test_parse_machine_info_parses_network_interfaces():
+    # GIVEN a machine mock with one interface that has both IPv4 and IPv6 addresses
+    # ip_addresses in python-libjuju is Sequence[str] — plain strings, not objects
+    from unittest.mock import MagicMock
+
+    iface = MagicMock()
+    iface.ip_addresses = ["10.0.0.1", "fe80::1"]
+    iface.mac_address = "52:54:00:aa:bb:cc"
+    iface.space = "alpha"
+    m_st = _make_machine_mock(network_interfaces={"eth0": iface})
+
+    # WHEN _parse_machine_info is called
+    result = _parse_machine_info("0", m_st, "dev", "ctrl")
+
+    # THEN all IP addresses are captured for the interface
+    assert len(result.network_interfaces) == 1
+    nic = result.network_interfaces[0]
+    assert nic.name == "eth0"
+    assert nic.ips == ["10.0.0.1", "fe80::1"]
+    assert nic.mac == "52:54:00:aa:bb:cc"
+    assert nic.space == "alpha"
+
+
+def test_parse_machine_info_no_network_interfaces_returns_empty_list():
+    # GIVEN a machine mock with no network interfaces
+    m_st = _make_machine_mock(network_interfaces=None)
+
+    # WHEN _parse_machine_info is called
+    result = _parse_machine_info("0", m_st, "dev", "ctrl")
+
+    # THEN network_interfaces is an empty list
+    assert result.network_interfaces == []
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# _parse_hw
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_parse_hw_parses_all_known_fields():
+    # GIVEN a full hardware string
+    hw = "arch=amd64 cores=4 mem=16384M root-disk=51200M virt-type=kvm availability-zone=us-east-1a"
+
+    # WHEN _parse_hw is called
+    result = _parse_hw(hw)
+
+    # THEN all fields are parsed with correct types
+    assert result == {
+        "arch": "amd64",
+        "cores": 4,
+        "mem": 16384,
+        "root-disk": 51200,
+        "virt-type": "kvm",
+        "availability-zone": "us-east-1a",
+    }
+
+
+def test_parse_hw_ignores_invalid_numeric_values():
+    # GIVEN a hardware string with non-numeric integer fields
+    hw = "arch=amd64 cores=notanumber mem=badM root-disk=alsoM virt-type=kvm"
+
+    # WHEN _parse_hw is called
+    result = _parse_hw(hw)
+
+    # THEN invalid fields are silently dropped; valid string fields are kept
+    assert result["arch"] == "amd64"
+    assert result["virt-type"] == "kvm"
+    assert "cores" not in result
+    assert "mem" not in result
+    assert "root-disk" not in result
+
+
+def test_parse_hw_returns_empty_dict_for_empty_string():
+    # GIVEN an empty hardware string
+    # WHEN _parse_hw is called
+    result = _parse_hw("")
+
+    # THEN an empty dict is returned
+    assert result == {}
+
+
+def test_parse_hw_ignores_unknown_keys():
+    # GIVEN a hardware string with an unknown key
+    hw = "arch=amd64 future-field=value"
+
+    # WHEN _parse_hw is called
+    result = _parse_hw(hw)
+
+    # THEN only known keys appear in the result
+    assert "future-field" not in result
+    assert result["arch"] == "amd64"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# _since_to_iso
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_since_to_iso_returns_empty_for_none():
+    # GIVEN a None value
+    # WHEN _since_to_iso is called
+    result = _since_to_iso(None)
+    # THEN an empty string is returned
+    assert result == ""
+
+
+def test_since_to_iso_calls_isoformat_on_datetime():
+    # GIVEN a datetime object
+    from datetime import datetime, timezone
+
+    dt = datetime(2024, 1, 15, 10, 30, 0, tzinfo=timezone.utc)
+
+    # WHEN _since_to_iso is called
+    result = _since_to_iso(dt)
+
+    # THEN the ISO string from isoformat() is returned
+    assert result == dt.isoformat()
+
+
+def test_since_to_iso_falls_back_to_str_when_no_isoformat():
+    # GIVEN a value with no isoformat() method (plain string)
+    # WHEN _since_to_iso is called
+    result = _since_to_iso("2024-01-15T10:30:00")
+
+    # THEN the string representation is returned as fallback
+    assert result == "2024-01-15T10:30:00"

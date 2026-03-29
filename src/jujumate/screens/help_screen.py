@@ -17,7 +17,7 @@ HELP_TEXT = """\
   [bold]h[/bold]       Health
 
 [bold cyan]Actions[/bold cyan]
-  [bold]Enter[/bold]   Drill-down / view app config or relation data
+  [bold]Enter[/bold]   Drill-down / view app config, relation data or machine detail
   [bold]/[/bold]       Filter (Status tab) — Esc to clear
   [bold]f[/bold]       Toggle unhealthy / all models (Health tab)
   [bold]S[/bold]       Secrets (requires model selected)
