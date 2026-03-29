@@ -3,7 +3,13 @@ import logging
 import pytest
 import yaml
 
-from jujumate.settings import AppSettingsError, load_settings, save_theme
+from jujumate.settings import (
+    AppSettings,
+    AppSettingsError,
+    load_settings,
+    save_settings,
+    save_theme,
+)
 
 
 def _write_config(tmp_path, data):
@@ -162,3 +168,75 @@ def test_save_theme_preserves_existing_settings(tmp_path):
     data = yaml.safe_load(config_file.read_text())
     assert data["theme"] == "ubuntu"
     assert data["refresh_interval"] == 10
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# save_settings
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _default_settings(**kwargs) -> AppSettings:
+    defaults = dict(refresh_interval=5, log_level=logging.INFO, theme="ubuntu")
+    defaults.update(kwargs)
+    return AppSettings(**defaults)
+
+
+def test_save_settings_creates_file_with_all_fields(tmp_path):
+    # GIVEN no config file and a fully populated AppSettings
+    config_file = tmp_path / "config.yaml"
+    settings = _default_settings(
+        refresh_interval=10, default_controller="prod", log_level=logging.DEBUG, theme="dark"
+    )
+    # WHEN save_settings is called
+    save_settings(settings, config_file=config_file)
+    # THEN the file is created with all persisted fields
+    data = yaml.safe_load(config_file.read_text())
+    assert data["theme"] == "dark"
+    assert data["refresh_interval"] == 10
+    assert data["default_controller"] == "prod"
+    assert data["log_level"] == "DEBUG"
+
+
+def test_save_settings_removes_default_controller_when_none(tmp_path):
+    # GIVEN a config file that already has a default_controller
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(yaml.dump({"default_controller": "old-ctrl"}))
+    settings = _default_settings(default_controller=None)
+    # WHEN save_settings is called with default_controller=None
+    save_settings(settings, config_file=config_file)
+    # THEN default_controller is removed from the file
+    data = yaml.safe_load(config_file.read_text())
+    assert "default_controller" not in data
+
+
+def test_save_settings_preserves_unmanaged_keys(tmp_path):
+    # GIVEN a config file with juju_data_dir (an unmanaged key for save_settings)
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(yaml.dump({"juju_data_dir": "/custom/path"}))
+    settings = _default_settings()
+    # WHEN save_settings is called
+    save_settings(settings, config_file=config_file)
+    # THEN juju_data_dir is still present
+    data = yaml.safe_load(config_file.read_text())
+    assert data["juju_data_dir"] == "/custom/path"
+
+
+def test_save_settings_writes_log_level_as_name(tmp_path):
+    # GIVEN settings with log_level=WARNING
+    config_file = tmp_path / "config.yaml"
+    settings = _default_settings(log_level=logging.WARNING)
+    # WHEN save_settings is called
+    save_settings(settings, config_file=config_file)
+    # THEN log_level is written as the string "WARNING"
+    data = yaml.safe_load(config_file.read_text())
+    assert data["log_level"] == "WARNING"
+
+
+def test_save_settings_creates_parent_dirs(tmp_path):
+    # GIVEN a config path whose parent directories do not exist
+    config_file = tmp_path / "nested" / "dir" / "config.yaml"
+    settings = _default_settings()
+    # WHEN save_settings is called
+    save_settings(settings, config_file=config_file)
+    # THEN the file is created (parent dirs are created automatically)
+    assert config_file.exists()

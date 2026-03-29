@@ -31,6 +31,15 @@ def test_juju_config_stores_fields():
     # THEN
     assert config.current_controller == "prod"
     assert len(config.controllers) == 2
+    assert config.controller_models == {}
+
+
+def test_juju_config_default_controller_is_none():
+    # GIVEN / WHEN
+    config = JujuConfig()
+
+    # THEN
+    assert config.current_controller is None
 
 
 # ── load_config — happy path ──────────────────────────────────────────────────
@@ -94,6 +103,69 @@ def test_load_config_current_model(tmp_path, models_data, expected_current_model
     assert config.current_model == expected_current_model
 
 
+# ── load_config — controller_models ─────────────────────────────────────────
+
+
+def test_load_config_builds_controller_models_for_all_controllers(tmp_path):
+    # GIVEN: two controllers each with a current model
+    _write_controllers(
+        tmp_path,
+        {"controllers": {"prod": {}, "staging": {}}, "current-controller": "prod"},
+    )
+    _write_models(
+        tmp_path,
+        {
+            "controllers": {
+                "prod": {"current-model": "admin/mymodel"},
+                "staging": {"current-model": "admin/stagingmodel"},
+            }
+        },
+    )
+
+    # WHEN
+    config = load_config(tmp_path)
+
+    # THEN
+    assert config.controller_models == {"prod": "mymodel", "staging": "stagingmodel"}
+
+
+def test_load_config_controller_models_excludes_controllers_without_model(tmp_path):
+    # GIVEN: one controller has a current model, the other does not
+    _write_controllers(
+        tmp_path,
+        {"controllers": {"prod": {}, "staging": {}}, "current-controller": "prod"},
+    )
+    _write_models(
+        tmp_path,
+        {"controllers": {"prod": {"current-model": "admin/mymodel"}}},
+    )
+
+    # WHEN
+    config = load_config(tmp_path)
+
+    # THEN
+    assert "prod" in config.controller_models
+    assert "staging" not in config.controller_models
+
+
+# ── load_config — no default controller ──────────────────────────────────────
+
+
+def test_load_config_no_current_controller_returns_none(tmp_path):
+    # GIVEN: controllers file exists but no current-controller is set
+    _write_controllers(
+        tmp_path, {"controllers": {"prod": {}, "staging": {}}, "current-controller": ""}
+    )
+
+    # WHEN
+    config = load_config(tmp_path)
+
+    # THEN: does not raise; current_controller is None
+    assert config.current_controller is None
+    assert set(config.controllers) == {"prod", "staging"}
+    assert config.current_model is None
+
+
 # ── load_config — error conditions ───────────────────────────────────────────
 
 
@@ -101,11 +173,6 @@ def test_load_config_current_model(tmp_path, models_data, expected_current_model
     "yaml_data,expected_error_fragment",
     [
         pytest.param(None, "Juju config not found", id="missing-file"),
-        pytest.param(
-            {"controllers": {"prod": {}}, "current-controller": ""},
-            "No active controller",
-            id="no-current-controller",
-        ),
         pytest.param(
             {"controllers": {"prod": {}}, "current-controller": "ghost"},
             "not found in controllers list",

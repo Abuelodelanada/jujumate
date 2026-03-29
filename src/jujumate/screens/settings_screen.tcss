@@ -1,0 +1,50 @@
+SettingsScreen {
+    align: center middle;
+}
+
+SettingsScreen #settings-panel {
+    width: 64;
+    height: auto;
+    max-height: 85%;
+    background: $surface;
+    border: round $accent;
+    border-title-color: $accent;
+    border-title-style: bold;
+    padding: 1 0;
+}
+
+SettingsScreen .section-title {
+    height: 1;
+    margin-top: 1;
+}
+
+SettingsScreen .section-sep {
+    height: 1;
+    margin-bottom: 1;
+}
+
+SettingsScreen .section-spacer {
+    height: 1;
+}
+
+SettingsScreen .setting-row {
+    height: 3;
+    padding: 0 2;
+    margin-bottom: 1;
+}
+
+SettingsScreen .setting-label {
+    width: 20;
+    height: 3;
+    content-align: left middle;
+}
+
+SettingsScreen Select {
+    width: 1fr;
+}
+
+SettingsScreen #settings-hint {
+    height: 1;
+    margin-top: 1;
+    margin-bottom: 1;
+}
