@@ -114,13 +114,22 @@ def _make_relation_model(mock_controller: MagicMock, apps_units: dict) -> AsyncM
     return model
 
 
+def _make_status_mock(**overrides) -> MagicMock:
+    """Build a minimal FullStatus mock with sensible defaults."""
+    status = MagicMock()
+    status.relations = overrides.get("relations", [])
+    status.applications = overrides.get("applications", {})
+    status.offers = overrides.get("offers", {})
+    status.remote_applications = overrides.get("remote_applications", {})
+    status.application_endpoints = overrides.get("application_endpoints", {})
+    status.unknown_fields = overrides.get("unknown_fields", {})
+    return status
+
+
 def _make_status_with_relation(mock_controller: MagicMock, *rels: MagicMock) -> None:
     """Configure mock_controller with a model that returns a status containing *rels."""
     model = AsyncMock()
-    status = MagicMock()
-    status.relations = list(rels)
-    status.offers = {}
-    status.applications = {}
+    status = _make_status_mock(relations=list(rels))
     model.get_status = AsyncMock(return_value=status)
     model.applications = {}
     mock_controller.get_model.return_value = model
@@ -520,12 +529,8 @@ async def test_get_relations_raises_on_failure(mock_controller):
 @pytest.mark.asyncio
 async def test_get_status_details_returns_offers(mock_controller):
     # GIVEN a model with one offer and no relations
-    model = AsyncMock()
-    status = MagicMock()
-    status.relations = []
     app_st = MagicMock()
     app_st.charm_rev = 180
-    status.applications = {"alertmanager": app_st}
     offer_st = MagicMock()
     offer_st.application_name = "alertmanager"
     offer_st.active_connected_count = 0
@@ -534,10 +539,13 @@ async def test_get_status_details_returns_offers(mock_controller):
     ep.interface = "karma_dashboard"
     ep.role = "provider"
     offer_st.endpoints = {"karma-dashboard": ep}
-    status.offers = {"alertmanager-karma-dashboard": offer_st}
-    status.application_endpoints = {}
+    status = _make_status_mock(
+        applications={"alertmanager": app_st},
+        offers={"alertmanager-karma-dashboard": offer_st},
+    )
     live_app = MagicMock()
     live_app.charm_name = "alertmanager-k8s"
+    model = AsyncMock()
     model.get_status = AsyncMock(return_value=status)
     model.applications = {"alertmanager": live_app}
     mock_controller.get_model.return_value = model
@@ -798,25 +806,21 @@ async def test_get_relation_data_skips_wrong_relation_id(mock_controller):
 @pytest.mark.asyncio
 async def test_get_status_details_saas_from_unknown_fields(mock_controller):
     # GIVEN a Juju 3.6+ model with SAAS in unknown_fields['application-endpoints']
-    model = AsyncMock()
-    status = MagicMock()
-    status.relations = []
-    status.applications = {}
-    status.offers = {}
-    status.remote_applications = {}
-    status.application_endpoints = {}
-    status.unknown_fields = {
-        "application-endpoints": {
-            "remote-pg": {
-                "url": "mystore:admin/pg",
-                "application-status": {"current": "active"},
-            },
-            "remote-mysql": {
-                "url": "otherstore:admin/mysql",
-                "application-status": {"current": "blocked"},
-            },
+    status = _make_status_mock(
+        unknown_fields={
+            "application-endpoints": {
+                "remote-pg": {
+                    "url": "mystore:admin/pg",
+                    "application-status": {"current": "active"},
+                },
+                "remote-mysql": {
+                    "url": "otherstore:admin/mysql",
+                    "application-status": {"current": "blocked"},
+                },
+            }
         }
-    }
+    )
+    model = AsyncMock()
     model.get_status = AsyncMock(return_value=status)
     model.applications = {}
     mock_controller.get_model.return_value = model
@@ -838,17 +842,11 @@ async def test_get_status_details_saas_from_unknown_fields(mock_controller):
 @pytest.mark.asyncio
 async def test_get_status_details_saas_from_remote_applications(mock_controller):
     # GIVEN a model with SAAS in status.remote_applications (pre-3.6 Juju)
-    model = AsyncMock()
-    status = MagicMock()
-    status.relations = []
-    status.applications = {}
-    status.offers = {}
-    status.unknown_fields = {}
-    status.application_endpoints = {}
     remote_st = MagicMock()
     remote_st.offer_url = "mystore:admin/mysql"
     remote_st.status.status = "waiting"
-    status.remote_applications = {"remote-mysql": remote_st}
+    status = _make_status_mock(remote_applications={"remote-mysql": remote_st})
+    model = AsyncMock()
     model.get_status = AsyncMock(return_value=status)
     model.applications = {}
     mock_controller.get_model.return_value = model
@@ -1713,8 +1711,6 @@ def _make_machine_mock(
     instance_since=None,
     network_interfaces=None,
 ):
-    from unittest.mock import MagicMock
-
     m = MagicMock()
     m.agent_status.status = "started"
     m.agent_status.since = agent_since
@@ -1727,32 +1723,6 @@ def _make_machine_mock(
     m.instance_status.info = "ready"
     m.instance_status.since = instance_since
     m.network_interfaces = network_interfaces
-    return m
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# _parse_machine_info — extended fields
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-def _make_machine_mock_hw(
-    hardware="arch=amd64 cores=4 mem=16384M root-disk=51200M virt-type=kvm "
-    "availability-zone=us-east-1a",
-):
-    from unittest.mock import MagicMock
-
-    m = MagicMock()
-    m.agent_status.status = "started"
-    m.agent_status.since = None
-    m.dns_name = "10.0.0.1"
-    m.instance_id = "i-abc123"
-    m.base.name = "ubuntu"
-    m.base.channel = "22.04"
-    m.hardware = hardware
-    m.instance_status.status = "running"
-    m.instance_status.info = "ready"
-    m.instance_status.since = None
-    m.network_interfaces = None
     return m
 
 
@@ -1775,8 +1745,6 @@ def test_parse_machine_info_parses_hardware_fields():
 def test_parse_machine_info_parses_network_interfaces():
     # GIVEN a machine mock with one interface that has both IPv4 and IPv6 addresses
     # ip_addresses in python-libjuju is Sequence[str] — plain strings, not objects
-    from unittest.mock import MagicMock
-
     iface = MagicMock()
     iface.ip_addresses = ["10.0.0.1", "fe80::1"]
     iface.mac_address = "52:54:00:aa:bb:cc"
@@ -1811,58 +1779,38 @@ def test_parse_machine_info_no_network_interfaces_returns_empty_list():
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def test_parse_hw_parses_all_known_fields():
-    # GIVEN a full hardware string
-    hw = "arch=amd64 cores=4 mem=16384M root-disk=51200M virt-type=kvm availability-zone=us-east-1a"
-
+@pytest.mark.parametrize(
+    "hw_string, expected",
+    [
+        pytest.param(
+            "arch=amd64 cores=4 mem=16384M root-disk=51200M virt-type=kvm "
+            "availability-zone=us-east-1a",
+            {
+                "arch": "amd64",
+                "cores": 4,
+                "mem": 16384,
+                "root-disk": 51200,
+                "virt-type": "kvm",
+                "availability-zone": "us-east-1a",
+            },
+            id="all-known-fields",
+        ),
+        pytest.param(
+            "arch=amd64 cores=notanumber mem=badM root-disk=alsoM virt-type=kvm",
+            {"arch": "amd64", "virt-type": "kvm"},
+            id="invalid-numeric-ignored",
+        ),
+        pytest.param("", {}, id="empty-string"),
+        pytest.param("arch=amd64 future-field=value", {"arch": "amd64"}, id="unknown-keys-ignored"),
+    ],
+)
+def test_parse_hw(hw_string: str, expected: dict) -> None:
+    # GIVEN a hardware string
     # WHEN _parse_hw is called
-    result = _parse_hw(hw)
+    result = _parse_hw(hw_string)
 
-    # THEN all fields are parsed with correct types
-    assert result == {
-        "arch": "amd64",
-        "cores": 4,
-        "mem": 16384,
-        "root-disk": 51200,
-        "virt-type": "kvm",
-        "availability-zone": "us-east-1a",
-    }
-
-
-def test_parse_hw_ignores_invalid_numeric_values():
-    # GIVEN a hardware string with non-numeric integer fields
-    hw = "arch=amd64 cores=notanumber mem=badM root-disk=alsoM virt-type=kvm"
-
-    # WHEN _parse_hw is called
-    result = _parse_hw(hw)
-
-    # THEN invalid fields are silently dropped; valid string fields are kept
-    assert result["arch"] == "amd64"
-    assert result["virt-type"] == "kvm"
-    assert "cores" not in result
-    assert "mem" not in result
-    assert "root-disk" not in result
-
-
-def test_parse_hw_returns_empty_dict_for_empty_string():
-    # GIVEN an empty hardware string
-    # WHEN _parse_hw is called
-    result = _parse_hw("")
-
-    # THEN an empty dict is returned
-    assert result == {}
-
-
-def test_parse_hw_ignores_unknown_keys():
-    # GIVEN a hardware string with an unknown key
-    hw = "arch=amd64 future-field=value"
-
-    # WHEN _parse_hw is called
-    result = _parse_hw(hw)
-
-    # THEN only known keys appear in the result
-    assert "future-field" not in result
-    assert result["arch"] == "amd64"
+    # THEN the result matches the expected dict
+    assert result == expected
 
 
 # ─────────────────────────────────────────────────────────────────────────────

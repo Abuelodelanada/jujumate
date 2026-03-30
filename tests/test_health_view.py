@@ -3,6 +3,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from textual.containers import Vertical
 from textual.widgets import DataTable, Label, TabbedContent
 
 from jujumate import palette
@@ -194,39 +195,34 @@ def test_colored_status_empty_string_uses_fallback_dot() -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def test_model_worst_status_empty_app_list_returns_active() -> None:
-    # GIVEN no apps
-    # WHEN _model_worst_status is called
-    result = _model_worst_status([])
-    # THEN it returns "active" as the neutral default
-    assert result == "active"
-
-
-def test_model_worst_status_returns_most_severe_status() -> None:
-    # GIVEN apps with mixed statuses
-    apps = [_app("a", status="active"), _app("b", status="blocked"), _app("c", status="waiting")]
-    # WHEN _model_worst_status is called
-    result = _model_worst_status(apps)
-    # THEN it returns the worst status (blocked beats waiting beats active)
-    assert result == "blocked"
-
-
-def test_model_worst_status_all_healthy_returns_active() -> None:
-    # GIVEN all apps are healthy
-    apps = [_app("a", status="active"), _app("b", status="idle")]
-    # WHEN _model_worst_status is called
-    result = _model_worst_status(apps)
-    # THEN it returns "active" (or another healthy status)
-    assert result in _HEALTHY
-
-
-def test_model_worst_status_error_beats_blocked() -> None:
-    # GIVEN apps with error and blocked statuses
-    apps = [_app("a", status="blocked"), _app("b", status="error")]
+@pytest.mark.parametrize(
+    "apps, expected",
+    [
+        pytest.param([], "active", id="empty-list"),
+        pytest.param(
+            [_app("a", status="active"), _app("b", status="blocked"), _app("c", status="waiting")],
+            "blocked",
+            id="blocked-beats-waiting",
+        ),
+        pytest.param(
+            [_app("a", status="active"), _app("b", status="idle")], _HEALTHY, id="all-healthy"
+        ),
+        pytest.param(
+            [_app("a", status="blocked"), _app("b", status="error")],
+            "error",
+            id="error-beats-blocked",
+        ),
+    ],
+)
+def test_model_worst_status(apps, expected) -> None:
+    # GIVEN a list of apps with various statuses
     # WHEN _model_worst_status is called
     result = _model_worst_status(apps)
-    # THEN error wins (rank 0)
-    assert result == "error"
+    # THEN the result is the expected value (or contained in it for the healthy case)
+    if isinstance(expected, (list, tuple, set, frozenset)):
+        assert result in expected
+    else:
+        assert result == expected
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -240,7 +236,6 @@ async def test_health_view_on_mount_sets_border_titles(pilot) -> None:
     view = await _mount_health_view(pilot)
 
     # WHEN we inspect the border titles after mount
-    from textual.containers import Vertical
 
     left = view.query_one("#health-left-panel", Vertical)
     right = view.query_one("#health-right-panel", Vertical)
@@ -322,7 +317,6 @@ async def test_health_view_summary_footer_shows_all_healthy(pilot) -> None:
 @pytest.mark.asyncio
 async def test_health_view_right_panel_title_shows_issues_on_selection(pilot) -> None:
     # GIVEN a mounted HealthView with a blocked unit
-    from textual.containers import Vertical
 
     view = await _mount_health_view(pilot)
     models = [_model("dev", "ctrl")]
@@ -342,7 +336,6 @@ async def test_health_view_right_panel_title_shows_issues_on_selection(pilot) ->
 @pytest.mark.asyncio
 async def test_health_view_right_panel_title_shows_healthy_when_no_issues(pilot) -> None:
     # GIVEN a mounted HealthView showing all models, with all healthy units
-    from textual.containers import Vertical
 
     view = await _mount_health_view(pilot)
     view._show_all = True
@@ -448,7 +441,6 @@ async def test_health_view_message_longer_than_64_chars_is_truncated(pilot) -> N
 @pytest.mark.asyncio
 async def test_health_view_row_highlighted_updates_right_panel(pilot) -> None:
     # GIVEN a HealthView with two models
-    from textual.containers import Vertical
 
     view = await _mount_health_view(pilot)
     models = [_model("dev", "ctrl"), _model("prod", "ctrl")]

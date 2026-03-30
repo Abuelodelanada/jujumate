@@ -45,26 +45,23 @@ def test_juju_config_default_controller_is_none():
 # ── load_config — happy path ──────────────────────────────────────────────────
 
 
-def test_load_config_returns_current_controller(tmp_path):
-    # GIVEN
+@pytest.mark.parametrize(
+    "attribute, expected",
+    [
+        pytest.param("current_controller", "prod", id="current-controller"),
+        pytest.param("controllers", {"prod", "staging"}, id="all-controllers"),
+    ],
+)
+def test_load_config_basic_fields(tmp_path, attribute, expected):
+    # GIVEN a valid controllers file
     _write_controllers(tmp_path, _VALID_CONTROLLERS)
 
-    # WHEN
+    # WHEN load_config is called
     config = load_config(tmp_path)
 
-    # THEN
-    assert config.current_controller == "prod"
-
-
-def test_load_config_returns_all_controllers(tmp_path):
-    # GIVEN
-    _write_controllers(tmp_path, _VALID_CONTROLLERS)
-
-    # WHEN
-    config = load_config(tmp_path)
-
-    # THEN
-    assert set(config.controllers) == {"prod", "staging"}
+    # THEN the requested field matches the expected value
+    value = getattr(config, attribute)
+    assert (set(value) if attribute == "controllers" else value) == expected
 
 
 # ── load_config — current_model resolution ───────────────────────────────────

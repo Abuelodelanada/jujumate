@@ -22,6 +22,7 @@ from jujumate.models.entities import (
     SecretInfo,
     UnitInfo,
 )
+from jujumate.screens.log_screen import LogScreen
 
 
 @pytest.fixture(autouse=True)
@@ -108,3 +109,13 @@ def mock_controller():
     ctrl = AsyncMock()
     ctrl.controller_name = "test-controller"
     return ctrl
+
+
+@pytest_asyncio.fixture
+async def log_screen(pilot):
+    """Mounted LogScreen with streaming disabled. Returns the screen instance."""
+    screen = LogScreen("prod", "dev")
+    with patch.object(LogScreen, "_start_stream"):
+        await pilot.app.push_screen(screen)
+        await pilot.pause()
+    yield screen

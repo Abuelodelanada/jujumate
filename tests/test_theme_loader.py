@@ -11,6 +11,13 @@ def _write_theme(directory, data):
     return path
 
 
+@pytest.fixture
+def user_themes_dir(tmp_path, monkeypatch):
+    """Redirect USER_THEMES_DIR to a temporary directory and return it."""
+    monkeypatch.setattr("jujumate.theme_loader.USER_THEMES_DIR", tmp_path)
+    return tmp_path
+
+
 @pytest.mark.parametrize("theme_name", ["ubuntu", "dark"])
 def test_builtin_themes_include(theme_name: str) -> None:
     # GIVEN the set of all installed themes
@@ -37,10 +44,9 @@ def test_load_theme_not_found_raises():
         load_theme("nonexistent-theme")
 
 
-def test_user_theme_overrides_builtin(tmp_path, monkeypatch):
+def test_user_theme_overrides_builtin(user_themes_dir):
     # GIVEN a user theme file named "ubuntu" with a different primary colour
-    monkeypatch.setattr("jujumate.theme_loader.USER_THEMES_DIR", tmp_path)
-    _write_theme(tmp_path, {"name": "ubuntu", "primary": "#FF0000"})
+    _write_theme(user_themes_dir, {"name": "ubuntu", "primary": "#FF0000"})
 
     # WHEN we load the "ubuntu" theme
     theme = load_theme("ubuntu")
@@ -49,10 +55,9 @@ def test_user_theme_overrides_builtin(tmp_path, monkeypatch):
     assert theme.primary == "#FF0000"
 
 
-def test_user_custom_theme_is_available(tmp_path, monkeypatch):
+def test_user_custom_theme_is_available(user_themes_dir):
     # GIVEN a user-defined theme file that doesn't exist in builtins
-    monkeypatch.setattr("jujumate.theme_loader.USER_THEMES_DIR", tmp_path)
-    _write_theme(tmp_path, {"name": "mytheme", "primary": "#AABBCC"})
+    _write_theme(user_themes_dir, {"name": "mytheme", "primary": "#AABBCC"})
 
     # WHEN we load all themes
     themes = load_all_themes()
@@ -61,10 +66,9 @@ def test_user_custom_theme_is_available(tmp_path, monkeypatch):
     assert "mytheme" in themes
 
 
-def test_theme_missing_name_raises(tmp_path, monkeypatch):
+def test_theme_missing_name_raises(user_themes_dir):
     # GIVEN a YAML theme file that is missing the "name" field
-    monkeypatch.setattr("jujumate.theme_loader.USER_THEMES_DIR", tmp_path)
-    bad = tmp_path / "bad.yaml"
+    bad = user_themes_dir / "bad.yaml"
     bad.write_text(yaml.dump({"primary": "#FF0000"}))
 
     # WHEN we load all themes
@@ -74,10 +78,9 @@ def test_theme_missing_name_raises(tmp_path, monkeypatch):
     assert "bad" not in themes
 
 
-def test_theme_missing_primary_raises(tmp_path, monkeypatch):
+def test_theme_missing_primary_raises(user_themes_dir):
     # GIVEN a YAML theme file that is missing the "primary" field
-    monkeypatch.setattr("jujumate.theme_loader.USER_THEMES_DIR", tmp_path)
-    bad = tmp_path / "noprimary.yaml"
+    bad = user_themes_dir / "noprimary.yaml"
     bad.write_text(yaml.dump({"name": "noprimary"}))
 
     # WHEN we load all themes
@@ -87,10 +90,9 @@ def test_theme_missing_primary_raises(tmp_path, monkeypatch):
     assert "noprimary" not in themes
 
 
-def test_invalid_yaml_skipped(tmp_path, monkeypatch):
+def test_invalid_yaml_skipped(user_themes_dir):
     # GIVEN a theme file containing invalid YAML
-    monkeypatch.setattr("jujumate.theme_loader.USER_THEMES_DIR", tmp_path)
-    bad = tmp_path / "broken.yaml"
+    bad = user_themes_dir / "broken.yaml"
     bad.write_text(":::: not valid yaml ::::")
 
     # WHEN we load all themes
@@ -100,10 +102,9 @@ def test_invalid_yaml_skipped(tmp_path, monkeypatch):
     assert "broken" not in themes
 
 
-def test_unreadable_file_skipped(tmp_path, monkeypatch):
+def test_unreadable_file_skipped(user_themes_dir):
     # GIVEN a theme file that cannot be read (no read permission)
-    monkeypatch.setattr("jujumate.theme_loader.USER_THEMES_DIR", tmp_path)
-    bad = tmp_path / "locked.yaml"
+    bad = user_themes_dir / "locked.yaml"
     bad.write_text(yaml.dump({"name": "locked", "primary": "#FF0000"}))
     bad.chmod(0o000)
 

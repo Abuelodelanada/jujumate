@@ -4,6 +4,8 @@ import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
+from textual.containers import Vertical
+from textual.widgets import Select
 
 from jujumate.screens.settings_screen import (
     _NO_CONTROLLER,
@@ -17,37 +19,23 @@ from jujumate.settings import AppSettings
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def test_nearest_refresh_returns_exact_match():
-    # GIVEN a value that exactly matches an allowed option
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        pytest.param(2, 2, id="exact-2"),
+        pytest.param(5, 5, id="exact-5"),
+        pytest.param(10, 10, id="exact-10"),
+        pytest.param(3, 2, id="snaps-lower"),
+        pytest.param(9, 10, id="snaps-higher"),
+        pytest.param(30, 10, id="large-value"),
+    ],
+)
+def test_nearest_refresh(value: int, expected: int) -> None:
+    # GIVEN a value that may or may not match an allowed option
     # WHEN _nearest_refresh is called
-    # THEN it returns the same value
-    assert _nearest_refresh(2) == 2
-    assert _nearest_refresh(5) == 5
-    assert _nearest_refresh(10) == 10
-
-
-def test_nearest_refresh_snaps_to_closest_lower():
-    # GIVEN a value closer to 2 than to 5
-    # WHEN _nearest_refresh is called
-    result = _nearest_refresh(3)
-    # THEN it returns 2
-    assert result == 2
-
-
-def test_nearest_refresh_snaps_to_closest_higher():
-    # GIVEN a value closer to 10 than to 5
-    # WHEN _nearest_refresh is called
-    result = _nearest_refresh(9)
-    # THEN it returns 10
-    assert result == 10
-
-
-def test_nearest_refresh_snaps_large_value_to_10():
-    # GIVEN a value larger than any allowed option
-    # WHEN _nearest_refresh is called
-    result = _nearest_refresh(30)
-    # THEN it returns the largest option
-    assert result == 10
+    result = _nearest_refresh(value)
+    # THEN it returns the nearest allowed option
+    assert result == expected
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -76,7 +64,6 @@ async def test_settings_screen_compose_shows_three_sections(pilot):
     await pilot.pause()
 
     # THEN all three setting selects are rendered (one per section)
-    from textual.widgets import Select
 
     assert pilot.app.screen.query_one("#select-theme", Select) is not None
     assert pilot.app.screen.query_one("#select-refresh", Select) is not None
@@ -93,7 +80,6 @@ async def test_settings_screen_on_mount_sets_border_title(pilot):
     await pilot.pause()
 
     # THEN the panel border_title is "Settings"
-    from textual.containers import Vertical
 
     panel = pilot.app.screen.query_one("#settings-panel", Vertical)
     assert panel.border_title == "Settings"
@@ -111,8 +97,6 @@ async def test_settings_screen_theme_change_calls_switch_theme(pilot):
     screen = SettingsScreen(settings, controller_names=[])
     await pilot.app.push_screen(screen)
     await pilot.pause()
-
-    from textual.widgets import Select
 
     with (
         patch.object(pilot.app, "switch_theme") as mock_switch,
@@ -138,7 +122,6 @@ async def test_settings_screen_refresh_change_updates_settings(pilot):
 
     with patch("jujumate.screens.settings_screen.save_settings") as mock_save:
         # WHEN refresh interval is changed to 10
-        from textual.widgets import Select
 
         select = pilot.app.screen.query_one("#select-refresh", Select)
         select.value = 10
@@ -159,7 +142,6 @@ async def test_settings_screen_controller_change_updates_settings(pilot):
 
     with patch("jujumate.screens.settings_screen.save_settings") as mock_save:
         # WHEN a controller is selected
-        from textual.widgets import Select
 
         select = pilot.app.screen.query_one("#select-controller", Select)
         select.value = "prod"
@@ -180,7 +162,6 @@ async def test_settings_screen_controller_none_clears_default(pilot):
 
     with patch("jujumate.screens.settings_screen.save_settings") as mock_save:
         # WHEN "— none —" is selected
-        from textual.widgets import Select
 
         select = pilot.app.screen.query_one("#select-controller", Select)
         select.value = _NO_CONTROLLER
@@ -208,7 +189,6 @@ async def test_settings_screen_log_level_change_applies_immediately(pilot):
         mock_logging.DEBUG = logging.DEBUG
 
         # WHEN log level is changed to DEBUG
-        from textual.widgets import Select
 
         select = pilot.app.screen.query_one("#select-log-level", Select)
         select.value = logging.DEBUG
@@ -252,8 +232,6 @@ async def test_settings_screen_select_blank_value_does_nothing(pilot):
     await pilot.pause()
 
     with patch("jujumate.screens.settings_screen.save_settings") as mock_save:
-        from textual.widgets import Select
-
         # WHEN on_select_changed is triggered with a BLANK value
         mock_event = MagicMock()
         mock_event.value = Select.BLANK

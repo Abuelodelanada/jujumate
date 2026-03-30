@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from juju.errors import JujuError
+from textual.css.query import NoMatches
 from textual.widgets import DataTable, Label, ListItem, ListView, TabbedContent
 from textual.widgets._data_table import RowKey
 
@@ -599,9 +600,8 @@ async def test_fetch_relations_worker_posts_message(pilot):
 async def test_fetch_relations_worker_handles_exception(pilot):
     # GIVEN a JujuClient mock that raises on connect
     screen = pilot.app.screen
-    mock_client = AsyncMock()
+    mock_client = _make_juju_client_mock()
     mock_client.__aenter__ = AsyncMock(side_effect=JujuError("boom"))
-    mock_client.__aexit__ = AsyncMock(return_value=None)
     with patch("jujumate.screens.main_screen.JujuClient", return_value=mock_client):
         # WHEN _fetch_relations is called
         screen._fetch_relations("ctrl", "dev")
@@ -760,7 +760,6 @@ async def test_active_tab_returns_empty_string_when_not_mounted(pilot):
     screen = pilot.app.screen
 
     # WHEN _active_tab is called and query_one raises NoMatches
-    from textual.css.query import NoMatches
 
     with patch.object(screen, "query_one", side_effect=NoMatches()):
         result = screen._active_tab()
@@ -1581,16 +1580,14 @@ async def test_offer_detail_fetch_consumers_scans_all_controllers(pilot):
         endpoints=[OfferEndpoint("metrics-endpoint", "prometheus_scrape", "provider")],
     )
     consumer = SAASInfo("monitoring", "prom-scrape", "active", "local", "admin/cos.prom")
-    mock_client_a = AsyncMock()
-    mock_client_a.list_model_names = AsyncMock(return_value=["cos"])
-    mock_client_a.get_saas = AsyncMock(return_value=[])
-    mock_client_a.__aenter__ = AsyncMock(return_value=mock_client_a)
-    mock_client_a.__aexit__ = AsyncMock(return_value=False)
-    mock_client_b = AsyncMock()
-    mock_client_b.list_model_names = AsyncMock(return_value=["monitoring"])
-    mock_client_b.get_saas = AsyncMock(return_value=[consumer])
-    mock_client_b.__aenter__ = AsyncMock(return_value=mock_client_b)
-    mock_client_b.__aexit__ = AsyncMock(return_value=False)
+    mock_client_a = _make_juju_client_mock(
+        list_model_names=["cos"],
+        get_saas=[],
+    )
+    mock_client_b = _make_juju_client_mock(
+        list_model_names=["monitoring"],
+        get_saas=[consumer],
+    )
 
     def _make_client(controller_name: str) -> AsyncMock:
         return mock_client_a if controller_name == "ctrl-a" else mock_client_b
@@ -1624,10 +1621,7 @@ async def test_app_config_screen_fetch_worker_success(pilot):
     # GIVEN an AppConfigScreen with JujuClient patched to return entries
     ai = AppInfo("pg", "dev", "postgresql", "14/stable", 363)
     entries = [AppConfigEntry("port", "5432", "5432", "int", "Port", "default")]
-    mock_client = AsyncMock()
-    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_client.__aexit__ = AsyncMock(return_value=False)
-    mock_client.get_app_config = AsyncMock(return_value=entries)
+    mock_client = _make_juju_client_mock(get_app_config=entries)
 
     with patch("jujumate.screens.app_config_screen.JujuClient", return_value=mock_client):
         screen = AppConfigScreen("ctrl", "dev", ai)
@@ -1644,9 +1638,8 @@ async def test_app_config_screen_fetch_worker_error(pilot):
     """Lines 37-43: _fetch worker shows error on exception."""
     # GIVEN an AppConfigScreen with JujuClient that raises
     ai = AppInfo("pg", "dev", "postgresql", "14/stable", 363)
-    mock_client = AsyncMock()
+    mock_client = _make_juju_client_mock()
     mock_client.__aenter__ = AsyncMock(side_effect=Exception("connection refused"))
-    mock_client.__aexit__ = AsyncMock(return_value=False)
 
     with patch("jujumate.screens.app_config_screen.JujuClient", return_value=mock_client):
         screen = AppConfigScreen("ctrl", "dev", ai)
@@ -1669,10 +1662,7 @@ async def test_relation_data_screen_fetch_worker_success(pilot):
     # GIVEN a RelationDataScreen with JujuClient patched to return entries
     rel = RelationInfo("dev", "pg:db", "wp:db", "pgsql", "regular", relation_id=1)
     entries = [RelationDataEntry("provider", "pg", "host", "10.0.0.1", "app")]
-    mock_client = AsyncMock()
-    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_client.__aexit__ = AsyncMock(return_value=False)
-    mock_client.get_relation_data = AsyncMock(return_value=entries)
+    mock_client = _make_juju_client_mock(get_relation_data=entries)
 
     with patch("jujumate.screens.relation_data_screen.JujuClient", return_value=mock_client):
         screen = RelationDataScreen("ctrl", "dev", rel)
@@ -1689,9 +1679,8 @@ async def test_relation_data_screen_fetch_worker_error(pilot):
     """Lines 48-56: _fetch worker shows error on exception."""
     # GIVEN a RelationDataScreen with JujuClient that raises
     rel = RelationInfo("dev", "pg:db", "wp:db", "pgsql", "regular", relation_id=1)
-    mock_client = AsyncMock()
+    mock_client = _make_juju_client_mock()
     mock_client.__aenter__ = AsyncMock(side_effect=JujuError("failed"))
-    mock_client.__aexit__ = AsyncMock(return_value=False)
 
     with patch("jujumate.screens.relation_data_screen.JujuClient", return_value=mock_client):
         screen = RelationDataScreen("ctrl", "dev", rel)
@@ -1722,10 +1711,7 @@ async def test_secret_detail_screen_fetch_worker_success(pilot):
         created="2024-01-01",
         updated="2024-01-01",
     )
-    mock_client = AsyncMock()
-    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_client.__aexit__ = AsyncMock(return_value=False)
-    mock_client.get_secret_content = AsyncMock(return_value={"password": "s3cr3t"})
+    mock_client = _make_juju_client_mock(get_secret_content={"password": "s3cr3t"})
 
     with patch("jujumate.screens.secrets_screen.JujuClient", return_value=mock_client):
         screen = SecretDetailScreen("ctrl", "dev", secret)
@@ -1752,10 +1738,7 @@ async def test_secret_detail_screen_fetch_worker_empty_content(pilot):
         created="2024-01-01",
         updated="2024-01-01",
     )
-    mock_client = AsyncMock()
-    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_client.__aexit__ = AsyncMock(return_value=False)
-    mock_client.get_secret_content = AsyncMock(return_value={})
+    mock_client = _make_juju_client_mock(get_secret_content={})
 
     with patch("jujumate.screens.secrets_screen.JujuClient", return_value=mock_client):
         screen = SecretDetailScreen("ctrl", "dev", secret)
@@ -1784,9 +1767,8 @@ async def test_secret_detail_screen_fetch_worker_error(pilot):
         created="2024-01-01",
         updated="2024-01-01",
     )
-    mock_client = AsyncMock()
+    mock_client = _make_juju_client_mock()
     mock_client.__aenter__ = AsyncMock(side_effect=JujuError("forbidden"))
-    mock_client.__aexit__ = AsyncMock(return_value=False)
 
     with patch("jujumate.screens.secrets_screen.JujuClient", return_value=mock_client):
         screen = SecretDetailScreen("ctrl", "dev", secret)

@@ -107,39 +107,31 @@ def test_empty_file_returns_defaults(tmp_path):
     assert settings.refresh_interval == 5
 
 
-def test_default_log_level_is_warning(tmp_path):
-    # GIVEN no config file at the given path
+@pytest.mark.parametrize(
+    "yaml_data, expected_level, raises",
+    [
+        pytest.param(None, logging.INFO, False, id="default"),
+        pytest.param({"log_level": "DEBUG"}, logging.DEBUG, False, id="custom-debug"),
+        pytest.param({"log_level": "info"}, logging.INFO, False, id="case-insensitive"),
+        pytest.param({"log_level": "VERBOSE"}, None, True, id="invalid-raises"),
+    ],
+)
+def test_log_level(tmp_path, yaml_data, expected_level, raises):
+    # GIVEN a config file (or none) with the given log_level setting
+    if yaml_data is None:
+        config_file = tmp_path / "config.yaml"
+    else:
+        config_file = _write_config(tmp_path, yaml_data)
+
     # WHEN load_settings is called
-    settings = load_settings(tmp_path / "config.yaml")
-    # THEN the default log level is INFO
-    assert settings.log_level == logging.INFO
-
-
-def test_custom_log_level(tmp_path):
-    # GIVEN a config file specifying DEBUG as the log level
-    config_file = _write_config(tmp_path, {"log_level": "DEBUG"})
-    # WHEN load_settings is called
-    settings = load_settings(config_file)
-    # THEN the log level is set to DEBUG
-    assert settings.log_level == logging.DEBUG
-
-
-def test_log_level_case_insensitive(tmp_path):
-    # GIVEN a config file specifying the log level in lowercase
-    config_file = _write_config(tmp_path, {"log_level": "info"})
-    # WHEN load_settings is called
-    settings = load_settings(config_file)
-    # THEN the log level is correctly resolved
-    assert settings.log_level == logging.INFO
-
-
-def test_invalid_log_level_raises(tmp_path):
-    # GIVEN a config file with an unrecognised log level
-    config_file = _write_config(tmp_path, {"log_level": "VERBOSE"})
-    # WHEN load_settings is called
-    # THEN an AppSettingsError is raised mentioning log_level
-    with pytest.raises(AppSettingsError, match="log_level"):
-        load_settings(config_file)
+    if raises:
+        # THEN an AppSettingsError is raised for unrecognised levels
+        with pytest.raises(AppSettingsError, match="log_level"):
+            load_settings(config_file)
+    else:
+        settings = load_settings(config_file)
+        # THEN the resolved log level matches expectations
+        assert settings.log_level == expected_level
 
 
 def test_save_theme_creates_file(tmp_path):

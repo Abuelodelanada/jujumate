@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -62,6 +63,20 @@ from jujumate.widgets.units_view import UnitsView
 async def _mount_view(pilot, view):
     await pilot.app.screen.mount(view)
     await pilot.pause()
+
+
+@contextmanager
+def _capture_posted(obj):
+    """Capture messages posted via obj.post_message within the context."""
+    messages: list = []
+    with patch.object(obj, "post_message", side_effect=messages.append):
+        yield messages
+
+
+def _mock_clipboard(view) -> None:
+    """Replace copy_to_clipboard and notify on a view with MagicMocks."""
+    view.app.copy_to_clipboard = MagicMock()
+    view.notify = MagicMock()
 
 
 @pytest.mark.asyncio
@@ -224,9 +239,8 @@ async def test_view_row_selection_posts_message(
     view.update(entities)
     await pilot.pause()
 
-    posted: list = []
     # WHEN a row selection event is triggered
-    with patch.object(view, "post_message", side_effect=posted.append):
+    with _capture_posted(view) as posted:
         view.on_navigable_table_row_selected(NavigableTable.RowSelected(key=row_key))
 
     # THEN a single message of the expected type is posted with the right name
@@ -426,89 +440,98 @@ def test_jujumate_header_breadcrumb():
     assert "14:22:03" in status
 
 
-def test_jujumate_header_stats_by_tab():
-    # GIVEN a header and various tab/count combinations
+@pytest.mark.parametrize(
+    "tab, count_field, expected_key, expected_val",
+    [
+        pytest.param("tab-clouds", {"cloud_count": 3}, "clouds", "3", id="clouds"),
+        pytest.param(
+            "tab-controllers",
+            {"controller_count": 2},
+            "controllers",
+            "2",
+            id="controllers",
+        ),
+        pytest.param("tab-models", {"model_count": 5}, "models", "5", id="models"),
+        pytest.param(
+            "tab-status",
+            {"machine_count": 3, "saas_count": 2},
+            "3",
+            "2",
+            id="machine-and-saas",
+        ),
+        pytest.param("tab-unknown", {}, "", "", id="unknown-tab-empty"),
+    ],
+)
+def test_jujumate_header_stats_by_tab(
+    tab: str, count_field: dict, expected_key: str, expected_val: str
+):
+    # GIVEN a header and a tab/count combination
     header = JujuMateHeader.__new__(JujuMateHeader)
-
-    # WHEN _build_stats is called for each tab
-    # THEN the matching key and count value appear in the result
-    for tab, count_field, expected_key, expected_val in [
-        ("tab-clouds", {"cloud_count": 3}, "clouds", "3"),
-        ("tab-controllers", {"controller_count": 2}, "controllers", "2"),
-        ("tab-models", {"model_count": 5}, "models", "5"),
-    ]:
-        ctx = HeaderContext(active_tab=tab, **count_field)
-        result = header._build_stats(ctx)
-        assert expected_key in result, f"Tab {tab}: key not found"
-        assert expected_val in result, f"Tab {tab}: value not found"
-
-
-def test_jujumate_header_disconnected_status():
-    # GIVEN a HeaderContext with is_connected=False
-    header = JujuMateHeader.__new__(JujuMateHeader)
-    ctx = HeaderContext(is_connected=False)
-
-    # WHEN _build_status is called
-    # THEN the result contains "Disconnected"
-    assert "Disconnected" in header._build_status(ctx)
-
-
-def test_jujumate_header_empty_breadcrumb():
-    # GIVEN a HeaderContext with no controller or model set
-    header = JujuMateHeader.__new__(JujuMateHeader)
-    ctx = HeaderContext()
-
-    # WHEN _build_breadcrumb is called
-    # THEN an empty string is returned
-    assert header._build_breadcrumb(ctx) == ""
-
-
-def test_jujumate_header_stats_unknown_tab():
-    # GIVEN a HeaderContext with an unrecognised tab name
-    header = JujuMateHeader.__new__(JujuMateHeader)
-    ctx = HeaderContext(active_tab="tab-unknown")
 
     # WHEN _build_stats is called
-    # THEN an empty string is returned
-    assert header._build_stats(ctx) == ""
+    ctx = HeaderContext(active_tab=tab, **count_field)
+    result = header._build_stats(ctx)
+
+    # THEN the matching key and count value appear in the result (or result is empty)
+    if expected_key == "":
+        assert result == ""
+    else:
+        assert expected_key in result
+        assert expected_val in result
 
 
-def test_jujumate_header_connected_no_timestamp():
-    # GIVEN a HeaderContext that is connected but has no timestamp
+@pytest.mark.parametrize(
+    "ctx_kwargs, expected_in, expected_not_in",
+    [
+        pytest.param(
+            {"is_connected": False},
+            ["Disconnected"],
+            [],
+            id="disconnected",
+        ),
+        pytest.param(
+            {"is_connected": True, "timestamp": ""},
+            ["Live"],
+            ["·"],
+            id="connected-no-timestamp",
+        ),
+    ],
+)
+def test_jujumate_header_build_status(ctx_kwargs, expected_in, expected_not_in):
+    # GIVEN a HeaderContext with the given connection state
     header = JujuMateHeader.__new__(JujuMateHeader)
-    ctx = HeaderContext(is_connected=True, timestamp="")
+    ctx = HeaderContext(**ctx_kwargs)
 
     # WHEN _build_status is called
-    status = header._build_status(ctx)
+    result = header._build_status(ctx)
 
-    # THEN the status says "Live" but contains no separator dot
-    assert "Live" in status
-    assert "·" not in status
+    # THEN expected strings are present and absent
+    for text in expected_in:
+        assert text in result
+    for text in expected_not_in:
+        assert text not in result
 
 
-def test_jujumate_header_breadcrumb_with_juju_version():
-    # GIVEN a HeaderContext with a juju_version set
+@pytest.mark.parametrize(
+    "ctx_kwargs, expected_in, expected_equal",
+    [
+        pytest.param({}, None, "", id="empty"),
+        pytest.param({"juju_version": "3.6.0"}, ["3.6.0"], None, id="with-juju-version"),
+    ],
+)
+def test_jujumate_header_build_breadcrumb(ctx_kwargs, expected_in, expected_equal):
+    # GIVEN a HeaderContext with the given fields
     header = JujuMateHeader.__new__(JujuMateHeader)
-    ctx = HeaderContext(juju_version="3.6.0")
+    ctx = HeaderContext(**ctx_kwargs)
 
     # WHEN _build_breadcrumb is called
-    breadcrumb = header._build_breadcrumb(ctx)
+    result = header._build_breadcrumb(ctx)
 
-    # THEN the juju version appears in the breadcrumb string
-    assert "3.6.0" in breadcrumb
-
-
-def test_jujumate_header_stats_machine_and_saas_counts():
-    # GIVEN a HeaderContext with machine_count and saas_count set
-    header = JujuMateHeader.__new__(JujuMateHeader)
-    ctx = HeaderContext(active_tab="tab-status", machine_count=3, saas_count=2)
-
-    # WHEN _build_stats is called
-    stats = header._build_stats(ctx)
-
-    # THEN both counts appear in the stats string
-    assert "3" in stats
-    assert "2" in stats
+    # THEN the result matches expectations
+    if expected_equal is not None:
+        assert result == expected_equal
+    for text in expected_in or []:
+        assert text in result
 
 
 @pytest.mark.parametrize(
@@ -612,54 +635,63 @@ async def test_status_view_scroll_indicator_handles_missing_widgets():
 
 
 @pytest.mark.asyncio
-async def test_status_view_update_machines(pilot):
+@pytest.mark.parametrize(
+    "view_id, machines, is_kubernetes, expected_display, expected_rows",
+    [
+        pytest.param(
+            "test-status-machines",
+            [
+                MachineInfo(
+                    "dev", "0", "started", "10.0.0.1", "i-1234", "ubuntu@22.04", "us-east-1a"
+                ),
+                MachineInfo(
+                    "dev", "1", "started", "10.0.0.2", "i-5678", "ubuntu@22.04", "us-east-1b"
+                ),
+            ],
+            False,
+            True,
+            2,
+            id="two-machines-visible",
+        ),
+        pytest.param(
+            "test-status-machines-k8s",
+            [MachineInfo("cos", "0", "started", "10.0.0.1", "i-1234", "ubuntu@22.04", "")],
+            True,
+            False,
+            None,
+            id="kubernetes-hidden",
+        ),
+        pytest.param(
+            "test-status-machines-empty",
+            [],
+            False,
+            False,
+            None,
+            id="empty-hidden",
+        ),
+    ],
+)
+async def test_status_view_update_machines(
+    pilot,
+    view_id: str,
+    machines: list,
+    is_kubernetes: bool,
+    expected_display: bool,
+    expected_rows: int | None,
+):
     # GIVEN a mounted StatusView
-    view = StatusView(id="test-status-machines")
-    await _mount_view(pilot, view)
-    machines = [
-        MachineInfo("dev", "0", "started", "10.0.0.1", "i-1234", "ubuntu@22.04", "us-east-1a"),
-        MachineInfo("dev", "1", "started", "10.0.0.2", "i-5678", "ubuntu@22.04", "us-east-1b"),
-    ]
-
-    # WHEN update_machines is called with two machines
-    view.update_machines(machines)
-    await pilot.pause()
-    table = view.query_one("#status-machines-table", ResourceTable)
-
-    # THEN the machines table has two rows and is visible
-    assert table.query_one("DataTable").row_count == 2
-    assert view.query_one("#status-machines-table").display is True
-
-
-@pytest.mark.asyncio
-async def test_status_view_update_machines_hidden_for_kubernetes(pilot):
-    # GIVEN a mounted StatusView
-    view = StatusView(id="test-status-machines-k8s")
-    await _mount_view(pilot, view)
-    machines = [
-        MachineInfo("cos", "0", "started", "10.0.0.1", "i-1234", "ubuntu@22.04", ""),
-    ]
-
-    # WHEN update_machines is called with is_kubernetes=True
-    view.update_machines(machines, is_kubernetes=True)
-    await pilot.pause()
-
-    # THEN the machines table is hidden
-    assert view.query_one("#status-machines-table").display is False
-
-
-@pytest.mark.asyncio
-async def test_status_view_update_machines_hidden_when_empty(pilot):
-    # GIVEN a mounted StatusView
-    view = StatusView(id="test-status-machines-empty")
+    view = StatusView(id=view_id)
     await _mount_view(pilot, view)
 
-    # WHEN update_machines is called with an empty list
-    view.update_machines([])
+    # WHEN update_machines is called
+    view.update_machines(machines, is_kubernetes=is_kubernetes)
     await pilot.pause()
 
-    # THEN the machines table is hidden
-    assert view.query_one("#status-machines-table").display is False
+    # THEN the machines table visibility and row count match expectations
+    assert view.query_one("#status-machines-table").display is expected_display
+    if expected_rows is not None:
+        table = view.query_one("#status-machines-table", ResourceTable)
+        assert table.query_one("DataTable").row_count == expected_rows
 
 
 def test_colored_relation_no_colon():
@@ -852,38 +884,33 @@ async def test_table_focused_message_no_id_is_safe(pilot):
 
 
 @pytest.mark.asyncio
-async def test_apps_view_update(pilot):
+@pytest.mark.parametrize(
+    "view_id, apps, expected_rows",
+    [
+        pytest.param(
+            "test-apps",
+            [
+                AppInfo("pg", "dev", "postgresql", "14/stable", 363, unit_count=1, status="active"),
+                AppInfo("mysql", "dev", "mysql", "8/stable", 100, unit_count=2, status="blocked"),
+            ],
+            2,
+            id="two-apps",
+        ),
+        pytest.param("test-apps-empty", [], 0, id="empty"),
+    ],
+)
+async def test_apps_view_update(pilot, view_id: str, apps: list, expected_rows: int):
     # GIVEN a mounted AppsView
-    view = AppsView(id="test-apps")
+    view = AppsView(id=view_id)
     await pilot.app.screen.mount(view)
     await pilot.pause()
 
-    # WHEN two apps are added
-    view.update(
-        [
-            AppInfo("pg", "dev", "postgresql", "14/stable", 363, unit_count=1, status="active"),
-            AppInfo("mysql", "dev", "mysql", "8/stable", 100, unit_count=2, status="blocked"),
-        ]
-    )
+    # WHEN update is called
+    view.update(apps)
     await pilot.pause()
 
-    # THEN the DataTable has two rows
-    assert view.query_one(ResourceTable).query_one("DataTable").row_count == 2
-
-
-@pytest.mark.asyncio
-async def test_apps_view_empty(pilot):
-    # GIVEN a mounted AppsView
-    view = AppsView(id="test-apps-empty")
-    await pilot.app.screen.mount(view)
-    await pilot.pause()
-
-    # WHEN update is called with an empty list
-    view.update([])
-    await pilot.pause()
-
-    # THEN the DataTable has zero rows
-    assert view.query_one(ResourceTable).query_one("DataTable").row_count == 0
+    # THEN the DataTable has the expected number of rows
+    assert view.query_one(ResourceTable).query_one("DataTable").row_count == expected_rows
 
 
 @pytest.mark.asyncio
@@ -895,9 +922,8 @@ async def test_apps_view_row_selection_posts_app_selected(pilot):
     view.update([AppInfo("pg", "dev", "postgresql", "14/stable", 363)])
     await pilot.pause()
 
-    posted: list = []
     # WHEN a row selection event fires
-    with patch.object(view, "post_message", side_effect=posted.append):
+    with _capture_posted(view) as posted:
         dt = view.query_one(ResourceTable).query_one("DataTable")
         view.on_data_table_row_selected(
             DataTable.RowSelected(data_table=dt, cursor_row=0, row_key=RowKey("dev/pg"))
@@ -918,9 +944,8 @@ async def test_apps_view_row_selection_ignores_none_key(pilot):
     view.update([AppInfo("pg", "dev", "postgresql", "14/stable", 363)])
     await pilot.pause()
 
-    posted: list = []
     # WHEN a row selection event fires with a None row key
-    with patch.object(view, "post_message", side_effect=posted.append):
+    with _capture_posted(view) as posted:
         dt = view.query_one(ResourceTable).query_one("DataTable")
         view.on_data_table_row_selected(
             DataTable.RowSelected(data_table=dt, cursor_row=0, row_key=RowKey(None))
@@ -936,38 +961,33 @@ async def test_apps_view_row_selection_ignores_none_key(pilot):
 
 
 @pytest.mark.asyncio
-async def test_units_view_update(pilot):
+@pytest.mark.parametrize(
+    "view_id, units, expected_rows",
+    [
+        pytest.param(
+            "test-units",
+            [
+                UnitInfo("pg/0", "pg", "0", "active", "idle", "10.0.0.1"),
+                UnitInfo("pg/1", "pg", "1", "active", "idle", "10.0.0.2"),
+            ],
+            2,
+            id="two-units",
+        ),
+        pytest.param("test-units-empty", [], 0, id="empty"),
+    ],
+)
+async def test_units_view_update(pilot, view_id: str, units: list, expected_rows: int):
     # GIVEN a mounted UnitsView
-    view = UnitsView(id="test-units")
+    view = UnitsView(id=view_id)
     await pilot.app.screen.mount(view)
     await pilot.pause()
 
-    # WHEN two units are added
-    view.update(
-        [
-            UnitInfo("pg/0", "pg", "0", "active", "idle", "10.0.0.1"),
-            UnitInfo("pg/1", "pg", "1", "active", "idle", "10.0.0.2"),
-        ]
-    )
+    # WHEN update is called
+    view.update(units)
     await pilot.pause()
 
-    # THEN the DataTable has two rows
-    assert view.query_one(ResourceTable).query_one("DataTable").row_count == 2
-
-
-@pytest.mark.asyncio
-async def test_units_view_empty(pilot):
-    # GIVEN a mounted UnitsView
-    view = UnitsView(id="test-units-empty")
-    await pilot.app.screen.mount(view)
-    await pilot.pause()
-
-    # WHEN update is called with an empty list
-    view.update([])
-    await pilot.pause()
-
-    # THEN the DataTable has zero rows
-    assert view.query_one(ResourceTable).query_one("DataTable").row_count == 0
+    # THEN the DataTable has the expected number of rows
+    assert view.query_one(ResourceTable).query_one("DataTable").row_count == expected_rows
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1011,9 +1031,8 @@ async def test_navigable_table_enter_posts_row_selected(pilot):
     nt.update_rows([("row0",), ("row1",)], keys=["key0", "key1"])
     nt._cursor = 1
 
-    posted: list = []
     # WHEN the Enter key is pressed
-    with patch.object(nt, "post_message", side_effect=posted.append):
+    with _capture_posted(nt) as posted:
         nt.on_key(events.Key(key="enter", character="\r"))
 
     # THEN a RowSelected message is posted with the key for row 1
@@ -1028,9 +1047,8 @@ async def test_navigable_table_enter_no_rows_does_nothing(pilot):
     nt = NavigableTable(columns=[Column("Name", "name")], id="test-nt-norow")
     await pilot.app.screen.mount(nt)
 
-    posted: list = []
     # WHEN the Enter key is pressed
-    with patch.object(nt, "post_message", side_effect=posted.append):
+    with _capture_posted(nt) as posted:
         nt.on_key(events.Key(key="enter", character="\r"))
 
     # THEN no message is posted
@@ -1043,8 +1061,7 @@ async def test_resource_table_table_focused_event_posts_message(pilot):
     view = ResourceTable(columns=[Column("Name", "name")], id="test-rt-focus")
     await _mount_view(pilot, view)
 
-    posted: list = []
-    with patch.object(view, "post_message", side_effect=posted.append):
+    with _capture_posted(view) as posted:
         # WHEN the internal DataTable receives focus
         pilot.app.screen.set_focus(view.query_one(DataTable))
         await pilot.pause()
@@ -1100,8 +1117,7 @@ async def test_resource_table_on_focus_when_collapsed_posts_table_focused(pilot)
     view.collapsed = True
     await pilot.pause()
 
-    posted: list = []
-    with patch.object(view, "post_message", side_effect=posted.append):
+    with _capture_posted(view) as posted:
         # WHEN the ResourceTable itself receives focus (collapsed state)
         view._on_focus(MagicMock())
         await pilot.pause()
@@ -1130,52 +1146,33 @@ def test_group_units_with_orphan_subordinates():
     assert result[2] == (sub_orphan, "└─ ")
 
 
-def test_status_view_relation_selected_message():
-    # GIVEN a RelationInfo object
-    # WHEN a RelationSelected message is created
-    rel = RelationInfo("dev", "pg:db", "wp:db", "pgsql", "regular")
-
-    # THEN the message holds the relation
-    assert StatusView.RelationSelected(rel).relation is rel
-
-
-def test_status_view_app_selected_message():
-    # GIVEN an AppInfo object
-    # WHEN an AppSelected message is created
-    ai = AppInfo("pg", "dev", "pg", "14/stable", 1)
-
-    # THEN the message holds the app
-    assert StatusView.AppSelected(ai).app is ai
-
-
 @pytest.mark.asyncio
-async def test_status_view_update_saas_shown(pilot):
+@pytest.mark.parametrize(
+    "view_id, saas_list, expected_display",
+    [
+        pytest.param(
+            "test-saas-show",
+            [SAASInfo("dev", "remote-pg", "active", "my-store", "my-store:admin/pg")],
+            True,
+            id="with-data-visible",
+        ),
+        pytest.param("test-saas-empty", [], False, id="empty-hidden"),
+    ],
+)
+async def test_status_view_update_saas(
+    pilot, view_id: str, saas_list: list, expected_display: bool
+):
     # GIVEN a mounted StatusView
-    view = StatusView(id="test-saas-show")
+    view = StatusView(id=view_id)
     await pilot.app.screen.mount(view)
     await pilot.pause()
 
-    # WHEN a SAAS entry is added
-    view.update_saas([SAASInfo("dev", "remote-pg", "active", "my-store", "my-store:admin/pg")])
+    # WHEN update_saas is called
+    view.update_saas(saas_list)
     await pilot.pause()
 
-    # THEN the SAAS table is visible
-    assert view.query_one("#status-saas-table").display is True
-
-
-@pytest.mark.asyncio
-async def test_status_view_update_saas_hidden_when_empty(pilot):
-    # GIVEN a mounted StatusView
-    view = StatusView(id="test-saas-empty")
-    await pilot.app.screen.mount(view)
-    await pilot.pause()
-
-    # WHEN update_saas is called with an empty list
-    view.update_saas([])
-    await pilot.pause()
-
-    # THEN the SAAS table is hidden
-    assert view.query_one("#status-saas-table").display is False
+    # THEN the SAAS table visibility matches expectations
+    assert view.query_one("#status-saas-table").display is expected_display
 
 
 @pytest.mark.asyncio
@@ -1469,77 +1466,97 @@ def test_group_units_by_machine_tree_prefixes():
 
 
 @pytest.mark.asyncio
-async def test_status_view_row_selected_posts_app_selected(pilot):
-    # GIVEN a StatusView with one app
-    view = pilot.app.screen.query_one("#status-view", StatusView)
-    view.update_apps([AppInfo("pg", "dev", "pg", "14/stable", 1)])
-    await pilot.pause()
-
-    posted: list = []
-    # WHEN a row is selected in the apps table
-    with patch.object(view, "post_message", side_effect=posted.append):
-        dt = view.query_one("#status-apps-table DataTable", DataTable)
-        view.on_data_table_row_selected(
-            DataTable.RowSelected(data_table=dt, cursor_row=0, row_key=RowKey("k"))
-        )
-
-    # THEN an AppSelected message is posted with the correct app name
-    assert len(posted) == 1
-    assert isinstance(posted[0], StatusView.AppSelected)
-    assert posted[0].app.name == "pg"
-
-
 @pytest.mark.asyncio
-async def test_status_view_row_selected_posts_relation_selected(pilot):
-    # GIVEN a StatusView with one relation
+@pytest.mark.parametrize(
+    "update_fn, entities, table_id, msg_class, attr_chain, expected_val, setup_kwargs",
+    [
+        pytest.param(
+            "update_apps",
+            [AppInfo("pg", "dev", "pg", "14/stable", 1)],
+            "#status-apps-table",
+            StatusView.AppSelected,
+            ["app", "name"],
+            "pg",
+            {},
+            id="app",
+        ),
+        pytest.param(
+            "update_relations",
+            [RelationInfo("dev", "pg:db", "wp:db", "pgsql", "regular")],
+            "#status-rels-table",
+            StatusView.RelationSelected,
+            ["relation", "interface"],
+            "pgsql",
+            {},
+            id="relation",
+        ),
+        pytest.param(
+            "update_offers",
+            [
+                OfferInfo(
+                    "cos",
+                    "alertmanager-karma-dashboard",
+                    "alertmanager",
+                    "alertmanager-k8s",
+                    180,
+                    "0/0",
+                    "karma-dashboard",
+                    "karma_dashboard",
+                    "provider",
+                )
+            ],
+            "#status-offers-table",
+            StatusView.OfferSelected,
+            ["offer", "name"],
+            "alertmanager-karma-dashboard",
+            {},
+            id="offer",
+        ),
+        pytest.param(
+            "update_machines",
+            [
+                MachineInfo(
+                    "dev", "0", "started", "10.0.0.1", "i-abc123", "ubuntu@22.04", "us-east-1a"
+                )
+            ],
+            "#status-machines-table",
+            StatusView.MachineSelected,
+            ["machine", "id"],
+            "0",
+            {"is_kubernetes": False},
+            id="machine",
+        ),
+    ],
+)
+async def test_status_view_row_selected_posts_message(
+    pilot,
+    update_fn: str,
+    entities: list,
+    table_id: str,
+    msg_class: type,
+    attr_chain: list,
+    expected_val: object,
+    setup_kwargs: dict,
+):
+    # GIVEN a StatusView populated with the entity under test
     view = pilot.app.screen.query_one("#status-view", StatusView)
-    view.update_relations([RelationInfo("dev", "pg:db", "wp:db", "pgsql", "regular")])
+    getattr(view, update_fn)(entities, **setup_kwargs)
     await pilot.pause()
 
-    posted: list = []
-    # WHEN a row is selected in the relations table
-    with patch.object(view, "post_message", side_effect=posted.append):
-        dt = view.query_one("#status-rels-table DataTable", DataTable)
+    # WHEN a row is selected in the corresponding table
+    with _capture_posted(view) as posted:
+        dt = view.query_one(f"{table_id} DataTable", DataTable)
         view.on_data_table_row_selected(
             DataTable.RowSelected(data_table=dt, cursor_row=0, row_key=RowKey("k"))
         )
 
-    # THEN a RelationSelected message is posted with the correct interface
+    # THEN one message of the correct type is posted with the expected attribute value
     assert len(posted) == 1
-    assert isinstance(posted[0], StatusView.RelationSelected)
-    assert posted[0].relation.interface == "pgsql"
-
-
-@pytest.mark.asyncio
-async def test_status_view_row_selected_posts_offer_selected(pilot):
-    # GIVEN a StatusView with one offer loaded
-    view = pilot.app.screen.query_one("#status-view", StatusView)
-    offer = OfferInfo(
-        "cos",
-        "alertmanager-karma-dashboard",
-        "alertmanager",
-        "alertmanager-k8s",
-        180,
-        "0/0",
-        "karma-dashboard",
-        "karma_dashboard",
-        "provider",
-    )
-    view.update_offers([offer])
-    await pilot.pause()
-
-    posted: list = []
-    with patch.object(view, "post_message", side_effect=posted.append):
-        # WHEN a row is selected in the offers table
-        dt = view.query_one("#status-offers-table DataTable", DataTable)
-        view.on_data_table_row_selected(
-            DataTable.RowSelected(data_table=dt, cursor_row=0, row_key=RowKey("k"))
-        )
-
-    # THEN an OfferSelected message is posted
-    assert len(posted) == 1
-    assert isinstance(posted[0], StatusView.OfferSelected)
-    assert posted[0].offer.name == "alertmanager-karma-dashboard"
+    assert isinstance(posted[0], msg_class)
+    obj: object = posted[0]
+    for attr in attr_chain:
+        obj = getattr(obj, attr)
+    assert obj == expected_val
 
 
 @pytest.mark.asyncio
@@ -1592,8 +1609,7 @@ async def test_status_view_action_copy_to_clipboard_with_data(pilot):
     view = pilot.app.screen.query_one("#status-view", StatusView)
     view.update_apps([AppInfo("pg", "dev", "pg", "14/stable", 1, status="active")])
     await pilot.pause()
-    view.app.copy_to_clipboard = MagicMock()
-    view.notify = MagicMock()
+    _mock_clipboard(view)
 
     # WHEN action_copy_to_clipboard is called
     view.action_copy_to_clipboard()
@@ -1753,8 +1769,7 @@ async def test_app_config_view_copy_to_clipboard(pilot, has_app):
         view.update(ai, entries)
         await pilot.pause()
 
-    view.app.copy_to_clipboard = MagicMock()
-    view.notify = MagicMock()
+    _mock_clipboard(view)
 
     # WHEN action_copy_to_clipboard is called
     view.action_copy_to_clipboard()
@@ -1931,8 +1946,7 @@ async def test_relation_data_view_copy_to_clipboard(pilot, has_relation):
         view.update(rel, entries)
         await pilot.pause()
 
-    view.app.copy_to_clipboard = MagicMock()
-    view.notify = MagicMock()
+    _mock_clipboard(view)
 
     # WHEN action_copy_to_clipboard is called
     view.action_copy_to_clipboard()
@@ -2248,30 +2262,6 @@ async def test_status_view_format_for_clipboard_iaas_units(pilot):
 
 
 @pytest.mark.asyncio
-async def test_status_view_row_selected_posts_machine_selected(pilot):
-    # GIVEN a StatusView with one machine loaded
-    view = pilot.app.screen.query_one("#status-view", StatusView)
-    machine = MachineInfo(
-        "dev", "0", "started", "10.0.0.1", "i-abc123", "ubuntu@22.04", "us-east-1a"
-    )
-    view.update_machines([machine], is_kubernetes=False)
-    await pilot.pause()
-
-    posted: list = []
-    with patch.object(view, "post_message", side_effect=posted.append):
-        # WHEN a row is selected in the machines table
-        dt = view.query_one("#status-machines-table DataTable", DataTable)
-        view.on_data_table_row_selected(
-            DataTable.RowSelected(data_table=dt, cursor_row=0, row_key=RowKey("k"))
-        )
-
-    # THEN a MachineSelected message is posted with the correct machine id
-    assert len(posted) == 1
-    assert isinstance(posted[0], StatusView.MachineSelected)
-    assert posted[0].machine.id == "0"
-
-
-@pytest.mark.asyncio
 async def test_status_view_row_selected_on_unit_row_does_not_post_machine_selected(pilot):
     # GIVEN a StatusView in units-per-machine mode with one machine and one unit
     view = pilot.app.screen.query_one("#status-view", StatusView)
@@ -2284,8 +2274,7 @@ async def test_status_view_row_selected_on_unit_row_does_not_post_machine_select
     view._render_machines()
     await pilot.pause()
 
-    posted: list = []
-    with patch.object(view, "post_message", side_effect=posted.append):
+    with _capture_posted(view) as posted:
         # WHEN a row is selected that corresponds to a unit (row index 1)
         dt = view.query_one("#status-machines-table DataTable", DataTable)
         view.on_data_table_row_selected(

@@ -1,5 +1,6 @@
 """Tests for screens/log_screen.py — LogScreen modal and helper functions."""
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -114,31 +115,23 @@ def test_append_highlighted_with_needle_not_found() -> None:
 
 
 @pytest.mark.asyncio
-async def test_log_screen_mounts_and_shows_connecting(pilot) -> None:
+async def test_log_screen_mounts_and_shows_connecting(log_screen) -> None:
     # GIVEN a LogScreen with _start_stream patched to prevent real streaming
-    screen = LogScreen("prod", "dev")
-    with patch.object(LogScreen, "_start_stream"):
-        # WHEN the screen is pushed onto the app
-        await pilot.app.push_screen(screen)
-        await pilot.pause()
+    # WHEN the screen is pushed onto the app (done by log_screen fixture)
 
     # THEN the RichLog widget exists
-    assert screen.query_one("#log-richlog", RichLog) is not None
+    assert log_screen.query_one("#log-richlog", RichLog) is not None
 
 
 @pytest.mark.asyncio
-async def test_log_screen_blink_live_indicator(pilot) -> None:
+async def test_log_screen_blink_live_indicator(log_screen) -> None:
     # GIVEN a mounted LogScreen
-    screen = LogScreen("prod", "dev")
-    with patch.object(LogScreen, "_start_stream"):
-        await pilot.app.push_screen(screen)
-        await pilot.pause()
 
     # WHEN _blink_live_indicator is called twice
-    screen._blink_live_indicator()
-    state_after_first = screen._blink_state
-    screen._blink_live_indicator()
-    state_after_second = screen._blink_state
+    log_screen._blink_live_indicator()
+    state_after_first = log_screen._blink_state
+    log_screen._blink_live_indicator()
+    state_after_second = log_screen._blink_state
 
     # THEN the blink state alternates each call
     assert state_after_first != state_after_second
@@ -150,53 +143,26 @@ async def test_log_screen_blink_live_indicator(pilot) -> None:
 
 
 @pytest.mark.asyncio
-async def test_log_screen_matches_filter_no_filter(pilot) -> None:
-    # GIVEN a LogScreen with an empty filter
-    screen = LogScreen("prod", "dev")
-    with patch.object(LogScreen, "_start_stream"):
-        await pilot.app.push_screen(screen)
-        await pilot.pause()
-    screen._filter_text = ""
-
-    # WHEN _matches_filter is called with any entry
-    entry = _make_entry(message="anything")
-
-    # THEN the entry always matches
-    assert screen._matches_filter(entry) is True
-
-
-@pytest.mark.asyncio
-async def test_log_screen_matches_filter_with_match(pilot) -> None:
-    # GIVEN a LogScreen whose filter is "error" and an entry whose message contains "error"
-    screen = LogScreen("prod", "dev")
-    with patch.object(LogScreen, "_start_stream"):
-        await pilot.app.push_screen(screen)
-        await pilot.pause()
-    screen._filter_text = "error"
-    entry = _make_entry(message="error occurred")
+@pytest.mark.parametrize(
+    "filter_text, message, entity, expected",
+    [
+        ("", "anything", "unit-x", True),
+        ("error", "error occurred", "unit-x", True),
+        ("xyz", "everything is fine", "unit-pg-0", False),
+    ],
+)
+async def test_log_screen_matches_filter(
+    log_screen, filter_text: str, message: str, entity: str, expected: bool
+) -> None:
+    # GIVEN a LogScreen with the given filter text
+    log_screen._filter_text = filter_text
+    entry = _make_entry(message=message, entity=entity)
 
     # WHEN _matches_filter is called
-    result = screen._matches_filter(entry)
+    result = log_screen._matches_filter(entry)
 
-    # THEN the entry matches
-    assert result is True
-
-
-@pytest.mark.asyncio
-async def test_log_screen_matches_filter_no_match(pilot) -> None:
-    # GIVEN a LogScreen with filter "xyz" and an entry that does not contain "xyz"
-    screen = LogScreen("prod", "dev")
-    with patch.object(LogScreen, "_start_stream"):
-        await pilot.app.push_screen(screen)
-        await pilot.pause()
-    screen._filter_text = "xyz"
-    entry = _make_entry(message="everything is fine", entity="unit-pg-0")
-
-    # WHEN _matches_filter is called
-    result = screen._matches_filter(entry)
-
-    # THEN the entry does not match
-    assert result is False
+    # THEN result matches expected
+    assert result is expected
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -205,16 +171,12 @@ async def test_log_screen_matches_filter_no_match(pilot) -> None:
 
 
 @pytest.mark.asyncio
-async def test_log_screen_format_entry(pilot) -> None:
+async def test_log_screen_format_entry(log_screen) -> None:
     # GIVEN a mounted LogScreen and a sample LogEntry
-    screen = LogScreen("prod", "dev")
-    with patch.object(LogScreen, "_start_stream"):
-        await pilot.app.push_screen(screen)
-        await pilot.pause()
     entry = _make_entry(level="INFO", message="started", entity="unit-pg-0", timestamp="10:01:02")
 
     # WHEN _format_entry is called
-    result = screen._format_entry(entry)
+    result = log_screen._format_entry(entry)
 
     # THEN the result is a Rich Text object containing all key parts
     assert isinstance(result, Text)
@@ -229,19 +191,15 @@ async def test_log_screen_format_entry(pilot) -> None:
 
 
 @pytest.mark.asyncio
-async def test_log_screen_update_level_label(pilot) -> None:
+async def test_log_screen_update_level_label(log_screen, pilot) -> None:
     # GIVEN a mounted LogScreen at the default level index (INFO)
-    screen = LogScreen("prod", "dev")
-    with patch.object(LogScreen, "_start_stream"):
-        await pilot.app.push_screen(screen)
-        await pilot.pause()
 
     # WHEN _update_level_label is called
-    screen._update_level_label()
+    log_screen._update_level_label()
     await pilot.pause()
 
     # THEN the #log-level-label contains the current level name
-    label = screen.query_one("#log-level-label", Label)
+    label = log_screen.query_one("#log-level-label", Label)
     assert "INFO" in str(label.render())
 
 
@@ -251,21 +209,17 @@ async def test_log_screen_update_level_label(pilot) -> None:
 
 
 @pytest.mark.asyncio
-async def test_log_screen_rerender_buffer(pilot) -> None:
+async def test_log_screen_rerender_buffer(log_screen, pilot) -> None:
     # GIVEN a mounted LogScreen with entries in its buffer
-    screen = LogScreen("prod", "dev")
-    with patch.object(LogScreen, "_start_stream"):
-        await pilot.app.push_screen(screen)
-        await pilot.pause()
-    screen._buffer.append(_make_entry(message="line one"))
-    screen._buffer.append(_make_entry(message="line two"))
+    log_screen._buffer.append(_make_entry(message="line one"))
+    log_screen._buffer.append(_make_entry(message="line two"))
 
     # WHEN _rerender_buffer is called
-    screen._rerender_buffer()
+    log_screen._rerender_buffer()
     await pilot.pause()
 
     # THEN the RichLog has content (lines >= 2)
-    richlog = screen.query_one("#log-richlog", RichLog)
+    richlog = log_screen.query_one("#log-richlog", RichLog)
     assert len(richlog.lines) >= 2
 
 
@@ -275,17 +229,13 @@ async def test_log_screen_rerender_buffer(pilot) -> None:
 
 
 @pytest.mark.asyncio
-async def test_log_screen_action_focus_filter_opens_bar(pilot) -> None:
+async def test_log_screen_action_focus_filter_opens_bar(log_screen, pilot) -> None:
     # GIVEN a mounted LogScreen with the filter bar hidden
-    screen = LogScreen("prod", "dev")
-    with patch.object(LogScreen, "_start_stream"):
-        await pilot.app.push_screen(screen)
-        await pilot.pause()
-    bar = screen.query_one("#log-filter-bar")
+    bar = log_screen.query_one("#log-filter-bar")
     assert "visible" not in bar.classes
 
     # WHEN action_focus_filter is called
-    screen.action_focus_filter()
+    log_screen.action_focus_filter()
     await pilot.pause()
 
     # THEN the filter bar gains the "visible" class
@@ -293,20 +243,16 @@ async def test_log_screen_action_focus_filter_opens_bar(pilot) -> None:
 
 
 @pytest.mark.asyncio
-async def test_log_screen_action_focus_filter_already_open_inserts_slash(pilot) -> None:
+async def test_log_screen_action_focus_filter_already_open_inserts_slash(log_screen, pilot) -> None:
     # GIVEN a mounted LogScreen with the filter bar already visible
-    screen = LogScreen("prod", "dev")
-    with patch.object(LogScreen, "_start_stream"):
-        await pilot.app.push_screen(screen)
-        await pilot.pause()
-    screen.query_one("#log-filter-bar").add_class("visible")
+    log_screen.query_one("#log-filter-bar").add_class("visible")
 
     # WHEN action_focus_filter is called again
-    screen.action_focus_filter()
+    log_screen.action_focus_filter()
     await pilot.pause()
 
     # THEN a "/" is inserted into the filter input
-    fi = screen.query_one("#log-filter", Input)
+    fi = log_screen.query_one("#log-filter", Input)
     assert "/" in fi.value
 
 
@@ -316,39 +262,31 @@ async def test_log_screen_action_focus_filter_already_open_inserts_slash(pilot) 
 
 
 @pytest.mark.asyncio
-async def test_log_screen_action_close_or_clear_when_focused_on_filter(pilot) -> None:
+async def test_log_screen_action_close_or_clear_when_focused_on_filter(log_screen, pilot) -> None:
     # GIVEN the filter bar is visible and the filter input has focus
-    screen = LogScreen("prod", "dev")
-    with patch.object(LogScreen, "_start_stream"):
-        await pilot.app.push_screen(screen)
-        await pilot.pause()
-    screen.query_one("#log-filter-bar").add_class("visible")
-    fi = screen.query_one("#log-filter", Input)
-    screen.set_focus(fi)
+    log_screen.query_one("#log-filter-bar").add_class("visible")
+    fi = log_screen.query_one("#log-filter", Input)
+    log_screen.set_focus(fi)
     await pilot.pause()
 
     # WHEN action_close_or_clear is called
-    screen.action_close_or_clear()
+    log_screen.action_close_or_clear()
     await pilot.pause()
 
     # THEN the filter bar no longer has the "visible" class
-    assert "visible" not in screen.query_one("#log-filter-bar").classes
+    assert "visible" not in log_screen.query_one("#log-filter-bar").classes
 
 
 @pytest.mark.asyncio
-async def test_log_screen_action_close_or_clear_dismiss(pilot) -> None:
+async def test_log_screen_action_close_or_clear_dismiss(log_screen, pilot) -> None:
     # GIVEN the filter input does NOT have focus
-    screen = LogScreen("prod", "dev")
-    with patch.object(LogScreen, "_start_stream"):
-        await pilot.app.push_screen(screen)
-        await pilot.pause()
     # Focus the RichLog (not the filter input)
-    screen.set_focus(screen.query_one("#log-richlog", RichLog))
+    log_screen.set_focus(log_screen.query_one("#log-richlog", RichLog))
     await pilot.pause()
 
-    with patch.object(screen, "dismiss") as mock_dismiss:
+    with patch.object(log_screen, "dismiss") as mock_dismiss:
         # WHEN action_close_or_clear is called
-        screen.action_close_or_clear()
+        log_screen.action_close_or_clear()
 
     # THEN dismiss is called
     mock_dismiss.assert_called_once()
@@ -360,20 +298,16 @@ async def test_log_screen_action_close_or_clear_dismiss(pilot) -> None:
 
 
 @pytest.mark.asyncio
-async def test_log_screen_action_cycle_level(pilot) -> None:
+async def test_log_screen_action_cycle_level(log_screen) -> None:
     # GIVEN a mounted LogScreen at level index 2 (INFO)
-    screen = LogScreen("prod", "dev")
-    with patch.object(LogScreen, "_start_stream"):
-        await pilot.app.push_screen(screen)
-        await pilot.pause()
-    assert screen._level == "INFO"
+    assert log_screen._level == "INFO"
 
-    with patch.object(screen, "_start_stream"):
+    with patch.object(log_screen, "_start_stream"):
         # WHEN action_cycle_level is called
-        screen.action_cycle_level()
+        log_screen.action_cycle_level()
 
     # THEN the level advances to the next one (WARNING, index 3)
-    assert screen._level == "WARNING"
+    assert log_screen._level == "WARNING"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -382,17 +316,13 @@ async def test_log_screen_action_cycle_level(pilot) -> None:
 
 
 @pytest.mark.asyncio
-async def test_log_screen_action_scroll_end(pilot) -> None:
+async def test_log_screen_action_scroll_end(log_screen, pilot) -> None:
     # GIVEN a mounted LogScreen
-    screen = LogScreen("prod", "dev")
-    with patch.object(LogScreen, "_start_stream"):
-        await pilot.app.push_screen(screen)
-        await pilot.pause()
-    richlog = screen.query_one("#log-richlog", RichLog)
+    richlog = log_screen.query_one("#log-richlog", RichLog)
     richlog.auto_scroll = False
 
     # WHEN action_scroll_end is called
-    screen.action_scroll_end()
+    log_screen.action_scroll_end()
     await pilot.pause()
 
     # THEN auto_scroll is re-enabled
@@ -405,19 +335,15 @@ async def test_log_screen_action_scroll_end(pilot) -> None:
 
 
 @pytest.mark.asyncio
-async def test_log_screen_action_insert_separator_when_not_in_filter(pilot) -> None:
+async def test_log_screen_action_insert_separator_when_not_in_filter(log_screen, pilot) -> None:
     # GIVEN a mounted LogScreen with focus on the RichLog
-    screen = LogScreen("prod", "dev")
-    with patch.object(LogScreen, "_start_stream"):
-        await pilot.app.push_screen(screen)
-        await pilot.pause()
-    richlog = screen.query_one("#log-richlog", RichLog)
-    screen.set_focus(richlog)
+    richlog = log_screen.query_one("#log-richlog", RichLog)
+    log_screen.set_focus(richlog)
     await pilot.pause()
     before = len(richlog.lines)
 
     # WHEN action_insert_separator is called
-    screen.action_insert_separator()
+    log_screen.action_insert_separator()
     await pilot.pause()
 
     # THEN a new line is written to the RichLog
@@ -425,20 +351,16 @@ async def test_log_screen_action_insert_separator_when_not_in_filter(pilot) -> N
 
 
 @pytest.mark.asyncio
-async def test_log_screen_action_insert_separator_ignored_in_filter_mode(pilot) -> None:
+async def test_log_screen_action_insert_separator_ignored_in_filter_mode(log_screen, pilot) -> None:
     # GIVEN a mounted LogScreen with focus on the filter Input
-    screen = LogScreen("prod", "dev")
-    with patch.object(LogScreen, "_start_stream"):
-        await pilot.app.push_screen(screen)
-        await pilot.pause()
-    fi = screen.query_one("#log-filter", Input)
-    screen.set_focus(fi)
+    fi = log_screen.query_one("#log-filter", Input)
+    log_screen.set_focus(fi)
     await pilot.pause()
-    richlog = screen.query_one("#log-richlog", RichLog)
+    richlog = log_screen.query_one("#log-richlog", RichLog)
     before = len(richlog.lines)
 
     # WHEN action_insert_separator is called while in filter mode
-    screen.action_insert_separator()
+    log_screen.action_insert_separator()
     await pilot.pause()
 
     # THEN nothing is written to the RichLog
@@ -451,19 +373,15 @@ async def test_log_screen_action_insert_separator_ignored_in_filter_mode(pilot) 
 
 
 @pytest.mark.asyncio
-async def test_log_screen_action_copy_logs_empty_buffer(pilot) -> None:
+async def test_log_screen_action_copy_logs_empty_buffer(log_screen, pilot) -> None:
     # GIVEN a mounted LogScreen with an empty buffer
-    screen = LogScreen("prod", "dev")
-    with patch.object(LogScreen, "_start_stream"):
-        await pilot.app.push_screen(screen)
-        await pilot.pause()
-    screen._buffer.clear()
+    log_screen._buffer.clear()
 
     copy_mock = MagicMock()
-    screen.app.copy_to_clipboard = copy_mock
+    log_screen.app.copy_to_clipboard = copy_mock
 
     # WHEN action_copy_logs is called
-    screen.action_copy_logs()
+    log_screen.action_copy_logs()
     await pilot.pause()
 
     # THEN copy_to_clipboard is called (with empty string for empty buffer)
@@ -471,20 +389,16 @@ async def test_log_screen_action_copy_logs_empty_buffer(pilot) -> None:
 
 
 @pytest.mark.asyncio
-async def test_log_screen_action_copy_logs_with_entries(pilot) -> None:
+async def test_log_screen_action_copy_logs_with_entries(log_screen, pilot) -> None:
     # GIVEN a mounted LogScreen with entries in the buffer
-    screen = LogScreen("prod", "dev")
-    with patch.object(LogScreen, "_start_stream"):
-        await pilot.app.push_screen(screen)
-        await pilot.pause()
-    screen._buffer.append(_make_entry(message="first line"))
-    screen._buffer.append(_make_entry(message="second line"))
+    log_screen._buffer.append(_make_entry(message="first line"))
+    log_screen._buffer.append(_make_entry(message="second line"))
 
     copy_mock = MagicMock()
-    screen.app.copy_to_clipboard = copy_mock
+    log_screen.app.copy_to_clipboard = copy_mock
 
     # WHEN action_copy_logs is called
-    screen.action_copy_logs()
+    log_screen.action_copy_logs()
     await pilot.pause()
 
     # THEN copy_to_clipboard is called with a non-empty string
@@ -499,39 +413,31 @@ async def test_log_screen_action_copy_logs_with_entries(pilot) -> None:
 
 
 @pytest.mark.asyncio
-async def test_log_screen_on_input_changed_updates_filter(pilot) -> None:
+async def test_log_screen_on_input_changed_updates_filter(log_screen, pilot) -> None:
     # GIVEN a mounted LogScreen
-    screen = LogScreen("prod", "dev")
-    with patch.object(LogScreen, "_start_stream"):
-        await pilot.app.push_screen(screen)
-        await pilot.pause()
-    fi = screen.query_one("#log-filter", Input)
+    fi = log_screen.query_one("#log-filter", Input)
 
     # WHEN on_input_changed is called with value "error"
-    screen.on_input_changed(Input.Changed(input=fi, value="error"))
+    log_screen.on_input_changed(Input.Changed(input=fi, value="error"))
     await pilot.pause()
 
     # THEN _filter_text is updated
-    assert screen._filter_text == "error"
+    assert log_screen._filter_text == "error"
 
 
 @pytest.mark.asyncio
-async def test_log_screen_on_input_submitted_focuses_richlog(pilot) -> None:
+async def test_log_screen_on_input_submitted_focuses_richlog(log_screen, pilot) -> None:
     # GIVEN a mounted LogScreen with focus on the filter input
-    screen = LogScreen("prod", "dev")
-    with patch.object(LogScreen, "_start_stream"):
-        await pilot.app.push_screen(screen)
-        await pilot.pause()
-    fi = screen.query_one("#log-filter", Input)
-    screen.set_focus(fi)
+    fi = log_screen.query_one("#log-filter", Input)
+    log_screen.set_focus(fi)
     await pilot.pause()
 
     # WHEN on_input_submitted is called
-    screen.on_input_submitted(Input.Submitted(input=fi, value=""))
+    log_screen.on_input_submitted(Input.Submitted(input=fi, value=""))
     await pilot.pause()
 
     # THEN focus moves to the RichLog
-    assert screen.focused is screen.query_one("#log-richlog", RichLog)
+    assert log_screen.focused is log_screen.query_one("#log-richlog", RichLog)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -540,13 +446,8 @@ async def test_log_screen_on_input_submitted_focuses_richlog(pilot) -> None:
 
 
 @pytest.mark.asyncio
-async def test_log_screen_start_stream_success(pilot) -> None:
+async def test_log_screen_start_stream_success(log_screen, pilot) -> None:
     # GIVEN a LogScreen and a mock JujuClient whose stream_logs yields 2 entries
-    screen = LogScreen("prod", "dev")
-    with patch.object(LogScreen, "_start_stream"):
-        await pilot.app.push_screen(screen)
-        await pilot.pause()
-
     entry1 = _make_entry(message="first")
     entry2 = _make_entry(message="second")
 
@@ -561,37 +462,32 @@ async def test_log_screen_start_stream_success(pilot) -> None:
 
     with patch("jujumate.screens.log_screen.JujuClient", return_value=client_mock):
         # WHEN _start_stream is called and the worker completes
-        worker = screen._start_stream()
+        worker = log_screen._start_stream()
         await worker.wait()
         await pilot.pause()
 
     # THEN both entries are in the buffer
-    assert len(screen._buffer) == 2
+    assert len(log_screen._buffer) == 2
 
 
 @pytest.mark.asyncio
-async def test_log_screen_start_stream_exception(pilot) -> None:
+async def test_log_screen_start_stream_exception(log_screen, pilot) -> None:
     # GIVEN a LogScreen and a mock JujuClient whose __aenter__ raises an exception
-    screen = LogScreen("prod", "dev")
-    with patch.object(LogScreen, "_start_stream"):
-        await pilot.app.push_screen(screen)
-        await pilot.pause()
-
     client_mock = AsyncMock()
     client_mock.__aenter__ = AsyncMock(side_effect=Exception("connection refused"))
     client_mock.__aexit__ = AsyncMock(return_value=None)
 
-    screen.notify = MagicMock()
+    log_screen.notify = MagicMock()
 
     with patch("jujumate.screens.log_screen.JujuClient", return_value=client_mock):
         # WHEN _start_stream is called and the exception is raised
-        worker = screen._start_stream()
+        worker = log_screen._start_stream()
         await worker.wait()
         await pilot.pause()
 
     # THEN notify is called with severity="error"
-    screen.notify.assert_called_once()
-    call_kwargs = screen.notify.call_args
+    log_screen.notify.assert_called_once()
+    call_kwargs = log_screen.notify.call_args
     assert call_kwargs.kwargs.get("severity") == "error" or (len(call_kwargs.args) > 0)
 
 
@@ -658,28 +554,23 @@ def test_get_selected_text_get_selection_returns_none() -> None:
 
 
 @pytest.mark.asyncio
-async def test_log_screen_action_copy_logs_with_selection(pilot) -> None:
+async def test_log_screen_action_copy_logs_with_selection(log_screen) -> None:
     # GIVEN a mounted LogScreen and a RichLog with a text selection
-    screen = LogScreen("prod", "dev")
-    with patch.object(LogScreen, "_start_stream"):
-        await pilot.app.push_screen(screen)
-        await pilot.pause()
-
     copy_mock = MagicMock()
-    screen.app.copy_to_clipboard = copy_mock
-    screen.notify = MagicMock()
+    log_screen.app.copy_to_clipboard = copy_mock
+    log_screen.notify = MagicMock()
 
     mock_richlog = MagicMock()
     mock_richlog.text_selection = object()
     mock_richlog.get_selection.return_value = ("selected log line", 0, 16)
 
     # WHEN action_copy_logs is called with an active selection
-    with patch.object(screen, "query_one", return_value=mock_richlog):
-        screen.action_copy_logs()
+    with patch.object(log_screen, "query_one", return_value=mock_richlog):
+        log_screen.action_copy_logs()
 
     # THEN copy_to_clipboard is called with just the selected text
     copy_mock.assert_called_once_with("selected log line")
-    screen.notify.assert_called_once_with("Selection copied to clipboard")
+    log_screen.notify.assert_called_once_with("Selection copied to clipboard")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -688,15 +579,8 @@ async def test_log_screen_action_copy_logs_with_selection(pilot) -> None:
 
 
 @pytest.mark.asyncio
-async def test_log_screen_start_stream_cancelled(pilot) -> None:
+async def test_log_screen_start_stream_cancelled(log_screen, pilot) -> None:
     # GIVEN a LogScreen mounted with a streaming client that blocks
-    screen = LogScreen("prod", "dev")
-    with patch.object(LogScreen, "_start_stream"):
-        await pilot.app.push_screen(screen)
-        await pilot.pause()
-
-    import asyncio as _asyncio
-
     call_count = 0
 
     async def _selective_stream(*args, **kwargs):
@@ -704,7 +588,7 @@ async def test_log_screen_start_stream_cancelled(pilot) -> None:
         call_count += 1
         if call_count == 1:
             # Worker 1: blocks so it can be cancelled, triggering CancelledError
-            await _asyncio.sleep(100)
+            await asyncio.sleep(100)
         # Worker 2+: complete immediately (no yield → StopAsyncIteration)
         return
         yield  # makes this an async generator function
@@ -716,11 +600,11 @@ async def test_log_screen_start_stream_cancelled(pilot) -> None:
 
     with patch("jujumate.screens.log_screen.JujuClient", return_value=client_mock):
         # WHEN a new exclusive worker is started (cancels the previous one)
-        screen._start_stream()
+        log_screen._start_stream()
         await pilot.pause()  # let worker1 start and block in sleep(100)
-        worker2 = screen._start_stream()  # exclusive=True cancels worker1
+        worker2 = log_screen._start_stream()  # exclusive=True cancels worker1
         await worker2.wait()  # worker2 returns immediately
         await pilot.pause()
 
     # THEN no CancelledError propagated — screen is still functional
-    assert screen.query_one("#log-richlog", RichLog) is not None
+    assert log_screen.query_one("#log-richlog", RichLog) is not None

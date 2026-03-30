@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -42,6 +43,14 @@ def make_mock_client():
         [MachineInfo("dev", "0", "started", "10.0.0.1", "i-1234", "ubuntu@22.04", "us-east-1a")],
     )
     return client
+
+
+@contextmanager
+def _multi_clients_patch(*mock_clients):
+    """Patch JujuClient to return the given mock clients in sequence."""
+    clients = iter(mock_clients)
+    with patch("jujumate.client.watcher.JujuClient", side_effect=lambda **_: next(clients)):
+        yield
 
 
 @pytest.fixture
@@ -127,8 +136,7 @@ async def test_poll_once_aggregates_multiple_controllers(mock_target):
         [],
     )
 
-    clients = iter([client_a, client_b])
-    with patch("jujumate.client.watcher.JujuClient", side_effect=lambda **_: next(clients)):
+    with _multi_clients_patch(client_a, client_b):
         poller = JujuPoller(controller_names=["ctrl-a", "ctrl-b"], target=mock_target)
 
         # WHEN poll_once is called
@@ -150,8 +158,7 @@ async def test_poll_once_deduplicates_clouds(mock_target):
     client_a = make_mock_client()
     client_b = make_mock_client()  # also returns CloudInfo("aws", "ec2")
 
-    clients = iter([client_a, client_b])
-    with patch("jujumate.client.watcher.JujuClient", side_effect=lambda **_: next(clients)):
+    with _multi_clients_patch(client_a, client_b):
         poller = JujuPoller(controller_names=["ctrl-a", "ctrl-b"], target=mock_target)
 
         # WHEN poll_once is called
