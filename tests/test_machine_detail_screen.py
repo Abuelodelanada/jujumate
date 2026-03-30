@@ -18,10 +18,11 @@ from jujumate.screens.machine_detail_screen import (
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def test_time_ago_empty_string_returns_empty():
+@pytest.mark.parametrize("func", [_time_ago, _fmt_ts], ids=["_time_ago", "_fmt_ts"])
+def test_empty_string_returns_empty(func):
     # GIVEN an empty string
-    # WHEN _time_ago is called
-    result = _time_ago("")
+    # WHEN the function is called
+    result = func("")
     # THEN an empty string is returned
     assert result == ""
 
@@ -80,10 +81,11 @@ def test_time_ago_naive_timestamp_is_treated_as_utc():
     assert result == "2m ago"
 
 
-def test_time_ago_invalid_string_returns_input():
+@pytest.mark.parametrize("func", [_time_ago, _fmt_ts], ids=["_time_ago", "_fmt_ts"])
+def test_invalid_string_returns_input(func):
     # GIVEN a non-ISO string
-    # WHEN _time_ago is called
-    result = _time_ago("not-a-date")
+    # WHEN the function is called
+    result = func("not-a-date")
     # THEN the original string is returned as fallback
     assert result == "not-a-date"
 
@@ -131,12 +133,6 @@ def test_normalize_iso_leaves_standard_format_unchanged():
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def test_fmt_ts_empty_string_returns_empty():
-    # GIVEN an empty string
-    # WHEN _fmt_ts is called
-    assert _fmt_ts("") == ""
-
-
 def test_fmt_ts_formats_without_microseconds():
     # GIVEN an ISO timestamp with microseconds
     ts = "2024-06-01T12:34:56.789123+00:00"
@@ -162,14 +158,6 @@ def test_fmt_ts_handles_nanoseconds():
     result = _fmt_ts(ts)
     # THEN microseconds and Z suffix are handled correctly
     assert result == "2026-03-29 01:06:22"
-
-
-def test_fmt_ts_invalid_string_returns_input():
-    # GIVEN a non-ISO string
-    # WHEN _fmt_ts is called
-    result = _fmt_ts("not-a-date")
-    # THEN the original string is returned as fallback
-    assert result == "not-a-date"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
