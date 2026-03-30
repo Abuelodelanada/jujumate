@@ -163,6 +163,7 @@ def _parse_subordinate(
         ports=", ".join([_s(p) for p in (sub_st.opened_ports or [])]),
         message=_s(sub_st.workload_status.info) if sub_st.workload_status else "",
         subordinate_of=unit_name,
+        is_leader=bool(sub_st.leader),
         controller=controller_name,
     )
 

@@ -311,6 +311,54 @@ async def test_get_model_snapshot_includes_subordinate_units(mock_controller):
 
 
 @pytest.mark.asyncio
+async def test_get_model_snapshot_subordinate_leader_flag_set(mock_controller):
+    # GIVEN a model with a subordinate unit that is a leader
+    model, app_st, unit_st = _make_model_mock()
+    sub_st = MagicMock()
+    sub_st.workload_status.status = "active"
+    sub_st.workload_status.info = ""
+    sub_st.agent_status.status = "idle"
+    sub_st.address = ""
+    sub_st.public_address = "10.0.0.1"
+    sub_st.opened_ports = []
+    sub_st.leader = True
+    unit_st.subordinates = {"nrpe/0": sub_st}
+    mock_controller.get_model.return_value = model
+
+    # WHEN get_model_snapshot is called
+    client = JujuClient(controller=mock_controller)
+    _, _, units, _ = await client.get_model_snapshot("dev")
+
+    # THEN the subordinate unit has is_leader=True
+    sub = next(u for u in units if u.name == "nrpe/0")
+    assert sub.is_leader is True
+
+
+@pytest.mark.asyncio
+async def test_get_model_snapshot_subordinate_non_leader_flag_false(mock_controller):
+    # GIVEN a model with a subordinate unit that is NOT a leader
+    model, app_st, unit_st = _make_model_mock()
+    sub_st = MagicMock()
+    sub_st.workload_status.status = "active"
+    sub_st.workload_status.info = ""
+    sub_st.agent_status.status = "idle"
+    sub_st.address = ""
+    sub_st.public_address = "10.0.0.1"
+    sub_st.opened_ports = []
+    sub_st.leader = False
+    unit_st.subordinates = {"nrpe/0": sub_st}
+    mock_controller.get_model.return_value = model
+
+    # WHEN get_model_snapshot is called
+    client = JujuClient(controller=mock_controller)
+    _, _, units, _ = await client.get_model_snapshot("dev")
+
+    # THEN the subordinate unit has is_leader=False
+    sub = next(u for u in units if u.name == "nrpe/0")
+    assert sub.is_leader is False
+
+
+@pytest.mark.asyncio
 async def test_get_applications(mock_controller):
     # GIVEN a model with one application
     model, _, _ = _make_model_mock()
