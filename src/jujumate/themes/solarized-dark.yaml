@@ -26,6 +26,7 @@ variables:
   link:    "#268bd2"      # blue    — URLs, IPs, consume access
   muted:   "#586e75"      # base01  — comments / secondary content / unknown
   pulse-off: "#5b7300"    # green-d — dark green for pulse dim state
+  focus-border: "#2aa198" # cyan/teal (secondary) — focus indicator
   log-trace:   "#586e75"  # base01 muted
   log-debug:   "#268bd2"  # blue
   log-info:    "#859900"  # green

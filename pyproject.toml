@@ -1,6 +1,6 @@
 [project]
 name = "jujumate"
-version = "0.2.6"
+version = "0.2.7"
 
 description = "Terminal UI for Juju infrastructure orchestration"
 readme = "README.md"
