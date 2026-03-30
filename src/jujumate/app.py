@@ -34,10 +34,12 @@ class JujuMateApp(App):
     def __init__(self, settings: AppSettings | None = None) -> None:
         super().__init__()
         self._settings = settings or load_settings()
+        # Register themes in __init__ so their CSS variables (e.g. $focus-border)
+        # are available when widget DEFAULT_CSS is compiled — before on_mount runs.
+        self._apply_theme()
 
     def on_mount(self) -> None:
         asyncio.get_event_loop().set_exception_handler(_asyncio_exception_handler)
-        self._apply_theme()
         logger.info("JujuMate started")
         self.push_screen(MainScreen())
 
