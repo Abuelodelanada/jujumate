@@ -992,6 +992,10 @@
 <td>Toggle units-per-machine in the Machines panel</td>
 </tr>
 <tr>
+<td><code>x</code></td>
+<td>Collapse/expand the current panel</td>
+</tr>
+<tr>
 <td><code>Enter</code> on app</td>
 <td>Open App Config viewer</td>
 </tr>
@@ -1100,14 +1104,15 @@
 <p>The main view. Displays a full <code>juju status</code>-style breakdown of the selected model:</p>
 <ul>
 <li><strong>Applications</strong> — name, charm, channel, revision, units, status and workload message</li>
-<li><strong>Units</strong> — workload/agent status, machine or pod, address, ports</li>
+<li><strong>Units</strong> — workload/agent status, machine or pod, address, ports; leader units marked with <code>*</code></li>
 <li><strong>Machines</strong> — id, state, address, instance, base, AZ <em>(IaaS models only)</em></li>
 <li><strong>SAAS</strong> — consumed remote offers and their status</li>
 <li><strong>Offers</strong> — cross-model offers with active/total connection counts</li>
-<li><strong>Integrations</strong> — all relations (peer hidden by default; press <code>p</code> to show/hide)</li>
+<li><strong>Integrations</strong> — all relations with live status column (peer hidden by default; press <code>p</code> to show/hide); relations being removed show as <code>removing</code></li>
 </ul>
 <p>Press <code>Enter</code> on any app to open its <a href="#app-config-viewer">Config viewer</a>, or on any relation to open the <a href="#relation-data-inspector">Relation Data inspector</a>, or on any machine to open the <a href="#machine-detail-modal">Machine detail modal</a>.</p>
 <p>In the <strong>Machines</strong> panel, press <code>u</code> to expand each machine and see which units (including subordinates) are running on it.</p>
+<p>Press <code>x</code> on any panel to collapse it to just its title bar, freeing up screen space. Press <code>x</code> again to expand it. The panel with focus is highlighted with a distinct border colour (violet in Monokai and Ubuntu themes).</p>
 <h3 id="health">Health</h3>
 <p>A cross-model health dashboard showing all models across all controllers, sorted by worst status (error → blocked → maintenance → waiting → active). Select a model to see its affected units on the right panel.</p>
 <p>Press <code>f</code> to toggle the unhealthy-only filter and hide models where everything is active.</p>
