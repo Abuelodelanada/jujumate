@@ -17,6 +17,7 @@ variables:
   muted: "#888888"
   pulse-off: "#004d26"
   blocked: "#FF8800"
+  focus-border: "#77216F"   # Ubuntu aubergine — focus indicator
   log-trace:   "#888888"
   log-debug:   "#19B6EE"
   log-info:    "#26A269"

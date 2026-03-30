@@ -6,6 +6,7 @@ from textual import on
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, VerticalScroll
+from textual.css.query import NoMatches
 from textual.message import Message
 from textual.reactive import reactive
 from textual.widget import Widget
@@ -239,6 +240,7 @@ class StatusView(Widget):
     BINDINGS = [
         Binding("/", "activate_filter", show=False),
         Binding("escape", "close_filter", show=False),
+        Binding("x", "toggle_collapse", "Collapse/expand panel", show=False),
         Binding("y", "copy_to_clipboard", "Copy status", show=False),
         Binding("p", "toggle_peer_relations", "Toggle peer relations", show=False),
         Binding("u", "toggle_units_in_machines", "Toggle units in machines", show=False),
@@ -345,7 +347,7 @@ class StatusView(Widget):
     def _update_scroll_indicator(self) -> None:
         try:
             vs = self.query_one("#status-scroll", _TrackedScroll)
-        except Exception:
+        except NoMatches:
             return
         at_bottom = vs.scroll_y >= vs.max_scroll_y
         self._show_more = not at_bottom and vs.max_scroll_y > 0
@@ -356,7 +358,7 @@ class StatusView(Widget):
     def _watch__show_more(self, value: bool) -> None:
         try:
             self.query_one("#scroll-indicator").display = value
-        except Exception:
+        except NoMatches:
             pass
 
     def update_apps(self, apps: list[AppInfo]) -> None:
@@ -595,11 +597,11 @@ class StatusView(Widget):
                 return
             msgs = self._row_messages.get(table_id, [])
             msg = msgs[event.cursor_row] if event.cursor_row < len(msgs) else ""
-        except Exception:
+        except AttributeError:
             msg = ""
         try:
             self.query_one("#msg-bar", Label).update(msg)
-        except Exception:
+        except NoMatches:
             pass
 
     def on_resource_table_table_focused(self, event: ResourceTable.TableFocused) -> None:
@@ -614,7 +616,7 @@ class StatusView(Widget):
             msgs = self._row_messages.get(table_id, [])
             msg = msgs[row] if row < len(msgs) else ""
             self.query_one("#msg-bar", Label).update(msg)
-        except Exception:
+        except NoMatches:
             pass
 
     def _restore_cursor(self, table_id: str, row_count: int) -> None:
@@ -628,7 +630,7 @@ class StatusView(Widget):
             last_row = self._last_cursor.get(table_id, 0)
             row = min(last_row, max(row_count - 1, 0))
             dt.move_cursor(row=row)
-        except Exception:
+        except NoMatches:
             pass
 
     def update_relations(self, relations: list[RelationInfo]) -> None:
@@ -681,34 +683,34 @@ class StatusView(Widget):
                     machine = self._displayed_machines[idx]
                     if machine is not None:
                         self.post_message(StatusView.MachineSelected(machine))
-        except Exception:
+        except AttributeError:
             pass
 
     def _rerender_all(self) -> None:
         """Re-apply the current filter to all tables."""
         try:
             self._render_apps()
-        except Exception:
+        except NoMatches:
             pass
         try:
             self._render_saas()
-        except Exception:
+        except NoMatches:
             pass
         try:
             self._render_units()
-        except Exception:
+        except NoMatches:
             pass
         try:
             self._render_offers()
-        except Exception:
+        except NoMatches:
             pass
         try:
             self._render_machines()
-        except Exception:
+        except NoMatches:
             pass
         try:
             self._render_relations()
-        except Exception:
+        except NoMatches:
             pass
 
     def check_action(self, action: str, parameters: tuple) -> bool | None:
@@ -716,7 +718,7 @@ class StatusView(Widget):
             try:
                 bar = self.query_one("#filter-bar")
                 return "visible" in bar.classes or bool(self._filter)
-            except Exception:
+            except NoMatches:
                 return False
         return True
 
@@ -732,6 +734,16 @@ class StatusView(Widget):
         self._filter = ""
         self.query_one("#filter-bar").remove_class("visible")
         self._rerender_all()
+
+    def action_toggle_collapse(self) -> None:
+        """Collapse or expand the currently active panel."""
+        if not self._last_active_table:
+            return
+        try:
+            table = self.query_one(f"#{self._last_active_table}", ResourceTable)
+            table.collapsed = not table.collapsed
+        except NoMatches:
+            pass
 
     def _update_rels_border_title(self) -> None:
         table = self.query_one("#status-rels-table", ResourceTable)

@@ -4,7 +4,9 @@ from typing import Any
 
 from textual import events
 from textual.app import ComposeResult
+from textual.css.query import NoMatches
 from textual.message import Message
+from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import DataTable, Label
 
@@ -18,6 +20,8 @@ class Column:
 
 class ResourceTable(Widget):
     """Generic reusable DataTable for displaying Juju resources."""
+
+    collapsed: reactive[bool] = reactive(False, init=False)
 
     class TableFocused(Message):
         """Posted (bubbling) when the internal DataTable gains focus."""
@@ -89,3 +93,25 @@ class ResourceTable(Widget):
         """Show or hide a loading indicator."""
         self._is_loading = loading
         self.loading = loading
+
+    def _watch_collapsed(self, value: bool) -> None:
+        try:
+            dt = self.query_one(DataTable)
+            label = self.query_one("#empty-label")
+        except NoMatches:
+            return
+        if value:
+            dt.display = False
+            label.display = False
+            self.can_focus = True
+            self.add_class("collapsed")
+            self.focus()
+        else:
+            self.remove_class("collapsed")
+            self.can_focus = False
+            dt.display = True
+            self.query_one(DataTable).focus()
+
+    def _on_focus(self, event: events.Focus) -> None:
+        if self.collapsed:
+            self.post_message(ResourceTable.TableFocused(self))

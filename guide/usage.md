@@ -30,6 +30,7 @@
 | `Esc` | Clear filter |
 | `p` | Toggle peer relations in the Integrations panel |
 | `u` | Toggle units-per-machine in the Machines panel |
+| `x` | Collapse/expand the current panel |
 | `Enter` on app | Open App Config viewer |
 | `Enter` on offer | Open Offer detail |
 | `Enter` on relation | Open Relation Data inspector |
@@ -72,15 +73,17 @@
 The main view. Displays a full `juju status`-style breakdown of the selected model:
 
 - **Applications** — name, charm, channel, revision, units, status and workload message
-- **Units** — workload/agent status, machine or pod, address, ports
+- **Units** — workload/agent status, machine or pod, address, ports; leader units marked with `*`
 - **Machines** — id, state, address, instance, base, AZ *(IaaS models only)*
 - **SAAS** — consumed remote offers and their status
 - **Offers** — cross-model offers with active/total connection counts
-- **Integrations** — all relations (peer hidden by default; press `p` to show/hide)
+- **Integrations** — all relations with live status column (peer hidden by default; press `p` to show/hide); relations being removed show as `removing`
 
 Press `Enter` on any app to open its [Config viewer](#app-config-viewer), or on any relation to open the [Relation Data inspector](#relation-data-inspector), or on any machine to open the [Machine detail modal](#machine-detail-modal).
 
 In the **Machines** panel, press `u` to expand each machine and see which units (including subordinates) are running on it.
+
+Press `x` on any panel to collapse it to just its title bar, freeing up screen space. Press `x` again to expand it. The panel with focus is highlighted with a distinct border colour (violet in Monokai and Ubuntu themes).
 
 ### Health
 

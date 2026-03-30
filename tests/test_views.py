@@ -5,6 +5,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 from textual import events
+from textual.css.query import NoMatches
 from textual.widgets import DataTable, Input, Label, TabbedContent
 from textual.widgets._data_table import RowKey
 
@@ -1052,6 +1053,63 @@ async def test_resource_table_table_focused_event_posts_message(pilot):
     assert any(isinstance(m, ResourceTable.TableFocused) for m in posted)
 
 
+@pytest.mark.asyncio
+async def test_resource_table_collapsed_hides_datatable(pilot):
+    # GIVEN a mounted ResourceTable with a row
+    view = ResourceTable(columns=[Column("Name", "name")], id="test-rt-collapse")
+    await _mount_view(pilot, view)
+    view.update_rows([("pg",)])
+    await pilot.pause()
+
+    # WHEN collapsed is set to True
+    view.collapsed = True
+    await pilot.pause()
+
+    # THEN DataTable is hidden, the widget becomes focusable, and focus moves to it
+    assert view.query_one(DataTable).display is False
+    assert view.can_focus is True
+    assert "collapsed" in view.classes
+    assert pilot.app.focused is view
+
+
+@pytest.mark.asyncio
+async def test_resource_table_expanded_shows_datatable(pilot):
+    # GIVEN a collapsed ResourceTable
+    view = ResourceTable(columns=[Column("Name", "name")], id="test-rt-expand")
+    await _mount_view(pilot, view)
+    view.update_rows([("pg",)])
+    view.collapsed = True
+    await pilot.pause()
+
+    # WHEN collapsed is set back to False
+    view.collapsed = False
+    await pilot.pause()
+
+    # THEN DataTable is visible, widget is no longer focusable, focus moves to DataTable
+    assert view.query_one(DataTable).display is True
+    assert view.can_focus is False
+    assert "collapsed" not in view.classes
+    assert pilot.app.focused is view.query_one(DataTable)
+
+
+@pytest.mark.asyncio
+async def test_resource_table_on_focus_when_collapsed_posts_table_focused(pilot):
+    # GIVEN a collapsed ResourceTable (can_focus=True)
+    view = ResourceTable(columns=[Column("Name", "name")], id="test-rt-focus-collapsed")
+    await _mount_view(pilot, view)
+    view.collapsed = True
+    await pilot.pause()
+
+    posted: list = []
+    with patch.object(view, "post_message", side_effect=posted.append):
+        # WHEN the ResourceTable itself receives focus (collapsed state)
+        view._on_focus(MagicMock())
+        await pilot.pause()
+
+    # THEN a TableFocused message is posted
+    assert any(isinstance(m, ResourceTable.TableFocused) for m in posted)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # StatusView — filter, row selection, messages, saas
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1293,6 +1351,78 @@ async def test_status_view_action_toggle_units_in_machines_shows_and_hides(pilot
     # THEN only the machine row is shown again
     assert dt.row_count == 1
     assert view._show_units_in_machines is False
+
+
+@pytest.mark.asyncio
+async def test_status_view_action_toggle_collapse_collapses_active_panel(pilot):
+    # GIVEN a StatusView with the apps table as the last active table
+    view = pilot.app.screen.query_one("#status-view", StatusView)
+    rt = view.query_one("#status-apps-table", ResourceTable)
+    view._last_active_table = "status-apps-table"
+    await pilot.pause()
+
+    # WHEN action_toggle_collapse is called
+    view.action_toggle_collapse()
+    await pilot.pause()
+
+    # THEN the apps ResourceTable is collapsed
+    assert rt.collapsed is True
+    assert rt.query_one(DataTable).display is False
+
+
+@pytest.mark.asyncio
+async def test_status_view_action_toggle_collapse_expands_collapsed_panel(pilot):
+    # GIVEN a collapsed apps panel as the active table
+    view = pilot.app.screen.query_one("#status-view", StatusView)
+    rt = view.query_one("#status-apps-table", ResourceTable)
+    view._last_active_table = "status-apps-table"
+    rt.collapsed = True
+    await pilot.pause()
+
+    # WHEN action_toggle_collapse is called again
+    view.action_toggle_collapse()
+    await pilot.pause()
+
+    # THEN the apps ResourceTable is expanded
+    assert rt.collapsed is False
+    assert rt.query_one(DataTable).display is True
+
+
+@pytest.mark.asyncio
+async def test_status_view_action_toggle_collapse_no_active_table_is_noop(pilot):
+    # GIVEN no active table is set
+    view = pilot.app.screen.query_one("#status-view", StatusView)
+    view._last_active_table = ""
+
+    # WHEN action_toggle_collapse is called
+    view.action_toggle_collapse()
+    await pilot.pause()
+
+    # THEN no panel is collapsed (all remain expanded)
+    for rt in view.query(ResourceTable):
+        assert rt.collapsed is False
+
+
+@pytest.mark.asyncio
+async def test_resource_table_watch_collapsed_before_mount_is_safe(pilot):
+    # GIVEN a ResourceTable that is not yet mounted (query_one will raise)
+    view = ResourceTable(columns=[Column("Name", "name")], id="test-rt-premount")
+
+    # WHEN collapsed is set before mounting (watch fires, query_one fails)
+    # THEN no exception is raised
+    view._watch_collapsed(True)
+
+
+@pytest.mark.asyncio
+async def test_status_view_action_toggle_collapse_invalid_id_is_safe(pilot):
+    # GIVEN a StatusView with a _last_active_table pointing to a nonexistent widget
+    view = pilot.app.screen.query_one("#status-view", StatusView)
+    view._last_active_table = "nonexistent-table-id"
+
+    # WHEN action_toggle_collapse is called
+    # THEN no exception is raised
+    view.action_toggle_collapse()
+    await pilot.pause()
 
 
 @pytest.mark.asyncio
@@ -1842,13 +1972,13 @@ async def test_status_view_row_highlighted_has_focus_sets_active_table(pilot):
 
 @pytest.mark.asyncio
 async def test_status_view_resource_table_focused_exception_safe(pilot):
-    """Lines 480-481: exception in on_resource_table_table_focused is silently swallowed."""
-    # GIVEN a StatusView and a broken event whose query_one raises
+    """on_resource_table_table_focused: NoMatches from query_one is silently swallowed."""
+    # GIVEN a StatusView and a broken event whose query_one raises NoMatches
     view = pilot.app.screen.query_one("#status-view", StatusView)
 
     broken_event = MagicMock()
     broken_event.resource_table.id = "status-apps-table"
-    broken_event.resource_table.query_one = MagicMock(side_effect=RuntimeError("broken"))
+    broken_event.resource_table.query_one = MagicMock(side_effect=NoMatches("broken"))
 
     # WHEN the handler is called
     # THEN no exception propagates
@@ -1857,14 +1987,14 @@ async def test_status_view_resource_table_focused_exception_safe(pilot):
 
 @pytest.mark.asyncio
 async def test_status_view_row_selected_exception_safe(pilot):
-    """Lines 530-531: exception in on_data_table_row_selected is silently swallowed."""
-    # GIVEN a StatusView and an event whose data_table property raises
+    """on_data_table_row_selected: AttributeError from data_table access is silently swallowed."""
+    # GIVEN a StatusView and an event whose data_table property raises AttributeError
     view = pilot.app.screen.query_one("#status-view", StatusView)
 
     class _BadEvent:
         @property
         def data_table(self):
-            raise RuntimeError("bad table")
+            raise AttributeError("bad table")
 
     # WHEN the handler is called with the bad event
     # THEN no exception propagates
@@ -1873,17 +2003,17 @@ async def test_status_view_row_selected_exception_safe(pilot):
 
 @pytest.mark.asyncio
 async def test_status_view_rerender_all_exception_safe(pilot):
-    """Lines 537-558: all six render methods raise — _rerender_all swallows each."""
-    # GIVEN a StatusView where every render method raises an exception
+    """_rerender_all: NoMatches from each render method is swallowed individually."""
+    # GIVEN a StatusView where every render method raises NoMatches
     view = pilot.app.screen.query_one("#status-view", StatusView)
 
     with (
-        patch.object(view, "_render_apps", side_effect=Exception),
-        patch.object(view, "_render_saas", side_effect=Exception),
-        patch.object(view, "_render_units", side_effect=Exception),
-        patch.object(view, "_render_offers", side_effect=Exception),
-        patch.object(view, "_render_machines", side_effect=Exception),
-        patch.object(view, "_render_relations", side_effect=Exception),
+        patch.object(view, "_render_apps", side_effect=NoMatches),
+        patch.object(view, "_render_saas", side_effect=NoMatches),
+        patch.object(view, "_render_units", side_effect=NoMatches),
+        patch.object(view, "_render_offers", side_effect=NoMatches),
+        patch.object(view, "_render_machines", side_effect=NoMatches),
+        patch.object(view, "_render_relations", side_effect=NoMatches),
     ):
         # WHEN _rerender_all is called
         # THEN no exception propagates
@@ -1892,12 +2022,12 @@ async def test_status_view_rerender_all_exception_safe(pilot):
 
 @pytest.mark.asyncio
 async def test_status_view_check_action_close_filter_exception_safe(pilot):
-    """Lines 565-566: query_one raises in check_action → returns False."""
-    # GIVEN a StatusView where query_one raises
+    """check_action: NoMatches from query_one returns False instead of propagating."""
+    # GIVEN a StatusView where query_one raises NoMatches
     view = pilot.app.screen.query_one("#status-view", StatusView)
 
     # WHEN check_action is called
-    with patch.object(view, "query_one", side_effect=Exception("no widget")):
+    with patch.object(view, "query_one", side_effect=NoMatches("no widget")):
         result = view.check_action("close_filter", ())
 
     # THEN False is returned instead of propagating the exception

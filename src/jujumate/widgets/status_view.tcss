@@ -15,6 +15,14 @@ StatusView ResourceTable {
     margin-bottom: 0;
     padding: 1 1 0 1;
 }
+StatusView ResourceTable:focus-within,
+StatusView ResourceTable:focus {
+    border: solid $focus-border;
+    border-title-color: $focus-border;
+}
+StatusView ResourceTable.collapsed {
+    padding: 0;
+}
 StatusView DataTable {
     height: auto;
     border: none;

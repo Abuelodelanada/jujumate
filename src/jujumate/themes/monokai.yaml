@@ -26,6 +26,7 @@ variables:
   link:    "#66D9EF"      # Monokai cyan    — URLs, IPs, consume access
   muted:   "#75715E"      # Monokai comments color — dim / unknown
   pulse-off: "#233E1E"    # monokai-diff-green-base — dark green for pulse dim state
+  focus-border: "#AE81FF" # Monokai violet — focus indicator
   log-trace:   "#75715E"  # comment muted
   log-debug:   "#66D9EF"  # cyan
   log-info:    "#A6E22E"  # green

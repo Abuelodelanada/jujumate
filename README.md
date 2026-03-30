@@ -22,6 +22,9 @@
 - 🔎 **Inline filtering** — press `/` in Status or Logs to search with live highlight
 - 🔗 **Peer relation toggle** — press `p` to show/hide peer relations in the Integrations panel
 - 🖥️ **Units-per-machine toggle** — press `u` to show units (and their subordinates) nested under each machine
+- 🗂️ **Collapsible panels** — press `x` to collapse/expand any Status panel individually; focused panel highlighted in theme colour
+- 👑 **Leader indicators** — unit leaders marked with `*` (green) following `juju status` convention
+- 🔗 **Relation lifecycle** — Integrations panel shows live relation status; relations being torn down display as `removing`
 - 📋 **Copy to clipboard** — press `y` in Status or Relation Data to copy the full content
 - 🔐 **Secrets browser** — list and inspect Juju secrets per model (`Shift+S`)
 - 📦 **Offers browser** — browse all cross-model offers in a controller, with endpoint details and live consumer tracking across controllers (`Shift+O`)
@@ -93,6 +96,7 @@ On first launch JujuMate connects to your current Juju controller and auto-selec
 | `Esc` | Clear filter |
 | `p` | Toggle peer relations in the Integrations panel |
 | `u` | Toggle units (and subordinates) nested under each machine |
+| `x` | Collapse/expand the current panel |
 | `y` | Copy full status to clipboard (includes cloud, controller, model and Juju version) |
 | `Enter` on app | Open App Config viewer |
 | `Enter` on offer | Open Offer detail |
@@ -124,7 +128,7 @@ On first launch JujuMate connects to your current Juju controller and auto-selec
 ### Status
 The main view. Displays a full `juju status`-style breakdown of the selected model:
 - **Applications** — name, charm, channel, revision, units, status and workload message
-- **Units** — workload/agent status, machine or pod, address, ports; subordinates shown nested under their principal
+- **Units** — workload/agent status, machine or pod, address, ports; subordinates shown nested under their principal; leader units are marked with `*`
 - **Machines** — id, state, address, instance, base, AZ *(IaaS models only)*; press `u` to expand units and their subordinates inline; press `Enter` on a machine to open its detail modal
 
 Press `Enter` on a machine to see:
@@ -133,7 +137,9 @@ Press `Enter` on a machine to see:
 - **Network interfaces** — name, IP address, MAC address and Juju space for each NIC
 - **SAAS** — consumed remote offers and their status
 - **Offers** — cross-model offers with active/total connection counts
-- **Integrations** — regular and cross-model relations (peer relations hidden by default; press `p` to toggle)
+- **Integrations** — regular and cross-model relations with live status column (peer relations hidden by default; press `p` to toggle); relations being removed show as `removing`
+
+Each panel can be collapsed individually with `x` while it has focus, and expanded again with `x`. The focused panel is highlighted with a distinct border colour (violet in Monokai and Ubuntu themes).
 
 ### Health
 Shows a summary of all models across all controllers, highlighting those with errors or blocked units. Unhealthy models are shown by default; press `f` to toggle between unhealthy-only and all models.
