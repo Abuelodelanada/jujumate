@@ -3,8 +3,8 @@ HelpScreen {
 }
 
 HelpScreen #help-panel {
-    width: 100%;
-    height: 100%;
+    width: auto;
+    height: auto;
     padding: 1 2;
     border: round $accent;
     background: $surface;

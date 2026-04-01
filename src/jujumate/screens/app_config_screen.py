@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Callable
 from pathlib import Path
 
 from textual import work
@@ -7,21 +8,33 @@ from textual.binding import Binding
 from textual.screen import ModalScreen
 
 from jujumate.client.juju_client import JujuClient
-from jujumate.models.entities import AppInfo
+from jujumate.models.entities import AppConfigEntry, AppInfo
 from jujumate.widgets.app_config_view import AppConfigView
 
 logger = logging.getLogger(__name__)
 
 
 class AppConfigScreen(ModalScreen):
-    BINDINGS = [Binding("escape", "dismiss", show=False)]
+    BINDINGS = [
+        Binding("escape", "dismiss", show=False),
+        Binding("r", "refresh", "Refresh", show=False),
+    ]
     DEFAULT_CSS = (Path(__file__).parent / "app_config_screen.tcss").read_text()
 
-    def __init__(self, controller_name: str, model_name: str, app: AppInfo) -> None:
+    def __init__(
+        self,
+        controller_name: str,
+        model_name: str,
+        app: AppInfo,
+        prefetched_entries: list[AppConfigEntry] | None = None,
+        on_fetched: Callable[[list[AppConfigEntry]], None] | None = None,
+    ) -> None:
         super().__init__()
         self._controller_name = controller_name
         self._model_name = model_name
         self._app = app
+        self._prefetched_entries = prefetched_entries
+        self._on_fetched = on_fetched
 
     def compose(self) -> ComposeResult:
         yield AppConfigView(id="app-config-view")
@@ -29,6 +42,15 @@ class AppConfigScreen(ModalScreen):
     def on_mount(self) -> None:
         view = self.query_one(AppConfigView)
         view.border_title = f"Config — {self._app.name}"
+        if self._prefetched_entries is not None:
+            view.update(self._app, self._prefetched_entries)
+        else:
+            view.show_partial(self._app)
+            self._fetch(self._controller_name, self._model_name, self._app)
+
+    def action_refresh(self) -> None:
+        self.notify("Refreshing config…")
+        view = self.query_one(AppConfigView)
         view.show_loading(self._app)
         self._fetch(self._controller_name, self._model_name, self._app)
 
@@ -37,6 +59,8 @@ class AppConfigScreen(ModalScreen):
         try:
             async with JujuClient(controller_name=controller_name) as client:
                 entries = await client.get_app_config(model_name, app.name)
+            if self._on_fetched is not None:
+                self._on_fetched(entries)
             self.query_one(AppConfigView).update(app, entries)
         except Exception as exc:
             logger.exception("Failed to fetch config for app '%s'", app.name)

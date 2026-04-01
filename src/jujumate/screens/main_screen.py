@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 from pathlib import Path
 from typing import TypeVar
 
@@ -29,9 +30,11 @@ from jujumate.client.watcher import (
 )
 from jujumate.config import JujuConfigError, load_config
 from jujumate.models.entities import (
+    AppConfigEntry,
     AppInfo,
     CloudInfo,
     ControllerInfo,
+    ControllerOfferInfo,
     MachineInfo,
     ModelInfo,
     OfferInfo,
@@ -109,6 +112,12 @@ class MainScreen(Screen):
         self._selected_model: str | None = None
         # Auto-select: populated from Juju config on startup, cleared after first use
         self._auto_select_model: str | None = None
+        # Offers cache: keyed by controller name, value is (offers, fetch_timestamp).
+        # Entries older than settings.offers_cache_ttl seconds are re-fetched.
+        self._offers_cache: dict[str, tuple[list[ControllerOfferInfo], float]] = {}
+        # App config cache: keyed by (controller, model, app_name).
+        # Entries are kept until the user explicitly refreshes with 'r' inside the modal.
+        self._app_config_cache: dict[tuple[str, str, str], list[AppConfigEntry]] = {}
 
     def compose(self) -> ComposeResult:
         yield JujuMateHeader(id="main-header")
@@ -149,14 +158,21 @@ class MainScreen(Screen):
         self._poll_timer = self.set_interval(self._settings.refresh_interval, self._periodic_poll)
 
     async def _periodic_poll(self) -> None:
-        """Timer callback: only poll if the Status or Health tab is currently active."""
+        """Timer callback: only poll if the Status or Health tab is currently active.
+
+        On the Status tab with a model selected, uses a targeted single-model poll
+        instead of a full poll across all controllers, reducing API calls significantly.
+        Polling is skipped entirely when any modal is open (MainScreen is not the top screen).
+        """
         if not self._poller:
             return
+        if self.app.screen is not self:
+            return
         active_tab = self.query_one(TabbedContent).active
-        if active_tab in ("tab-status", "tab-health"):
+        if active_tab == "tab-status" and self._selected_controller and self._selected_model:
+            await self._poller.poll_model(self._selected_controller, self._selected_model)
+        elif active_tab in ("tab-status", "tab-health"):
             await self._poller.poll_once()
-            if self._selected_controller and self._selected_model:
-                self._fetch_relations(self._selected_controller, self._selected_model)
 
     async def on_unmount(self) -> None:
         if self._poll_timer is not None:
@@ -192,8 +208,6 @@ class MainScreen(Screen):
         self.notify("Refreshing…")
         if self._poller:
             await self._poller.poll_once()
-        if self._selected_controller and self._selected_model:
-            self._fetch_relations(self._selected_controller, self._selected_model)
         logger.info("Manual refresh triggered")
 
     def action_clear_filter(self) -> None:
@@ -224,7 +238,28 @@ class MainScreen(Screen):
         if not self._selected_controller:
             self.notify("Select a controller first", severity="warning")
             return
-        self.app.push_screen(OffersScreen(self._selected_controller))
+        ctrl = self._selected_controller
+        cached_entry = self._offers_cache.get(ctrl)
+        if cached_entry is not None:
+            offers, ts = cached_entry
+            if time.monotonic() - ts <= self._settings.offers_cache_ttl:
+                prefetched: list[ControllerOfferInfo] | None = offers
+            else:
+                prefetched = None
+        else:
+            prefetched = None
+
+        def _on_fetched(offers: list[ControllerOfferInfo]) -> None:
+            self._offers_cache[ctrl] = (offers, time.monotonic())
+
+        self.app.push_screen(
+            OffersScreen(
+                ctrl,
+                prefetched=prefetched,
+                on_fetched=_on_fetched,
+                all_saas=self._all_saas,
+            )
+        )
 
     def action_show_settings(self) -> None:
         controller_names = [c.name for c in self._all_controllers]
@@ -412,29 +447,36 @@ class MainScreen(Screen):
         self._refresh_header()
 
     def on_models_updated(self, message: ModelsUpdated) -> None:
-        existing = {(m.controller, m.name) for m in message.models}
+        if message.model and message.controller:
+            # Targeted update: replace only the matching model, keep the rest.
+            self._all_models = [
+                m
+                for m in self._all_models
+                if not (m.controller == message.controller and m.name == message.model)
+            ] + message.models
+        else:
+            # Full poll: check for deleted models before replacing.
+            existing = {(m.controller, m.name) for m in message.models}
+            if (
+                self._selected_model
+                and (self._selected_controller, self._selected_model) not in existing
+            ):
+                self.app.notify(
+                    f"Model '{self._selected_model}' no longer exists.",
+                    title="Model removed",
+                    severity="warning",
+                )
+                self._selected_model = None
+                self.action_switch_tab("tab-models")
 
-        # If the currently selected model was deleted, notify and switch to Models tab.
-        if (
-            self._selected_model
-            and (self._selected_controller, self._selected_model) not in existing
-        ):
-            self.app.notify(
-                f"Model '{self._selected_model}' no longer exists.",
-                title="Model removed",
-                severity="warning",
-            )
-            self._selected_model = None
-            self.action_switch_tab("tab-models")
+            # Prune stale relations / offers / SAAS for models that no longer exist.
+            self._all_relations = [
+                r for r in self._all_relations if (r.controller, r.model) in existing
+            ]
+            self._all_offers = [o for o in self._all_offers if (o.controller, o.model) in existing]
+            self._all_saas = [s for s in self._all_saas if (s.controller, s.model) in existing]
+            self._all_models = message.models
 
-        # Prune stale relations / offers / SAAS for models that no longer exist.
-        self._all_relations = [
-            r for r in self._all_relations if (r.controller, r.model) in existing
-        ]
-        self._all_offers = [o for o in self._all_offers if (o.controller, o.model) in existing]
-        self._all_saas = [s for s in self._all_saas if (s.controller, s.model) in existing]
-
-        self._all_models = message.models
         self._refresh_models_view()
         active = self._active_tab()
         if active == "tab-status":
@@ -444,7 +486,15 @@ class MainScreen(Screen):
         self._refresh_header()
 
     def on_apps_updated(self, message: AppsUpdated) -> None:
-        self._all_apps = message.apps
+        if message.model and message.controller:
+            # Targeted update: replace only apps for this (controller, model) pair.
+            self._all_apps = [
+                a
+                for a in self._all_apps
+                if not (a.controller == message.controller and a.model == message.model)
+            ] + message.apps
+        else:
+            self._all_apps = message.apps
         active = self._active_tab()
         if active == "tab-status":
             self._refresh_status_view()
@@ -453,7 +503,15 @@ class MainScreen(Screen):
         self._refresh_header()
 
     def on_units_updated(self, message: UnitsUpdated) -> None:
-        self._all_units = message.units
+        if message.model and message.controller:
+            # Targeted update: replace only units for this (controller, model) pair.
+            self._all_units = [
+                u
+                for u in self._all_units
+                if not (u.controller == message.controller and u.model == message.model)
+            ] + message.units
+        else:
+            self._all_units = message.units
         active = self._active_tab()
         if active == "tab-status":
             self._refresh_status_view()
@@ -462,7 +520,15 @@ class MainScreen(Screen):
         self._refresh_header()
 
     def on_machines_updated(self, message: MachinesUpdated) -> None:
-        self._all_machines = message.machines
+        if message.model and message.controller:
+            # Targeted update: replace only machines for this (controller, model) pair.
+            self._all_machines = [
+                m
+                for m in self._all_machines
+                if not (m.controller == message.controller and m.model == message.model)
+            ] + message.machines
+        else:
+            self._all_machines = message.machines
         if self._active_tab() == "tab-status":
             self._refresh_status_view()
 
@@ -519,7 +585,6 @@ class MainScreen(Screen):
         self._selected_model = model_name
         self._refresh_models_view()
         self._refresh_status_view()
-        self._fetch_relations(self._selected_controller, self._selected_model)
         self._refresh_header()
         self.action_switch_tab("tab-status")
         logger.info(
@@ -575,8 +640,6 @@ class MainScreen(Screen):
             self._settings.default_controller = self._selected_controller
             save_settings(self._settings)
         self._refresh_status_view()
-        if self._selected_controller:
-            self._fetch_relations(self._selected_controller, self._selected_model)
         self._refresh_header()
         self.action_switch_tab("tab-status")
 
@@ -586,37 +649,26 @@ class MainScreen(Screen):
         self._settings.default_controller = message.controller
         save_settings(self._settings)
         self._refresh_status_view()
-        self._fetch_relations(message.controller, message.model)
         self._refresh_header()
         self.action_switch_tab("tab-status")
-
-    @work(exclusive=True)
-    async def _fetch_relations(self, controller_name: str, model_name: str) -> None:
-        try:
-            async with JujuClient(controller_name=controller_name) as client:
-                relations, offers, saas = await client.get_status_details(model_name)
-            logger.debug(
-                "Fetched %d relations, %d offers, %d saas for model '%s'",
-                len(relations),
-                len(offers),
-                len(saas),
-                model_name,
-            )
-            self.post_message(
-                RelationsUpdated(model=model_name, controller=controller_name, relations=relations)
-            )
-            self.post_message(
-                OffersUpdated(model=model_name, controller=controller_name, offers=offers)
-            )
-            self.post_message(SaasUpdated(model=model_name, controller=controller_name, saas=saas))
-        except (JujuError, OSError, asyncio.TimeoutError, KeyError):
-            logger.exception("Failed to fetch status details for model '%s'", model_name)
 
     def on_status_view_app_selected(self, message: StatusView.AppSelected) -> None:
         if not self._selected_controller or not self._selected_model:
             return
+        cache_key = (self._selected_controller, self._selected_model, message.app.name)
+        prefetched = self._app_config_cache.get(cache_key)
+
+        def _on_fetched(entries: list[AppConfigEntry]) -> None:
+            self._app_config_cache[cache_key] = entries
+
         self.app.push_screen(
-            AppConfigScreen(self._selected_controller, self._selected_model, message.app)
+            AppConfigScreen(
+                self._selected_controller,
+                self._selected_model,
+                message.app,
+                prefetched_entries=prefetched,
+                on_fetched=_on_fetched,
+            )
         )
 
     def on_status_view_relation_selected(self, message: StatusView.RelationSelected) -> None:
@@ -653,4 +705,6 @@ class MainScreen(Screen):
             )
             return
         if detail:
-            self.app.push_screen(OfferDetailScreen(detail, controller_name))
+            self.app.push_screen(
+                OfferDetailScreen(detail, controller_name, all_saas=self._all_saas)
+            )

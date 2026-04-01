@@ -33,7 +33,7 @@ class RelationDataScreen(ModalScreen):
         provider = self._relation.provider.split(":")[0]
         requirer = self._relation.requirer.split(":")[0]
         view.border_title = f"Relation #{self._relation.relation_id} — {provider} ↔ {requirer}"
-        view.show_loading(self._relation)
+        view.show_partial(self._relation)
         self._fetch(self._controller_name, self._model_name, self._relation, provider, requirer)
 
     @work

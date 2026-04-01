@@ -3,7 +3,7 @@ MachineDetailScreen {
 }
 
 MachineDetailScreen #machine-detail-panel {
-    width: 80;
+    width: auto;
     height: auto;
     max-height: 85%;
     background: $surface;

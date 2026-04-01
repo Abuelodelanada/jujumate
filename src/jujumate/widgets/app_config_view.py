@@ -137,6 +137,15 @@ class AppConfigView(Widget):
         self.query_one("#ac-empty").display = False
         self.query_one("#ac-panel").display = True
 
+    def show_partial(self, app: AppInfo) -> None:
+        """Show app metadata immediately while config entries are being fetched."""
+        self.query_one("#ac-meta-content", Static).update(_meta_markup(app))
+        self.query_one("#ac-content", Static).update(
+            Text("Loading config entries…", style="dim italic")
+        )
+        self.query_one("#ac-empty").display = False
+        self.query_one("#ac-panel").display = True
+
     def show_loading(self, app: AppInfo) -> None:
         """Show a loading state while config is being fetched."""
         self.query_one("#ac-empty").display = True

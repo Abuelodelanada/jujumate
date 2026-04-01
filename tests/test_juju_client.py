@@ -230,7 +230,9 @@ async def test_get_model_snapshot(mock_controller):
     mock_controller.get_model.return_value = model
     # WHEN get_model_snapshot is called
     client = JujuClient(controller=mock_controller)
-    model_info, apps, units, machines = await client.get_model_snapshot("dev")
+    model_info, apps, units, machines, relations, offers, saas = await client.get_model_snapshot(
+        "dev"
+    )
     # THEN all parsed fields are correct and only one get_model call was made
     assert model_info.name == "dev"
     assert model_info.cloud == "aws"
@@ -270,7 +272,7 @@ async def test_get_model_snapshot_kubernetes(mock_controller):
     mock_controller.get_model.return_value = model
     # WHEN get_model_snapshot is called
     client = JujuClient(controller=mock_controller)
-    model_info, apps, units, machines = await client.get_model_snapshot("cos")
+    model_info, apps, units, machines, *_ = await client.get_model_snapshot("cos")
     # THEN is_kubernetes is True, machines empty, and unit uses address (not public_address)
     assert model_info.is_kubernetes is True
     assert model_info.machine_count == 0
@@ -286,7 +288,7 @@ async def test_get_model_snapshot_fallback_on_failure(mock_controller):
     mock_controller.get_model.side_effect = JujuError("timeout")
     # WHEN get_model_snapshot is called
     client = JujuClient(controller=mock_controller)
-    model_info, apps, units, machines = await client.get_model_snapshot("broken")
+    model_info, apps, units, machines, *_ = await client.get_model_snapshot("broken")
     # THEN a minimal fallback ModelInfo is returned with empty lists
     assert model_info.status == "unknown"
     assert apps == []
@@ -309,7 +311,7 @@ async def test_get_model_snapshot_includes_subordinate_units(mock_controller):
     mock_controller.get_model.return_value = model
     # WHEN get_model_snapshot is called
     client = JujuClient(controller=mock_controller)
-    _, _, units, _ = await client.get_model_snapshot("dev")
+    _, _, units, *_ = await client.get_model_snapshot("dev")
     # THEN both the principal unit and the subordinate are returned
     assert len(units) == 2
     sub = next(u for u in units if u.name == "nrpe/0")
@@ -336,7 +338,7 @@ async def test_get_model_snapshot_subordinate_leader_flag_set(mock_controller):
 
     # WHEN get_model_snapshot is called
     client = JujuClient(controller=mock_controller)
-    _, _, units, _ = await client.get_model_snapshot("dev")
+    _, _, units, *_ = await client.get_model_snapshot("dev")
 
     # THEN the subordinate unit has is_leader=True
     sub = next(u for u in units if u.name == "nrpe/0")
@@ -360,7 +362,7 @@ async def test_get_model_snapshot_subordinate_non_leader_flag_false(mock_control
 
     # WHEN get_model_snapshot is called
     client = JujuClient(controller=mock_controller)
-    _, _, units, _ = await client.get_model_snapshot("dev")
+    _, _, units, *_ = await client.get_model_snapshot("dev")
 
     # THEN the subordinate unit has is_leader=False
     sub = next(u for u in units if u.name == "nrpe/0")
@@ -464,6 +466,21 @@ async def test_get_controllers_returns_empty_on_failure(mock_controller):
     result = await client.get_controllers()
     # THEN an empty list is returned
     assert result == []
+
+
+@pytest.mark.asyncio
+async def test_get_controllers_with_model_names_skips_list_models(mock_controller):
+    # GIVEN a controller and a pre-fetched model list
+    conn = MagicMock()
+    conn.info = {"server-version": "3.4.0"}
+    mock_controller.connection = MagicMock(return_value=conn)
+    mock_controller.get_cloud = AsyncMock(return_value="aws")
+    # WHEN get_controllers is called with model_names provided
+    client = JujuClient(controller=mock_controller)
+    result = await client.get_controllers(model_names=["dev", "staging", "prod"])
+    # THEN the model count is taken from the provided list, not from list_models()
+    assert result[0].model_count == 3
+    mock_controller.list_models.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -867,7 +884,7 @@ async def test_get_status_details_saas_from_remote_applications(mock_controller)
 
 
 @pytest.mark.asyncio
-async def test_get_status_details_raises_juju_error_when_model_gone(mock_controller):
+async def test_get_status_details_model_gone_returns_empty(mock_controller):
     # GIVEN the controller raises InvalidStatusCode (model was removed)
     mock_controller.get_model = AsyncMock(
         side_effect=websockets.exceptions.InvalidStatusCode(400, None)
@@ -875,9 +892,11 @@ async def test_get_status_details_raises_juju_error_when_model_gone(mock_control
     client = JujuClient(controller=mock_controller)
 
     # WHEN get_status_details is called for the removed model
-    # THEN a JujuError is raised instead of crashing the app
-    with pytest.raises(JujuError, match="no longer available"):
-        await client.get_status_details("removed-model")
+    # THEN it returns empty lists (graceful fallback, no crash)
+    relations, offers, saas = await client.get_status_details("removed-model")
+    assert relations == []
+    assert offers == []
+    assert saas == []
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -988,7 +1007,35 @@ async def test_get_relation_data_includes_unit_level_data(mock_controller):
 
 
 @pytest.mark.asyncio
-async def test_get_controller_offers_uses_status_counts(mock_controller):
+async def test_get_relation_data_calls_units_info_concurrently(mock_controller):
+    """Both UnitsInfo calls are issued concurrently via asyncio.gather."""
+    # GIVEN two apps each with one unit
+    pg_unit = MagicMock()
+    pg_unit.name = "pg/0"
+    wp_unit = MagicMock()
+    wp_unit.name = "wordpress/0"
+    _make_relation_model(mock_controller, {"postgresql": [pg_unit], "wordpress": [wp_unit]})
+    gather_call_counts: list[int] = []
+    original_gather = asyncio.gather
+
+    async def recording_gather(*coros, **kwargs):
+        gather_call_counts.append(len(coros))
+        return await original_gather(*coros, **kwargs)
+
+    with patch("juju.client.client.ApplicationFacade") as MockFacade:
+        facade_inst = AsyncMock()
+        MockFacade.from_connection = MagicMock(return_value=facade_inst)
+        empty_result = MagicMock()
+        empty_result.results = []
+        facade_inst.UnitsInfo = AsyncMock(return_value=empty_result)
+        with patch("jujumate.client.juju_client.asyncio.gather", side_effect=recording_gather):
+            # WHEN get_relation_data is called for a 2-sided relation
+            client = JujuClient(controller=mock_controller)
+            await client.get_relation_data("dev", 5, "postgresql", "wordpress")
+
+    # THEN asyncio.gather was called with 2 coroutines (one per side)
+    assert gather_call_counts == [2]
+
     # GIVEN an offer with no connections in list_offers (non-admin) but counts in model status
     ep = MagicMock()
     ep.name = "metrics-endpoint"
@@ -1286,11 +1333,14 @@ async def test_get_model_snapshot_skips_none_app_st(mock_controller):
     full_status.applications = {"postgresql": None}  # None app_st should be skipped
     full_status.machines = {}
     full_status.relations = []
+    full_status.offers = {}
+    full_status.unknown_fields = {}
+    full_status.remote_applications = {}
     model.get_status = AsyncMock(return_value=full_status)
     mock_controller.get_model.return_value = model
     # WHEN get_model_snapshot is called
     client = JujuClient(controller=mock_controller)
-    _, apps, units, _ = await client.get_model_snapshot("dev")
+    _, apps, units, *_ = await client.get_model_snapshot("dev")
     # THEN the None app_st is skipped
     assert apps == []
     assert units == []
@@ -1304,7 +1354,7 @@ async def test_get_model_snapshot_skips_none_unit_st(mock_controller):
     mock_controller.get_model.return_value = model
     # WHEN get_model_snapshot is called
     client = JujuClient(controller=mock_controller)
-    _, _, units, _ = await client.get_model_snapshot("dev")
+    _, _, units, *_ = await client.get_model_snapshot("dev")
     # THEN the None unit_st is skipped
     assert units == []
 
@@ -1317,7 +1367,7 @@ async def test_get_model_snapshot_skips_none_subordinate(mock_controller):
     mock_controller.get_model.return_value = model
     # WHEN get_model_snapshot is called
     client = JujuClient(controller=mock_controller)
-    _, _, units, _ = await client.get_model_snapshot("dev")
+    _, _, units, *_ = await client.get_model_snapshot("dev")
     # THEN the None subordinate is skipped; only the principal unit is returned
     assert len(units) == 1
     assert units[0].name == "postgresql/0"
@@ -1398,6 +1448,82 @@ async def test_get_secret_content_raises_juju_error_when_model_gone(mock_control
     # THEN a JujuError is raised instead of crashing
     with pytest.raises(JujuError, match="no longer available"):
         await client.get_secret_content("removed-model", "secret:abc123")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# get_secrets_with_content
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_get_secrets_with_content_returns_secrets_and_content_map(mock_controller):
+    # GIVEN a model with one secret that has content
+    encoded = base64.b64encode(b"mypassword").decode()
+    model = AsyncMock()
+    raw_secret = MagicMock()
+    raw_secret.uri = "secret:abc123"
+    raw_secret.label = "db-password"
+    raw_secret.owner_tag = "application-pg"
+    raw_secret.description = ""
+    raw_secret.latest_revision = 3
+    raw_secret.rotate_policy = "hourly"
+    raw_secret.create_time = "2024-01-01"
+    raw_secret.update_time = "2024-06-01"
+    raw_secret.value = MagicMock()
+    raw_secret.value.data = {"password": encoded}
+    model.list_secrets = AsyncMock(return_value=[raw_secret])
+    model.disconnect = AsyncMock()
+    mock_controller.get_model = AsyncMock(return_value=model)
+    # WHEN get_secrets_with_content is called
+    client = JujuClient(controller=mock_controller)
+    secrets, content_map = await client.get_secrets_with_content("dev")
+    # THEN secrets list is populated correctly
+    assert len(secrets) == 1
+    assert secrets[0].uri == "secret:abc123"
+    assert secrets[0].owner == "pg"
+    assert secrets[0].revision == 3
+    # THEN content_map has the decoded value for the secret
+    assert content_map == {"secret:abc123": {"password": "mypassword"}}
+    # THEN only one list_secrets call was made (not two)
+    model.list_secrets.assert_called_once_with(show_secrets=True)
+
+
+@pytest.mark.asyncio
+async def test_get_secrets_with_content_excludes_secrets_without_data(mock_controller):
+    # GIVEN a secret with no value
+    model = AsyncMock()
+    raw = MagicMock()
+    raw.uri = "secret:nodata"
+    raw.label = ""
+    raw.owner_tag = ""
+    raw.description = ""
+    raw.latest_revision = 1
+    raw.rotate_policy = ""
+    raw.create_time = ""
+    raw.update_time = ""
+    raw.value = None
+    model.list_secrets = AsyncMock(return_value=[raw])
+    model.disconnect = AsyncMock()
+    mock_controller.get_model = AsyncMock(return_value=model)
+    # WHEN get_secrets_with_content is called
+    client = JujuClient(controller=mock_controller)
+    secrets, content_map = await client.get_secrets_with_content("dev")
+    # THEN the secret appears in the list but not in the content map
+    assert len(secrets) == 1
+    assert content_map == {}
+
+
+@pytest.mark.asyncio
+async def test_get_secrets_with_content_raises_juju_error_when_model_gone(mock_controller):
+    # GIVEN the controller raises InvalidStatusCode
+    mock_controller.get_model = AsyncMock(
+        side_effect=websockets.exceptions.InvalidStatusCode(400, None)
+    )
+    client = JujuClient(controller=mock_controller)
+    # WHEN get_secrets_with_content is called
+    # THEN a JujuError is raised
+    with pytest.raises(JujuError, match="no longer available"):
+        await client.get_secrets_with_content("removed-model")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1698,8 +1824,46 @@ async def test_stream_logs_skips_invalid_json_message(mock_controller):
     assert entries == []
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# _parse_machine_info — extended fields
+@pytest.mark.asyncio
+async def test_get_model_uuid_caches_result_across_instances(mock_controller):
+    """model_uuids() is called only once even across two JujuClient instances (UUID cache hit)."""
+    # GIVEN a clean cache and a mock controller with a known UUID
+    JujuClient._uuid_cache.clear()
+    mock_controller.model_uuids = AsyncMock(return_value={"dev": "uuid-abc"})
+    mock_controller.controller_name = "test-ctrl"
+
+    client_a = JujuClient(controller=mock_controller)
+    client_b = JujuClient(controller=mock_controller)
+
+    # WHEN both instances look up the UUID for the same model
+    uuid_a = await client_a._get_model_uuid("dev")
+    uuid_b = await client_b._get_model_uuid("dev")
+
+    # THEN the result is correct and model_uuids() was called only once
+    assert uuid_a == "uuid-abc"
+    assert uuid_b == "uuid-abc"
+    mock_controller.model_uuids.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_get_model_uuid_per_model_caching(mock_controller):
+    """Each distinct model gets its own cache entry; no cross-contamination."""
+    # GIVEN a clean cache with two models
+    JujuClient._uuid_cache.clear()
+    mock_controller.model_uuids = AsyncMock(return_value={"dev": "uuid-dev", "prod": "uuid-prod"})
+    mock_controller.controller_name = "test-ctrl"
+    client = JujuClient(controller=mock_controller)
+
+    # WHEN both models are looked up
+    uuid_dev = await client._get_model_uuid("dev")
+    uuid_prod = await client._get_model_uuid("prod")
+
+    # THEN each model returns its own UUID and model_uuids() was called twice (once per miss)
+    assert uuid_dev == "uuid-dev"
+    assert uuid_prod == "uuid-prod"
+    assert mock_controller.model_uuids.await_count == 2
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 
 

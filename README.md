@@ -182,12 +182,15 @@ JujuMate is configured via `~/.config/jujumate/config.yaml`. All fields are opti
 
 theme: ubuntu               # Theme name (default: ubuntu)
 refresh_interval: 5         # Seconds between auto-refresh (default: 5)
+offers_cache_ttl: 300       # Seconds to cache the offers list (default: 300)
 default_controller: prod    # Controller to use (default: current Juju controller)
 log_file: ~/.local/state/jujumate/jujumate.log
 log_level: INFO             # DEBUG | INFO | WARNING | ERROR | CRITICAL
 ```
 
 Most settings can also be changed at runtime — press `Shift+C` to open the **Settings modal**, which lets you change the theme (with live preview), refresh interval, default controller and log level without editing the file manually. Changes are saved immediately.
+
+> **`offers_cache_ttl`** is a config-file-only setting (not exposed in the Settings modal). It controls how long the Offers list is cached between modal opens. Press `r` inside the Offers modal to force an immediate refresh.
 
 ---
 

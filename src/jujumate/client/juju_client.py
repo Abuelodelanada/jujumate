@@ -492,6 +492,11 @@ def _parse_log_entry(message: str | bytes) -> LogEntry:
 
 
 class JujuClient:
+    # Class-level UUID cache: (controller_name, model_name) → uuid.
+    # Model UUIDs are stable for the lifetime of a model; caching avoids one
+    # model_uuids() round-trip every time the log screen is opened.
+    _uuid_cache: dict[tuple[Any, str], str] = {}
+
     def __init__(
         self,
         controller_name: str | None = None,
@@ -499,6 +504,16 @@ class JujuClient:
     ) -> None:
         self._controller_name = controller_name
         self._controller = controller if controller is not None else Controller()
+
+    async def _get_model_uuid(self, model_name: str) -> str:
+        """Return the UUID for *model_name*, using the class-level cache if available."""
+        ctrl_key: Any = self._controller.controller_name or self._controller_name
+        cache_key = (ctrl_key, model_name)
+        if cache_key not in JujuClient._uuid_cache:
+            JujuClient._uuid_cache[cache_key] = await _resolve_model_uuid(
+                self._controller, model_name
+            )
+        return JujuClient._uuid_cache[cache_key]
 
     async def connect(self) -> None:
         logger.debug("Connecting to controller: %s", self._controller_name or "current")
@@ -525,13 +540,14 @@ class JujuClient:
     async def list_model_names(self) -> list[str]:
         return await self._controller.list_models()
 
-    async def get_controllers(self) -> list[ControllerInfo]:
+    async def get_controllers(self, model_names: list[str] | None = None) -> list[ControllerInfo]:
         try:
             cloud_name = await self._controller.get_cloud()
             conn = self._controller.connection()
             info: dict = conn.info if isinstance(conn.info, dict) else {}
             juju_version = str(info.get("server-version", ""))
-            model_names = await self._controller.list_models()
+            if model_names is None:
+                model_names = await self._controller.list_models()
             controllers = [
                 ControllerInfo(
                     name=self._controller.controller_name or "",
@@ -561,11 +577,19 @@ class JujuClient:
 
     async def get_model_snapshot(
         self, model_name: str
-    ) -> tuple[ModelInfo, list[AppInfo], list[UnitInfo], list[MachineInfo]]:
-        """Fetch ModelInfo, AppInfo list, UnitInfo list, and MachineInfo list.
+    ) -> tuple[
+        ModelInfo,
+        list[AppInfo],
+        list[UnitInfo],
+        list[MachineInfo],
+        list[RelationInfo],
+        list[OfferInfo],
+        list[SAASInfo],
+    ]:
+        """Fetch all model data in a single model.get_status() call.
 
-        Uses model.get_status() (FullStatus) to get accurate channel, revision,
-        address, exposed, and version data that is not available from AllWatcher deltas.
+        Returns ModelInfo, apps, units, machines, relations, offers and SAAS.
+        Using one FullStatus response avoids a second round-trip to the controller.
         """
         controller_name = self._controller.controller_name or ""
         try:
@@ -608,9 +632,34 @@ class JujuClient:
                     for m_id, m_st in (full_status.machines or {}).items()
                     if m_st is not None
                 ]
+                relations = [
+                    r
+                    for rel in (full_status.relations or [])
+                    if rel is not None
+                    and (r := _parse_relation(rel, model_name, controller_name)) is not None
+                ]
+                offers = [
+                    offer
+                    for offer_name, offer_st in (full_status.offers or {}).items()
+                    if offer_st is not None
+                    for offer in _parse_offer_endpoints(
+                        offer_name, offer_st, model, app_statuses, model_name, controller_name
+                    )
+                ]
+                app_endpoints: dict = (full_status.unknown_fields or {}).get(
+                    "application-endpoints", {}
+                )
+                remote_apps: dict = full_status.remote_applications or {}
+                saas = [
+                    _parse_saas_app_endpoint(name, ep, model_name, controller_name)
+                    for name, ep in app_endpoints.items()
+                ] + [
+                    _parse_saas_remote_app(name, remote_st, model_name, controller_name)
+                    for name, remote_st in remote_apps.items()
+                ]
             finally:
                 await model.disconnect()
-        except JujuError:
+        except (JujuError, websockets.exceptions.InvalidStatusCode):
             logger.exception(
                 "Failed to get snapshot for model '%s', using minimal info", model_name
             )
@@ -620,14 +669,21 @@ class JujuClient:
             apps = []
             units = []
             machines = []
+            relations = []
+            offers = []
+            saas = []
         logger.debug(
-            "Snapshot for model '%s': %d apps, %d units, %d machines",
+            "Snapshot for model '%s': %d apps, %d units, %d machines, "
+            "%d relations, %d offers, %d saas",
             model_name,
             len(apps),
             len(units),
             len(machines),
+            len(relations),
+            len(offers),
+            len(saas),
         )
-        return model_info, apps, units, machines
+        return model_info, apps, units, machines, relations, offers, saas
 
     async def get_models(self) -> list[ModelInfo]:
         model_names = await self._controller.list_models()
@@ -635,61 +691,29 @@ class JujuClient:
         logger.debug("Listing models for controller '%s': %s", controller_name, model_names)
         models = []
         for name in model_names:
-            model_info, _, _, _ = await self.get_model_snapshot(name)
+            model_info, *_ = await self.get_model_snapshot(name)
             models.append(model_info)
         logger.debug("Fetched %d models for controller '%s'", len(models), controller_name)
         return models
 
     async def get_applications(self, model_name: str) -> list[AppInfo]:
-        _, apps, _, _ = await self.get_model_snapshot(model_name)
+        _, apps, *_ = await self.get_model_snapshot(model_name)
         logger.debug("Fetched %d applications for model '%s'", len(apps), model_name)
         return apps
 
     async def get_units(self, model_name: str) -> list[UnitInfo]:
-        _, _, units, _ = await self.get_model_snapshot(model_name)
+        _, _, units, *_ = await self.get_model_snapshot(model_name)
         logger.debug("Fetched %d units for model '%s'", len(units), model_name)
         return units
 
     async def get_status_details(
         self, model_name: str
     ) -> tuple[list[RelationInfo], list[OfferInfo], list[SAASInfo]]:
-        """Fetch relations, offers and SAAS for a model in a single connection."""
-        try:
-            model = await self._controller.get_model(model_name)
-        except websockets.exceptions.InvalidStatusCode as exc:
-            raise JujuError(f"Model '{model_name}' is no longer available: {exc}") from exc
-        try:
-            status = await model.get_status()
-            app_statuses = status.applications or {}
-            controller_name = self._controller_name or ""
+        """Fetch relations, offers and SAAS for a model.
 
-            relations = [
-                r
-                for rel in (status.relations or [])
-                if rel is not None
-                and (r := _parse_relation(rel, model_name, controller_name)) is not None
-            ]
-            offers = [
-                offer
-                for offer_name, offer_st in (status.offers or {}).items()
-                if offer_st is not None
-                for offer in _parse_offer_endpoints(
-                    offer_name, offer_st, model, app_statuses, model_name, controller_name
-                )
-            ]
-            # Juju 3.6+ renamed "remote-applications" to "application-endpoints".
-            # python-libjuju doesn't know about the new field yet, so it ends up in unknown_fields.
-            app_endpoints: dict = (status.unknown_fields or {}).get("application-endpoints", {})
-            remote_apps: dict = status.remote_applications or {}
-            saas = [
-                _parse_saas_app_endpoint(name, ep, model_name, controller_name)
-                for name, ep in app_endpoints.items()
-            ] + [
-                _parse_saas_remote_app(name, remote_st, model_name, controller_name)
-                for name, remote_st in remote_apps.items()
-            ]
-        finally:
-            await model.disconnect()
+        Delegates to get_model_snapshot() so only one model.get_status() call is made.
+        """
+        _, _, _, _, relations, offers, saas = await self.get_model_snapshot(model_name)
         logger.debug(
             "Status details for model '%s': %d relations, %d offers, %d saas",
             model_name,
@@ -755,6 +779,56 @@ class JujuClient:
         finally:
             await model.disconnect()
 
+    async def get_secrets_with_content(
+        self, model_name: str
+    ) -> tuple[list[SecretInfo], dict[str, dict[str, str]]]:
+        """Fetch all secrets and their content in a single ``list_secrets`` call.
+
+        Returns a tuple of (secrets, content_map) where content_map maps each
+        secret URI to its decoded key-value content dict.  Using this instead
+        of calling ``get_secrets`` and ``get_secret_content`` separately saves
+        one API call per secret the user opens.
+        """
+        try:
+            model = await self._controller.get_model(model_name)
+        except websockets.exceptions.InvalidStatusCode as exc:
+            raise JujuError(f"Model '{model_name}' is no longer available: {exc}") from exc
+        try:
+            results = await model.list_secrets(show_secrets=True)
+            secrets: list[SecretInfo] = []
+            content_map: dict[str, dict[str, str]] = {}
+            for s in results or []:
+                uri = getattr(s, "uri", "") or ""
+                owner = getattr(s, "owner_tag", "") or ""
+                if "-" in owner:
+                    owner = owner.split("-", 1)[1]
+                secrets.append(
+                    SecretInfo(
+                        uri=uri,
+                        label=getattr(s, "label", "") or "",
+                        owner=owner,
+                        description=getattr(s, "description", "") or "",
+                        revision=getattr(s, "latest_revision", 0) or 0,
+                        rotate_policy=getattr(s, "rotate_policy", "") or "",
+                        created=getattr(s, "create_time", "") or "",
+                        updated=getattr(s, "update_time", "") or "",
+                    )
+                )
+                value = getattr(s, "value", None)
+                if value is not None:
+                    data = getattr(value, "data", None)
+                    if data:
+                        content_map[uri] = {k: _decode_secret_value(v) for k, v in data.items()}
+        finally:
+            await model.disconnect()
+        logger.debug(
+            "Secrets with content for '%s': %d entries, %d with content",
+            model_name,
+            len(secrets),
+            len(content_map),
+        )
+        return secrets, content_map
+
     async def get_app_config(self, model_name: str, app_name: str) -> list[AppConfigEntry]:
         """Fetch configuration entries for an application."""
         entries: list[AppConfigEntry] = []
@@ -809,8 +883,8 @@ class JujuClient:
     ) -> list[RelationDataEntry]:
         """Fetch relation data bags for both sides of a relation.
 
-        Calls Application.UnitsInfo for one unit on each side.  From the
-        provider unit we get: provider app-level data + requirer units' data.
+        Calls Application.UnitsInfo for one unit on each side concurrently.
+        From the provider unit we get: provider app-level data + requirer units' data.
         From the requirer unit we get: requirer app-level data + provider units' data.
         """
         try:
@@ -819,26 +893,38 @@ class JujuClient:
             raise JujuError(f"Model '{model_name}' is no longer available: {exc}") from exc
         try:
             facade = juju_client.ApplicationFacade.from_connection(model.connection())
-            entries: list[RelationDataEntry] = []
-            for app_name, _own_side, other_side, other_app_name in _relation_sides(
-                provider_app, requirer_app
-            ):
+
+            async def _fetch_side(
+                app_name: str, other_side: str, other_app_name: str
+            ) -> list[RelationDataEntry]:
                 app = model.applications.get(app_name)
                 if not app or not app.units:
-                    continue
+                    return []
                 unit_obj = next(iter(app.units))
                 unit_tag = "unit-" + unit_obj.name.replace("/", "-")
                 result = await facade.UnitsInfo(entities=[juju_client.Entity(unit_tag)])
                 if not result.results:
-                    continue
+                    return []
                 unit_result = result.results[0]
                 if unit_result.error or not unit_result.result:
-                    continue
+                    return []
+                side_entries: list[RelationDataEntry] = []
                 for ep_data in unit_result.result.relation_data or []:
                     if ep_data.relation_id != relation_id:
                         continue
-                    entries.extend(_parse_app_relation_data(ep_data, other_side, other_app_name))
-                    entries.extend(_parse_unit_relation_data(ep_data, other_side))
+                    side_entries.extend(
+                        _parse_app_relation_data(ep_data, other_side, other_app_name)
+                    )
+                    side_entries.extend(_parse_unit_relation_data(ep_data, other_side))
+                return side_entries
+
+            results = await asyncio.gather(
+                *(
+                    _fetch_side(app, other, other_app)
+                    for app, _, other, other_app in _relation_sides(provider_app, requirer_app)
+                )
+            )
+            entries = [entry for side in results for entry in side]
         finally:
             await model.disconnect()
         logger.debug("Relation data for relation %d: %d entries", relation_id, len(entries))
@@ -905,7 +991,7 @@ class JujuClient:
             model_name: Model to stream logs from.
             level: Minimum log level — TRACE, DEBUG, INFO, WARNING, ERROR.
         """
-        uuid = await _resolve_model_uuid(self._controller, model_name)
+        uuid = await self._get_model_uuid(model_name)
         endpoint, username, password, cacert = _log_stream_connection_params(self._controller)
         url = _build_log_stream_url(endpoint, username, password, uuid, level)
         ssl_ctx = _build_ssl_context(cacert)

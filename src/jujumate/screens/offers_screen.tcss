@@ -2,9 +2,9 @@ OfferDetailScreen {
     align: center middle;
 }
 OfferDetailScreen #detail-panel {
-    width: 88%;
+    width: 95%;
     height: auto;
-    max-height: 85%;
+    max-height: 95%;
     background: $surface;
     border: round $accent;
     border-title-color: $accent;
@@ -47,8 +47,9 @@ OffersScreen {
     align: center middle;
 }
 OffersScreen #offers-panel {
-    width: 88%;
-    height: 85%;
+    width: 95%;
+    height: auto;
+    max-height: 95%;
     background: $surface;
     border: round $accent;
     border-title-color: $accent;

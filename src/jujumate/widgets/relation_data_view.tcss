@@ -4,6 +4,14 @@ RelationDataView {
 RelationDataView #rd-panel {
     height: 1fr;
 }
+RelationDataView #rd-meta-content {
+    height: auto;
+    padding: 0 1;
+}
+RelationDataView Rule {
+    height: 1;
+    color: $panel-lighten-2;
+}
 RelationDataView #rd-scroll {
     height: 1fr;
     scrollbar-size-vertical: 0;

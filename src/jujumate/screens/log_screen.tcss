@@ -2,8 +2,8 @@ LogScreen {
     align: center middle;
 }
 LogScreen #log-outer {
-    width: 98%;
-    height: 95%;
+    width: auto;
+    height: auto;
     background: $surface;
     border: round $accent;
     border-title-color: $accent;
