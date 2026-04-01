@@ -80,7 +80,7 @@ class SecretDetailScreen(ModalScreen):
             yield Rule()
             yield Label("Loading content…", id="secret-loading")
             yield ListView(id="secret-data")
-            yield Label("y copy to clipboard", id="secret-hint")
+            yield Label("<up> & <down>: select secret - y: copy to clipboard", id="secret-hint")
 
     def _populate_list(self, lv: ListView, data: dict[str, str]) -> None:
         """Populate the secret key-value ListView, or show an empty placeholder."""
