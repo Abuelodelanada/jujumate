@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -56,10 +56,16 @@ class OfferDetailScreen(ModalScreen):
 
     DEFAULT_CSS = (Path(__file__).parent / "offers_screen.tcss").read_text()
 
-    def __init__(self, offer: ControllerOfferInfo, controller_name: str) -> None:
+    def __init__(
+        self,
+        offer: ControllerOfferInfo,
+        controller_name: str,
+        all_saas: list[SAASInfo] | None = None,
+    ) -> None:
         super().__init__()
         self._offer = offer
         self._controller_name = controller_name
+        self._all_saas = all_saas
 
     def _field_labels(self, fields: list[tuple[str, str]], col_width: int) -> Iterable[Label]:
         """Yield formatted Labels for each offer field."""
@@ -114,7 +120,20 @@ class OfferDetailScreen(ModalScreen):
         conn_dt = self.query_one("#connections-table", DataTable)
         conn_dt.add_columns("Controller", "Model", "Application", "Status")
         conn_dt.display = False
-        self._fetch_consumers(self._controller_name, self._offer)
+        if self._all_saas is not None:
+            self._find_consumers_in_cache(self._all_saas)
+        else:
+            self._fetch_consumers(self._controller_name, self._offer)
+
+    def _find_consumers_in_cache(self, all_saas: list[SAASInfo]) -> None:
+        """Search the already-polled SAAS list for consumers of this offer (zero API calls)."""
+        target_url = _normalize_url(self._offer.offer_url)
+        consumers = [
+            _ConsumerEntry(controller=s.controller, saas=s)
+            for s in all_saas
+            if _normalize_url(s.url) == target_url
+        ]
+        self._populate_consumers(consumers)
 
     @work
     async def _fetch_consumers(self, controller_name: str, offer: ControllerOfferInfo) -> None:
@@ -167,14 +186,26 @@ class OfferDetailScreen(ModalScreen):
 class OffersScreen(ModalScreen):
     """Modal overlay displaying all offers across the controller."""
 
-    BINDINGS = [Binding("escape", "dismiss", show=False)]
+    BINDINGS = [
+        Binding("escape", "dismiss", show=False),
+        Binding("r", "refresh", "Refresh", show=False),
+    ]
 
     DEFAULT_CSS = (Path(__file__).parent / "offers_screen.tcss").read_text()
 
-    def __init__(self, controller_name: str) -> None:
+    def __init__(
+        self,
+        controller_name: str,
+        prefetched: list[ControllerOfferInfo] | None = None,
+        on_fetched: Callable[[list[ControllerOfferInfo]], None] | None = None,
+        all_saas: list[SAASInfo] | None = None,
+    ) -> None:
         super().__init__()
         self._controller_name = controller_name
         self._offers: list[ControllerOfferInfo] = []
+        self._prefetched = prefetched
+        self._on_fetched = on_fetched
+        self._all_saas = all_saas
 
     def compose(self) -> ComposeResult:
         with Vertical(id="offers-panel"):
@@ -186,13 +217,18 @@ class OffersScreen(ModalScreen):
         dt = self.query_one("#offers-table", DataTable)
         dt.add_columns("URL", "Access", "Endpoints", "Connected")
         dt.display = False
-        self._fetch(self._controller_name)
+        if self._prefetched is not None:
+            self._populate(self._prefetched)
+        else:
+            self._fetch(self._controller_name)
 
     @work
     async def _fetch(self, controller_name: str) -> None:
         try:
             async with JujuClient(controller_name=controller_name) as client:
                 offers = await client.get_controller_offers()
+            if self._on_fetched is not None:
+                self._on_fetched(offers)
             self._populate(offers)
         except Exception as exc:
             logger.exception("Failed to fetch offers for controller '%s'", controller_name)
@@ -228,9 +264,25 @@ class OffersScreen(ModalScreen):
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         idx = int(str(event.row_key.value))
         if 0 <= idx < len(self._offers):
-            self.app.push_screen(OfferDetailScreen(self._offers[idx], self._controller_name))
+            self.app.push_screen(
+                OfferDetailScreen(self._offers[idx], self._controller_name, all_saas=self._all_saas)
+            )
 
     def _show_error(self, error: str) -> None:
         loading = self.query_one("#offers-loading", Static)
         loading.update(Text(f"Error: {error}", style="bold red"))
         loading.display = True
+
+    def action_refresh(self) -> None:
+        """Re-fetch offers, discarding cached data and invalidating the parent cache."""
+        if self._on_fetched is not None:
+            self._on_fetched([])
+        self._offers = []
+        dt = self.query_one("#offers-table", DataTable)
+        dt.clear()
+        dt.display = False
+        loading = self.query_one("#offers-loading", Static)
+        loading.update("Loading…")
+        loading.display = True
+        self.notify("Refreshing offers…", timeout=2)
+        self._fetch(self._controller_name)

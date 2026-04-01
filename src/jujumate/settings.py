@@ -17,6 +17,7 @@ LOG_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
 @dataclass
 class AppSettings:
     refresh_interval: int = 5
+    offers_cache_ttl: int = 300
     default_controller: str | None = None
     juju_data_dir: Path = _real_home / ".local" / "share" / "juju"
     log_file: Path = _real_home / ".local" / "state" / "jujumate" / "jujumate.log"
@@ -69,6 +70,10 @@ def load_settings(config_file: Path = CONFIG_FILE) -> AppSettings:
     if not isinstance(refresh_interval, int) or refresh_interval < 1:
         raise AppSettingsError("'refresh_interval' must be an integer >= 1.")
 
+    offers_cache_ttl = data.get("offers_cache_ttl", AppSettings.offers_cache_ttl)
+    if not isinstance(offers_cache_ttl, int) or offers_cache_ttl < 1:
+        raise AppSettingsError("'offers_cache_ttl' must be an integer >= 1.")
+
     juju_data_dir = (
         Path(data["juju_data_dir"]).expanduser()
         if "juju_data_dir" in data
@@ -88,6 +93,7 @@ def load_settings(config_file: Path = CONFIG_FILE) -> AppSettings:
 
     return AppSettings(
         refresh_interval=refresh_interval,
+        offers_cache_ttl=offers_cache_ttl,
         default_controller=data.get("default_controller"),
         juju_data_dir=juju_data_dir,
         log_file=log_file,

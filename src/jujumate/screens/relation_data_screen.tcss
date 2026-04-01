@@ -2,8 +2,8 @@ RelationDataScreen {
     align: center middle;
 }
 RelationDataScreen RelationDataView {
-    width: 88%;
-    height: 85%;
+    width: auto;
+    height: auto;
     background: $surface;
     border: round $accent;
     border-title-color: $accent;

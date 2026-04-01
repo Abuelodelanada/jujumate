@@ -32,18 +32,33 @@ class SecretDetailScreen(ModalScreen):
 
     DEFAULT_CSS = (Path(__file__).parent / "secrets_screen.tcss").read_text()
 
-    def __init__(self, controller_name: str, model_name: str, secret: SecretInfo) -> None:
+    def __init__(
+        self,
+        controller_name: str,
+        model_name: str,
+        secret: SecretInfo,
+        prefetched_content: dict[str, str] | None = None,
+    ) -> None:
         super().__init__()
         self._controller_name = controller_name
         self._model_name = model_name
         self._secret = secret
         self._content_data: dict[str, str] = {}
+        self._prefetched_content = prefetched_content
 
     def on_mount(self) -> None:
         s = self._secret
         self.query_one("#detail-panel").border_title = f"Secret — {s.label or s.uri}"
         self.query_one("#secret-data").display = False
-        self._fetch(self._controller_name, self._model_name, s.uri)
+        if self._prefetched_content is not None:
+            self._content_data = self._prefetched_content
+            lv = self.query_one("#secret-data", ListView)
+            self._populate_list(lv, self._prefetched_content)
+            self.query_one("#secret-loading").display = False
+            lv.display = True
+            lv.focus()
+        else:
+            self._fetch(self._controller_name, self._model_name, s.uri)
 
     def compose(self) -> ComposeResult:
         s = self._secret
@@ -121,7 +136,10 @@ class SecretDetailScreen(ModalScreen):
 class SecretsScreen(ModalScreen):
     """Modal overlay displaying all secrets for a model."""
 
-    BINDINGS = [Binding("escape", "dismiss", show=False)]
+    BINDINGS = [
+        Binding("escape", "dismiss", show=False),
+        Binding("r", "refresh", "Refresh", show=False),
+    ]
 
     DEFAULT_CSS = (Path(__file__).parent / "secrets_screen.tcss").read_text()
 
@@ -130,6 +148,7 @@ class SecretsScreen(ModalScreen):
         self._controller_name = controller_name
         self._model_name = model_name
         self._secrets: list[SecretInfo] = []
+        self._secret_contents: dict[str, dict[str, str]] = {}
 
     def compose(self) -> ComposeResult:
         with Vertical(id="secrets-panel"):
@@ -147,7 +166,8 @@ class SecretsScreen(ModalScreen):
     async def _fetch(self, controller_name: str, model_name: str) -> None:
         try:
             async with JujuClient(controller_name=controller_name) as client:
-                secrets = await client.get_secrets(model_name)
+                secrets, content_map = await client.get_secrets_with_content(model_name)
+            self._secret_contents = content_map
             self._populate(secrets)
         except (JujuError, OSError, asyncio.TimeoutError, KeyError) as exc:
             logger.exception("Failed to fetch secrets for model '%s'", model_name)
@@ -177,11 +197,31 @@ class SecretsScreen(ModalScreen):
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         idx = int(str(event.row_key.value))
         if 0 <= idx < len(self._secrets):
+            secret = self._secrets[idx]
+            prefetched = self._secret_contents.get(secret.uri)
             self.app.push_screen(
-                SecretDetailScreen(self._controller_name, self._model_name, self._secrets[idx])
+                SecretDetailScreen(
+                    self._controller_name,
+                    self._model_name,
+                    secret,
+                    prefetched_content=prefetched,
+                )
             )
 
     def _show_error(self, error: str) -> None:
         loading = self.query_one("#secrets-loading", Static)
         loading.update(Text(f"Error: {error}", style="bold red"))
         loading.display = True
+
+    def action_refresh(self) -> None:
+        """Re-fetch secrets and content, discarding the current data."""
+        self._secrets = []
+        self._secret_contents = {}
+        dt = self.query_one("#secrets-table", DataTable)
+        dt.clear()
+        dt.display = False
+        loading = self.query_one("#secrets-loading", Static)
+        loading.update("Loading…")
+        loading.display = True
+        self.notify("Refreshing secrets…", timeout=2)
+        self._fetch(self._controller_name, self._model_name)

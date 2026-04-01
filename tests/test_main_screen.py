@@ -1,3 +1,4 @@
+import time
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -5,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from juju.errors import JujuError
 from textual.css.query import NoMatches
-from textual.widgets import DataTable, Label, ListItem, ListView, TabbedContent
+from textual.widgets import DataTable, Label, ListItem, ListView, Static, TabbedContent
 from textual.widgets._data_table import RowKey
 
 from jujumate.app import JujuMateApp, _asyncio_exception_handler
@@ -294,11 +295,9 @@ async def test_action_refresh_data_with_poller_and_model(pilot):
     screen._selected_controller = "ctrl"
     screen._selected_model = "dev"
     # WHEN action_refresh_data is called
-    with patch.object(screen, "_fetch_relations") as mock_fetch:
-        await screen.action_refresh_data()
-    # THEN poll_once is called and _fetch_relations is called with the selection
+    await screen.action_refresh_data()
+    # THEN poll_once is called (relations/offers/saas come from the poll itself)
     screen._poller.poll_once.assert_awaited_once()
-    mock_fetch.assert_called_once_with("ctrl", "dev")
 
 
 @pytest.mark.asyncio
@@ -558,6 +557,26 @@ async def test_offers_updated_populates_status_view(pilot):
 
 
 @pytest.mark.asyncio
+async def test_saas_updated_populates_status_view(pilot):
+    # GIVEN a model is selected and the Status tab is active
+    screen = pilot.app.screen
+    screen._selected_model = "dev"
+    screen.action_switch_tab("tab-status")
+    await pilot.pause()
+    # WHEN a SaasUpdated message is received
+    screen.on_saas_updated(
+        SaasUpdated(
+            model="dev",
+            controller="ctrl",
+            saas=[SAASInfo("dev", "remote-pg", "active", "mystore", "mystore:admin/pg")],
+        )
+    )
+    await pilot.pause()
+    # THEN the SAAS entry is stored and the status view is refreshed
+    assert any(s.model == "dev" for s in screen._all_saas)
+
+
+@pytest.mark.asyncio
 async def test_machines_updated_populates_status_view(pilot):
     # GIVEN a model is selected and the Status tab is active
     screen = pilot.app.screen
@@ -583,33 +602,14 @@ async def test_machines_updated_populates_status_view(pilot):
 
 @pytest.mark.asyncio
 async def test_fetch_relations_worker_posts_message(pilot):
-    # GIVEN a JujuClient mock that returns one relation
+    # GIVEN a RelationsUpdated message posted directly (as the poller now does)
     screen = pilot.app.screen
     rel = RelationInfo("dev", "pg:db", "wp:db", "pgsql", "regular")
-    mock_client = _make_juju_client_mock(get_status_details=([rel], [], []))
-    with patch("jujumate.screens.main_screen.JujuClient", return_value=mock_client):
-        # WHEN _fetch_relations is called
-        screen._fetch_relations("ctrl", "dev")
-        await pilot.pause()
-        await pilot.pause()
+    # WHEN on_relations_updated is received (simulating what the poller posts)
+    screen.on_relations_updated(RelationsUpdated(model="dev", controller="ctrl", relations=[rel]))
+    await pilot.pause()
     # THEN the relation is stored in _all_relations
     assert any(r.model == "dev" for r in screen._all_relations)
-
-
-@pytest.mark.asyncio
-async def test_fetch_relations_worker_handles_exception(pilot):
-    # GIVEN a JujuClient mock that raises on connect
-    screen = pilot.app.screen
-    mock_client = _make_juju_client_mock()
-    mock_client.__aenter__ = AsyncMock(side_effect=JujuError("boom"))
-    with patch("jujumate.screens.main_screen.JujuClient", return_value=mock_client):
-        # WHEN _fetch_relations is called
-        screen._fetch_relations("ctrl", "dev")
-        await pilot.pause()
-        await pilot.pause()
-    # THEN no relations are stored (exception is handled gracefully)
-    dev_rels = [r for r in screen._all_relations if r.model == "dev"]
-    assert dev_rels == []
 
 
 @pytest.mark.asyncio
@@ -620,10 +620,9 @@ async def test_auto_select_navigates_to_status_on_first_refresh(pilot):
     screen.on_models_updated(ModelsUpdated(models=[ModelInfo("dev", "ctrl", "aws", "", "active")]))
     screen.on_apps_updated(AppsUpdated(apps=[AppInfo("pg", "dev", "pg", "14/stable", 1)]))
     screen.on_units_updated(UnitsUpdated(units=[UnitInfo("pg/0", "pg", "0", "active", "idle")]))
-    with patch.object(screen, "_fetch_relations"):
-        # WHEN on_data_refreshed is received
-        screen.on_data_refreshed(DataRefreshed(timestamp=datetime(2024, 1, 1, 12, 0, 0)))
-        await pilot.pause()
+    # WHEN on_data_refreshed is received
+    screen.on_data_refreshed(DataRefreshed(timestamp=datetime(2024, 1, 1, 12, 0, 0)))
+    await pilot.pause()
     # THEN the model is auto-selected and the status tab is shown
     assert screen._selected_model == "dev"
     assert screen._selected_controller == "ctrl"
@@ -688,6 +687,26 @@ async def test_periodic_poll_no_poller_is_noop(pilot):
 
 
 @pytest.mark.asyncio
+async def test_periodic_poll_skipped_when_modal_is_open(pilot):
+    """No poll is made while any modal screen is on top of MainScreen."""
+    # GIVEN a poller is set and a modal is pushed over MainScreen
+    screen = pilot.app.screen
+    screen._poller = AsyncMock(spec=JujuPoller)
+    screen.query_one(TabbedContent).active = "tab-status"
+    screen._selected_controller = "ctrl"
+    screen._selected_model = "dev"
+    with patch.object(OffersScreen, "_fetch"):
+        screen.action_show_offers()
+        await pilot.pause()
+    assert isinstance(pilot.app.screen, OffersScreen)
+    # WHEN _periodic_poll fires while the modal is open
+    await screen._periodic_poll()
+    # THEN no poll is made
+    screen._poller.poll_model.assert_not_awaited()
+    screen._poller.poll_once.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_periodic_poll_non_status_tab_does_not_call_poll_once(pilot):
     # GIVEN a poller is set and the active tab is NOT "tab-status"
     screen = pilot.app.screen
@@ -700,19 +719,33 @@ async def test_periodic_poll_non_status_tab_does_not_call_poll_once(pilot):
 
 
 @pytest.mark.asyncio
-async def test_periodic_poll_status_tab_calls_poll_and_fetch_relations(pilot):
-    # GIVEN a poller is set, tab is "tab-status", and controller+model are selected
+async def test_periodic_poll_status_tab_with_model_calls_poll_model(pilot):
+    # GIVEN a poller is set, the tab is "tab-status", and a model is selected
     screen = pilot.app.screen
     screen._poller = AsyncMock(spec=JujuPoller)
     screen._selected_controller = "ctrl"
     screen._selected_model = "dev"
     screen.query_one(TabbedContent).active = "tab-status"
-    with patch.object(screen, "_fetch_relations") as mock_fetch:
-        # WHEN _periodic_poll is called
-        await screen._periodic_poll()
-    # THEN poll_once is called and _fetch_relations is invoked with the selection
+    # WHEN _periodic_poll is called
+    await screen._periodic_poll()
+    # THEN poll_model is called with the selected controller and model (targeted poll)
+    screen._poller.poll_model.assert_awaited_once_with("ctrl", "dev")
+    screen._poller.poll_once.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_periodic_poll_status_tab_no_model_calls_poll_once(pilot):
+    # GIVEN a poller is set, the tab is "tab-status", but no model is selected
+    screen = pilot.app.screen
+    screen._poller = AsyncMock(spec=JujuPoller)
+    screen._selected_controller = ""
+    screen._selected_model = ""
+    screen.query_one(TabbedContent).active = "tab-status"
+    # WHEN _periodic_poll is called
+    await screen._periodic_poll()
+    # THEN poll_once is called (full poll since no model is selected)
     screen._poller.poll_once.assert_awaited_once()
-    mock_fetch.assert_called_once_with("ctrl", "dev")
+    screen._poller.poll_model.assert_not_awaited()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1191,6 +1224,39 @@ async def test_secrets_screen_row_selected_out_of_range_safe(pilot):
 
 
 @pytest.mark.asyncio
+async def test_secrets_screen_r_key_triggers_refresh(pilot):
+    """Pressing 'r' in SecretsScreen clears state and re-fetches secrets."""
+    # GIVEN a SecretsScreen populated with a secret and cached content
+    secret = SecretInfo(
+        uri="csec:abc",
+        label="db-pass",
+        owner="pg",
+        description="",
+        revision=1,
+        rotate_policy="",
+        created="2024-01-01",
+        updated="2024-01-01",
+    )
+    with patch.object(SecretsScreen, "_fetch") as mock_fetch:
+        screen = SecretsScreen("ctrl", "dev")
+        await pilot.app.push_screen(screen)
+        await pilot.pause()
+        screen._populate([secret])
+        screen._secret_contents = {"csec:abc": {"password": "s3cr3t"}}
+        await pilot.pause()
+        # WHEN 'r' is pressed
+        mock_fetch.reset_mock()
+        screen.action_refresh()
+        await pilot.pause()
+    # THEN state is cleared and _fetch is called again
+    assert screen._secrets == []
+    assert screen._secret_contents == {}
+    dt = screen.query_one(DataTable)
+    assert dt.row_count == 0
+    mock_fetch.assert_called_once()
+
+
+@pytest.mark.asyncio
 async def test_secret_detail_screen_shows_fields(pilot):
     # GIVEN a SecretDetailScreen with _fetch patched
     secret = SecretInfo(
@@ -1213,6 +1279,66 @@ async def test_secret_detail_screen_shows_fields(pilot):
     # THEN the URI and label are visible
     assert "csec:abc123" in all_text
     assert "my-secret" in all_text
+
+
+@pytest.mark.asyncio
+async def test_secret_detail_screen_skips_fetch_when_prefetched_content_provided(pilot):
+    """When prefetched_content is provided, SecretDetailScreen skips the API call."""
+    # GIVEN a secret and its pre-fetched content
+    secret = SecretInfo(
+        uri="csec:abc123",
+        label="db-pass",
+        owner="pg",
+        description="",
+        revision=1,
+        rotate_policy="",
+        created="2024-01-01",
+        updated="2024-01-01",
+    )
+    content = {"password": "s3cr3t", "username": "admin"}
+    # WHEN SecretDetailScreen is opened with prefetched_content
+    with patch.object(SecretDetailScreen, "_fetch") as mock_fetch:
+        screen = SecretDetailScreen("ctrl", "dev", secret, prefetched_content=content)
+        await pilot.app.push_screen(screen)
+        await pilot.pause()
+    # THEN _fetch is never called (no API round-trip)
+    mock_fetch.assert_not_called()
+    # AND the content is immediately available
+    assert screen._content_data == content
+
+
+@pytest.mark.asyncio
+async def test_secrets_screen_row_selected_passes_content_to_detail_screen(pilot):
+    """On row select, SecretsScreen passes prefetched content to SecretDetailScreen."""
+    # GIVEN a SecretsScreen with a secret and its pre-loaded content
+    secret = SecretInfo(
+        uri="csec:abc",
+        label="my-secret",
+        owner="dev",
+        description="",
+        revision=1,
+        rotate_policy="",
+        created="2024-01-01",
+        updated="2024-01-01",
+    )
+    prefetched = {"key": "value"}
+    with patch.object(SecretsScreen, "_fetch"), patch.object(SecretDetailScreen, "_fetch"):
+        screen = SecretsScreen("ctrl", "dev")
+        await pilot.app.push_screen(screen)
+        await pilot.pause()
+        screen._populate([secret])
+        screen._secret_contents = {"csec:abc": prefetched}
+        await pilot.pause()
+        dt = screen.query_one(DataTable)
+        # WHEN row 0 is selected
+        screen.on_data_table_row_selected(
+            DataTable.RowSelected(data_table=dt, cursor_row=0, row_key=RowKey("0"))
+        )
+        await pilot.pause()
+    # THEN the SecretDetailScreen has the prefetched content set
+    detail = pilot.app.screen
+    assert isinstance(detail, SecretDetailScreen)
+    assert detail._prefetched_content == prefetched
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1418,6 +1544,104 @@ async def test_models_updated_keeps_selected_model_when_still_exists(pilot):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Targeted update — merge paths (model + controller set)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_models_updated_targeted_replaces_only_matching_model(pilot):
+    """Targeted ModelsUpdated replaces only the named model, keeping others intact."""
+    # GIVEN two models already loaded
+    screen = pilot.app.screen
+    screen._all_models = [
+        ModelInfo("dev", "ctrl", "aws", "", "active"),
+        ModelInfo("prod", "ctrl", "aws", "", "active"),
+    ]
+    updated = ModelInfo("dev", "ctrl", "aws", "", "blocked")
+    # WHEN ModelsUpdated is received with model + controller set (targeted)
+    screen.on_models_updated(ModelsUpdated(models=[updated], model="dev", controller="ctrl"))
+    # THEN only the matching model is replaced; the other is untouched
+    assert len(screen._all_models) == 2
+    dev = next(m for m in screen._all_models if m.name == "dev")
+    assert dev.status == "blocked"
+    assert any(m.name == "prod" for m in screen._all_models)
+
+
+@pytest.mark.asyncio
+async def test_apps_updated_targeted_replaces_only_matching_apps(pilot):
+    """Targeted AppsUpdated replaces only apps for the named (controller, model)."""
+    # GIVEN apps loaded for two different models
+    screen = pilot.app.screen
+    screen._all_apps = [
+        AppInfo("pg", "dev", "pg", "14/stable", 1, unit_count=1, controller="ctrl"),
+        AppInfo("nginx", "prod", "nginx", "latest", 1, unit_count=1, controller="ctrl"),
+    ]
+    updated_app = AppInfo("pg", "dev", "pg", "14/stable", 1, unit_count=2, controller="ctrl")
+    # WHEN AppsUpdated is received scoped to (ctrl, dev)
+    screen.on_apps_updated(AppsUpdated(apps=[updated_app], model="dev", controller="ctrl"))
+    # THEN only apps for (ctrl, dev) are replaced; prod apps remain
+    assert any(a.model == "prod" for a in screen._all_apps)
+    dev_pg = next(a for a in screen._all_apps if a.model == "dev")
+    assert dev_pg.unit_count == 2
+
+
+@pytest.mark.asyncio
+async def test_units_updated_targeted_replaces_only_matching_units(pilot):
+    """Targeted UnitsUpdated replaces only units for the named (controller, model)."""
+    # GIVEN units loaded for two different models
+    screen = pilot.app.screen
+    screen._all_units = [
+        UnitInfo("pg/0", "pg", "0", "active", "idle", model="dev", controller="ctrl"),
+        UnitInfo("nginx/0", "nginx", "0", "active", "idle", model="prod", controller="ctrl"),
+    ]
+    updated_unit = UnitInfo("pg/0", "pg", "0", "blocked", "idle", model="dev", controller="ctrl")
+    # WHEN UnitsUpdated is received scoped to (ctrl, dev)
+    screen.on_units_updated(UnitsUpdated(units=[updated_unit], model="dev", controller="ctrl"))
+    # THEN only units for (ctrl, dev) are replaced; prod units remain
+    assert any(u.model == "prod" for u in screen._all_units)
+    dev_pg = next(u for u in screen._all_units if u.model == "dev")
+    assert dev_pg.workload_status == "blocked"
+
+
+@pytest.mark.asyncio
+async def test_machines_updated_targeted_replaces_only_matching_machines(pilot):
+    """Targeted MachinesUpdated replaces only machines for the named (controller, model)."""
+    # GIVEN machines loaded for two different models
+    screen = pilot.app.screen
+    screen._all_machines = [
+        MachineInfo(
+            "dev",
+            "0",
+            "started",
+            "10.0.0.1",
+            "i-1",
+            "ubuntu@22.04",
+            "us-east-1a",
+            controller="ctrl",
+        ),
+        MachineInfo(
+            "prod",
+            "1",
+            "started",
+            "10.0.0.2",
+            "i-2",
+            "ubuntu@22.04",
+            "us-east-1a",
+            controller="ctrl",
+        ),
+    ]
+    updated = MachineInfo(
+        "dev", "0", "stopped", "10.0.0.1", "i-1", "ubuntu@22.04", "us-east-1a", controller="ctrl"
+    )
+    # WHEN MachinesUpdated is received scoped to (ctrl, dev)
+    screen.on_machines_updated(MachinesUpdated(machines=[updated], model="dev", controller="ctrl"))
+    # THEN only machines for (ctrl, dev) are replaced; prod machines remain
+    assert any(m.model == "prod" for m in screen._all_machines)
+    dev_machine = next(m for m in screen._all_machines if m.model == "dev")
+    assert dev_machine.state == "stopped"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # OffersScreen & OfferDetailScreen
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -1535,6 +1759,70 @@ async def test_action_show_offers_pushes_screen(pilot):
 
 
 @pytest.mark.asyncio
+async def test_action_show_offers_passes_cached_data_when_available(pilot):
+    """When the offers cache is warm (within TTL), OffersScreen opens with prefetched data."""
+    # GIVEN a controller is selected and the cache is populated with a fresh entry
+    screen = pilot.app.screen
+    screen._selected_controller = "my-ctrl"
+    cached_offers = [
+        ControllerOfferInfo(
+            model="dev",
+            name="pg",
+            offer_url="admin/dev.pg",
+            application="postgresql",
+            charm="ch:postgresql-1",
+            description="",
+        )
+    ]
+    screen._offers_cache["my-ctrl"] = (cached_offers, time.monotonic())
+    # WHEN action_show_offers is called
+    with patch.object(OffersScreen, "_fetch") as mock_fetch:
+        screen.action_show_offers()
+        await pilot.pause()
+    # THEN OffersScreen is opened without calling _fetch (data is pre-populated)
+    mock_fetch.assert_not_called()
+    assert isinstance(pilot.app.screen, OffersScreen)
+
+
+@pytest.mark.asyncio
+async def test_action_show_offers_refetches_when_cache_expired(pilot):
+    """When the cache entry is older than offers_cache_ttl, a fresh fetch is triggered."""
+    # GIVEN a stale cache entry (timestamp far in the past)
+    screen = pilot.app.screen
+    screen._selected_controller = "my-ctrl"
+    stale_ts = time.monotonic() - (screen._settings.offers_cache_ttl + 1)
+    screen._offers_cache["my-ctrl"] = ([], stale_ts)
+    # WHEN action_show_offers is called
+    with patch.object(OffersScreen, "_fetch") as mock_fetch:
+        screen.action_show_offers()
+        await pilot.pause()
+    # THEN _fetch is called because the cache has expired
+    mock_fetch.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_action_show_offers_stores_fetched_data_in_cache(pilot):
+    """After OffersScreen fetches, invoking its callback populates MainScreen's cache."""
+    # GIVEN no cached data and a controller is selected
+    screen = pilot.app.screen
+    screen._selected_controller = "my-ctrl"
+    assert "my-ctrl" not in screen._offers_cache
+    new_offers: list[ControllerOfferInfo] = []
+    # WHEN action_show_offers is called
+    with patch.object(OffersScreen, "_fetch"):
+        screen.action_show_offers()
+        await pilot.pause()
+    offers_screen = pilot.app.screen
+    assert isinstance(offers_screen, OffersScreen)
+    # THEN invoking the on_fetched callback stores (offers, timestamp) in the cache
+    assert offers_screen._on_fetched is not None
+    offers_screen._on_fetched(new_offers)
+    cached = screen._offers_cache.get("my-ctrl")
+    assert cached is not None
+    assert cached[0] is new_offers
+
+
+@pytest.mark.asyncio
 async def test_offer_detail_screen_populate_consumers(pilot):
     """_populate_consumers fills the connections table with SAASInfo rows."""
     # GIVEN an OfferDetailScreen with _fetch_consumers patched
@@ -1610,6 +1898,77 @@ async def test_offer_detail_fetch_consumers_scans_all_controllers(pilot):
     assert conn_dt.row_count == 1
 
 
+@pytest.mark.asyncio
+async def test_offer_detail_uses_cache_when_all_saas_provided(pilot):
+    """When all_saas is provided, consumers are found in-memory without API calls."""
+    # GIVEN an offer and a pre-populated SAAS list that contains a consumer
+    offer = ControllerOfferInfo(
+        model="cos",
+        name="prom",
+        offer_url="admin/cos.prom",
+        application="prometheus",
+        charm="ch:prom-1",
+        description="",
+    )
+    matching_saas = SAASInfo(
+        "monitoring", "prom-scrape", "active", "local", "admin/cos.prom", controller="ctrl-b"
+    )
+    unrelated_saas = SAASInfo(
+        "prod", "other", "active", "local", "admin/other.app", controller="ctrl-a"
+    )
+    # WHEN OfferDetailScreen is opened with all_saas
+    with patch.object(OfferDetailScreen, "_fetch_consumers") as mock_fetch:
+        screen = OfferDetailScreen(offer, "ctrl-a", all_saas=[matching_saas, unrelated_saas])
+        await pilot.app.push_screen(screen)
+        await pilot.pause()
+    # THEN _fetch_consumers is never called (no API round-trip)
+    mock_fetch.assert_not_called()
+    # AND the matching consumer is shown in the connections table
+    conn_dt = screen.query_one("#connections-table", DataTable)
+    assert conn_dt.row_count == 1
+
+
+@pytest.mark.asyncio
+async def test_offer_detail_shows_no_consumers_when_cache_empty_match(pilot):
+    """all_saas provided but no matching entry → shows 'No known consumers'."""
+    # GIVEN an offer and a SAAS list with no matching URL
+    offer = ControllerOfferInfo(
+        model="cos",
+        name="prom",
+        offer_url="admin/cos.prom",
+        application="prometheus",
+        charm="ch:prom-1",
+        description="",
+    )
+    unrelated = SAASInfo("prod", "other", "active", "local", "admin/other.app", controller="ctrl-a")
+    with patch.object(OfferDetailScreen, "_fetch_consumers"):
+        screen = OfferDetailScreen(offer, "ctrl-a", all_saas=[unrelated])
+        await pilot.app.push_screen(screen)
+        await pilot.pause()
+    # THEN loading label shows "No known consumers"
+    loading = screen.query_one("#consumers-loading", Static)
+    assert loading.display is True
+    assert "No known consumers" in str(loading.render())
+
+
+@pytest.mark.asyncio
+async def test_action_show_offers_passes_all_saas_to_offers_screen(pilot):
+    """MainScreen passes _all_saas to OffersScreen so it can propagate to OfferDetailScreen."""
+    # GIVEN a controller is selected and _all_saas is populated
+    screen = pilot.app.screen
+    screen._selected_controller = "my-ctrl"
+    saas = SAASInfo("monitoring", "prom", "active", "local", "admin/cos.prom", controller="my-ctrl")
+    screen._all_saas = [saas]
+    # WHEN action_show_offers is called
+    with patch.object(OffersScreen, "_fetch"):
+        screen.action_show_offers()
+        await pilot.pause()
+    offers_screen = pilot.app.screen
+    assert isinstance(offers_screen, OffersScreen)
+    # THEN OffersScreen received _all_saas
+    assert offers_screen._all_saas == [saas]
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # AppConfigScreen._fetch worker
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1647,12 +2006,112 @@ async def test_app_config_screen_fetch_worker_error(pilot):
         for _ in range(10):
             await pilot.pause()
 
-    # THEN the error panel is shown
-    assert screen.query_one(AppConfigView).query_one("#ac-empty").display is True
+
+@pytest.mark.asyncio
+async def test_app_config_screen_uses_prefetched_entries(pilot):
+    """AppConfigScreen skips _fetch() when prefetched_entries are provided."""
+    # GIVEN an AppConfigScreen with prefetched entries and _fetch patched to detect calls
+    ai = AppInfo("pg", "dev", "postgresql", "14/stable", 363)
+    entries = [AppConfigEntry("port", "5432", "5432", "int", "Port", "default")]
+    fetch_called = []
+
+    with patch.object(
+        AppConfigScreen, "_fetch", side_effect=lambda *a, **kw: fetch_called.append(1)
+    ):
+        screen = AppConfigScreen("ctrl", "dev", ai, prefetched_entries=entries)
+        await pilot.app.push_screen(screen)
+        await pilot.pause()
+
+    # THEN _fetch was NOT called (cached data used directly)
+    assert fetch_called == []
+    assert screen.query_one(AppConfigView).query_one("#ac-panel").display is True
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# RelationDataScreen._fetch worker
+@pytest.mark.asyncio
+async def test_app_config_screen_fetch_calls_on_fetched_callback(pilot):
+    """_fetch() calls on_fetched callback with the retrieved entries."""
+    # GIVEN an AppConfigScreen with on_fetched callback and a mock client
+    ai = AppInfo("pg", "dev", "postgresql", "14/stable", 363)
+    entries = [AppConfigEntry("port", "5432", "5432", "int", "Port", "default")]
+    received: list[list[AppConfigEntry]] = []
+    mock_client = _make_juju_client_mock(get_app_config=entries)
+
+    with patch("jujumate.screens.app_config_screen.JujuClient", return_value=mock_client):
+        screen = AppConfigScreen("ctrl", "dev", ai, on_fetched=received.append)
+        await pilot.app.push_screen(screen)
+        for _ in range(10):
+            await pilot.pause()
+
+    # THEN on_fetched was called with the entries
+    assert len(received) == 1
+    assert received[0] == entries
+
+
+@pytest.mark.asyncio
+async def test_app_config_screen_refresh_action_re_fetches(pilot):
+    """Pressing r triggers action_refresh which re-calls _fetch()."""
+    # GIVEN an AppConfigScreen with prefetched entries already displayed
+    ai = AppInfo("pg", "dev", "postgresql", "14/stable", 363)
+    prefetched = [AppConfigEntry("port", "5432", "5432", "int", "Port", "default")]
+    entries_v2 = [AppConfigEntry("port", "5433", "5432", "int", "Port", "user")]
+    mock_client = _make_juju_client_mock(get_app_config=entries_v2)
+
+    with patch.object(AppConfigScreen, "_fetch"):
+        screen = AppConfigScreen("ctrl", "dev", ai, prefetched_entries=prefetched)
+        await pilot.app.push_screen(screen)
+        await pilot.pause()
+
+    # WHEN r is pressed
+    with patch("jujumate.screens.app_config_screen.JujuClient", return_value=mock_client):
+        await pilot.press("r")
+        for _ in range(10):
+            await pilot.pause()
+
+    # THEN fresh data is displayed
+    assert screen.query_one(AppConfigView).query_one("#ac-panel").display is True
+
+
+@pytest.mark.asyncio
+async def test_app_config_cache_populated_on_first_open(pilot):
+    """MainScreen caches app config entries after the first open."""
+    # GIVEN a selected controller/model and a mock client returning config entries
+    screen = pilot.app.screen
+    screen._selected_controller = "ctrl"
+    screen._selected_model = "dev"
+    ai = AppInfo("pg", "dev", "postgresql", "14/stable", 363)
+    entries = [AppConfigEntry("port", "5432", "5432", "int", "Port", "default")]
+    mock_client = _make_juju_client_mock(get_app_config=entries)
+
+    with patch("jujumate.screens.app_config_screen.JujuClient", return_value=mock_client):
+        screen.on_status_view_app_selected(StatusView.AppSelected(app=ai))
+        for _ in range(10):
+            await pilot.pause()
+
+    # THEN the cache entry is populated
+    assert ("ctrl", "dev", "pg") in screen._app_config_cache
+    assert screen._app_config_cache[("ctrl", "dev", "pg")] == entries
+
+
+@pytest.mark.asyncio
+async def test_app_config_cache_hit_skips_api_call(pilot):
+    """Second open of the same app config uses the cache — no API call."""
+    # GIVEN a pre-populated cache entry
+    screen = pilot.app.screen
+    screen._selected_controller = "ctrl"
+    screen._selected_model = "dev"
+    ai = AppInfo("pg", "dev", "postgresql", "14/stable", 363)
+    cached = [AppConfigEntry("port", "5432", "5432", "int", "Port", "default")]
+    screen._app_config_cache[("ctrl", "dev", "pg")] = cached
+    fetch_calls: list[int] = []
+
+    with patch.object(AppConfigScreen, "_fetch", side_effect=lambda *a: fetch_calls.append(1)):
+        screen.on_status_view_app_selected(StatusView.AppSelected(app=ai))
+        await pilot.pause()
+
+    # THEN _fetch was not called (cache hit)
+    assert fetch_calls == []
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -1692,8 +2151,55 @@ async def test_relation_data_screen_fetch_worker_error(pilot):
     assert screen.query_one(RelationDataView).query_one("#rd-empty").display is True
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# SecretDetailScreen._fetch worker
+@pytest.mark.asyncio
+async def test_app_config_screen_shows_partial_data_before_fetch(pilot):
+    """AppConfigScreen shows metadata immediately (show_partial) before _fetch completes."""
+    # GIVEN an AppConfigScreen with _fetch patched (so it never completes)
+    ai = AppInfo("pg", "dev", "postgresql", "14/stable", 363, status="active")
+    with patch.object(AppConfigScreen, "_fetch"):
+        screen = AppConfigScreen("ctrl", "dev", ai)
+        await pilot.app.push_screen(screen)
+        await pilot.pause()
+
+    # THEN ac-panel is already visible (partial data shown) and meta content is populated
+    view = screen.query_one(AppConfigView)
+    assert view.query_one("#ac-panel").display is True
+    assert view.query_one("#ac-empty").display is False
+
+
+@pytest.mark.asyncio
+async def test_relation_data_screen_shows_partial_data_before_fetch(pilot):
+    """RelationDataScreen shows relation metadata immediately before _fetch completes."""
+    # GIVEN a RelationDataScreen with _fetch patched (so it never completes)
+    rel = RelationInfo("dev", "pg:db", "wp:db", "pgsql", "regular", relation_id=1)
+    with patch.object(RelationDataScreen, "_fetch"):
+        screen = RelationDataScreen("ctrl", "dev", rel)
+        await pilot.app.push_screen(screen)
+        await pilot.pause()
+
+    # THEN rd-panel is already visible (partial data shown)
+    view = screen.query_one(RelationDataView)
+    assert view.query_one("#rd-panel").display is True
+    assert view.query_one("#rd-empty").display is False
+
+
+@pytest.mark.asyncio
+async def test_relation_data_view_show_partial_populates_metadata(pilot):
+    """show_partial() shows rd-panel with meta section visible before data loads."""
+    # GIVEN a RelationDataScreen pushed with _fetch patched
+    rel = RelationInfo("dev", "pg:db", "wp:db", "pgsql", "regular", relation_id=5)
+    with patch.object(RelationDataScreen, "_fetch"):
+        screen = RelationDataScreen("ctrl", "dev", rel)
+        await pilot.app.push_screen(screen)
+        await pilot.pause()
+
+    # THEN rd-panel is visible, meta section is present, and empty label is hidden
+    view = screen.query_one(RelationDataView)
+    assert view.query_one("#rd-panel").display is True
+    assert view.query_one("#rd-meta-content").display is True
+    assert view.query_one("#rd-empty").display is False
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -2011,7 +2517,7 @@ async def test_offer_detail_screen_populate_consumers_no_consumers(pilot):
 
 @pytest.mark.asyncio
 async def test_offers_screen_fetch_worker_success(pilot):
-    """Lines 193-199: _fetch worker populates table on success."""
+    """Lines 193-199: _fetch worker populates table and calls on_fetched on success."""
     # GIVEN an OffersScreen with JujuClient patched to return offers
     offer = ControllerOfferInfo(
         model="cos",
@@ -2028,12 +2534,13 @@ async def test_offers_screen_fetch_worker_success(pilot):
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=False)
     mock_client.get_controller_offers = AsyncMock(return_value=[offer])
+    callback_result: list[list[ControllerOfferInfo]] = []
 
     with (
         patch("jujumate.screens.offers_screen.JujuClient", return_value=mock_client),
         patch.object(OfferDetailScreen, "_fetch_consumers"),
     ):
-        screen = OffersScreen("ctrl")
+        screen = OffersScreen("ctrl", on_fetched=callback_result.append)
         await pilot.app.push_screen(screen)
         for _ in range(10):
             await pilot.pause()
@@ -2041,6 +2548,9 @@ async def test_offers_screen_fetch_worker_success(pilot):
     # THEN the table has one row
     dt = screen.query_one("#offers-table", DataTable)
     assert dt.row_count == 1
+    # AND the on_fetched callback was invoked with the fetched offers
+    assert len(callback_result) == 1
+    assert callback_result[0] == [offer]
 
 
 @pytest.mark.asyncio
@@ -2060,6 +2570,38 @@ async def test_offers_screen_fetch_worker_error(pilot):
     # THEN loading label is visible
     loading = screen.query_one("#offers-loading")
     assert loading.display is True
+
+
+@pytest.mark.asyncio
+async def test_offers_screen_r_key_triggers_refresh(pilot):
+    """Pressing 'r' in OffersScreen clears state, invalidates cache and re-fetches."""
+    # GIVEN an OffersScreen populated with one offer and a cache callback
+    offer = ControllerOfferInfo(
+        model="cos",
+        name="prom",
+        offer_url="admin/cos.prom",
+        application="prometheus",
+        charm="ch:prom-1",
+        description="",
+    )
+    cache: list[list[ControllerOfferInfo]] = []
+    with patch.object(OffersScreen, "_fetch") as mock_fetch:
+        screen = OffersScreen("ctrl", on_fetched=cache.append)
+        await pilot.app.push_screen(screen)
+        await pilot.pause()
+        screen._populate([offer])
+        await pilot.pause()
+        mock_fetch.reset_mock()
+        # WHEN 'r' is pressed
+        screen.action_refresh()
+        await pilot.pause()
+    # THEN state is cleared, cache is invalidated, and _fetch is called again
+    assert screen._offers == []
+    dt = screen.query_one(DataTable)
+    assert dt.row_count == 0
+    mock_fetch.assert_called_once()
+    # AND the cache was cleared via the on_fetched callback (called with empty list)
+    assert cache[-1] == []
 
 
 @pytest.mark.asyncio
@@ -2196,7 +2738,7 @@ async def test_secrets_screen_fetch_worker_success(pilot):
     mock_client = AsyncMock()
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=False)
-    mock_client.get_secrets = AsyncMock(return_value=[secret])
+    mock_client.get_secrets_with_content = AsyncMock(return_value=([secret], {}))
 
     with patch("jujumate.screens.secrets_screen.JujuClient", return_value=mock_client):
         screen = SecretsScreen("ctrl", "dev")

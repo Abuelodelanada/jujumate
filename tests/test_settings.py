@@ -24,6 +24,7 @@ def test_defaults_when_file_missing(tmp_path):
     settings = load_settings(tmp_path / "config.yaml")
     # THEN default values are returned
     assert settings.refresh_interval == 5
+    assert settings.offers_cache_ttl == 300
     assert settings.default_controller is None
 
 
@@ -35,6 +36,12 @@ def test_defaults_when_file_missing(tmp_path):
             "refresh_interval",
             10,
             id="refresh_interval",
+        ),
+        pytest.param(
+            {"offers_cache_ttl": 120},
+            "offers_cache_ttl",
+            120,
+            id="offers_cache_ttl",
         ),
         pytest.param(
             {"default_controller": "prod"},
@@ -94,6 +101,19 @@ def test_non_integer_refresh_interval_raises(tmp_path):
     # WHEN load_settings is called
     # THEN an AppSettingsError is raised mentioning refresh_interval
     with pytest.raises(AppSettingsError, match="refresh_interval"):
+        load_settings(config_file)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [pytest.param(0, id="zero"), pytest.param("slow", id="string")],
+)
+def test_invalid_offers_cache_ttl_raises(tmp_path, value):
+    # GIVEN a config file with an invalid offers_cache_ttl
+    config_file = _write_config(tmp_path, {"offers_cache_ttl": value})
+    # WHEN load_settings is called
+    # THEN an AppSettingsError is raised mentioning offers_cache_ttl
+    with pytest.raises(AppSettingsError, match="offers_cache_ttl"):
         load_settings(config_file)
 
 

@@ -10,13 +10,37 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical, VerticalScroll
 from textual.widget import Widget
-from textual.widgets import Label, Static
+from textual.widgets import Label, Rule, Static
 
 from jujumate import palette
 from jujumate.models.entities import RelationDataEntry, RelationInfo
 
 _C_KEY = "bold white"
 _C_META = "dim"
+
+
+def _relation_meta_markup(relation: RelationInfo) -> str:
+    """Build Rich markup for the relation metadata header."""
+    provider_app = relation.provider.split(":")[0]
+    provider_ep = relation.provider.split(":")[1] if ":" in relation.provider else ""
+    requirer_app = relation.requirer.split(":")[0]
+    requirer_ep = relation.requirer.split(":")[1] if ":" in relation.requirer else ""
+    fields = [
+        (
+            "Provider",
+            provider_app
+            + (f" [{palette.MUTED}](endpoint: {provider_ep})[/]" if provider_ep else ""),
+        ),
+        (
+            "Requirer",
+            requirer_app
+            + (f" [{palette.MUTED}](endpoint: {requirer_ep})[/]" if requirer_ep else ""),
+        ),
+        ("Interface", relation.interface),
+        ("Type", relation.type),
+    ]
+    col_width = max(len(f) for f, _ in fields) + 2
+    return "\n".join(f"[bold]{f + ':'.ljust(col_width - len(f))}[/bold]{v}" for f, v in fields)
 
 
 def _kv_table(data: dict[str, str]) -> Table:
@@ -199,16 +223,27 @@ class RelationDataView(Widget):
             "No relation selected — press Enter on a relation to see its data bags.",
             id="rd-empty",
         )
-        with Vertical(id="rd-panel"), VerticalScroll(id="rd-scroll"):
-            yield Static("", id="rd-content")
+        with Vertical(id="rd-panel"):
+            yield Static("", id="rd-meta-content")
+            yield Rule()
+            with VerticalScroll(id="rd-scroll"):
+                yield Static("", id="rd-content")
 
     def on_mount(self) -> None:
         self.query_one("#rd-panel").display = False
+
+    def show_partial(self, relation: RelationInfo) -> None:
+        """Show relation metadata immediately while data bags are being fetched."""
+        self.query_one("#rd-meta-content", Static).update(_relation_meta_markup(relation))
+        self.query_one("#rd-content", Static).update(Text("Loading data bags…", style="dim italic"))
+        self.query_one("#rd-empty").display = False
+        self.query_one("#rd-panel").display = True
 
     def update(self, relation: RelationInfo, entries: list[RelationDataEntry]) -> None:
         """Populate the view with relation data in jhack style."""
         self._current_relation = relation
         self._current_entries = entries
+        self.query_one("#rd-meta-content", Static).update(_relation_meta_markup(relation))
         renderable = _build_relation_renderable(relation, entries)
         self.query_one("#rd-content", Static).update(renderable)
         self.query_one("#rd-empty").display = False
