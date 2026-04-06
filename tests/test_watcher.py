@@ -45,6 +45,7 @@ def make_mock_client():
         [],  # relations
         [],  # offers
         [],  # saas
+        [],  # storage
     )
     return client
 
@@ -136,6 +137,7 @@ async def test_poll_once_aggregates_multiple_controllers(mock_target):
         [],
         [],
         [],
+        [],  # storage
     )
     client_b = make_mock_client()
     client_b.list_model_names.return_value = ["prod"]
@@ -147,6 +149,7 @@ async def test_poll_once_aggregates_multiple_controllers(mock_target):
         [],
         [],
         [],
+        [],  # storage
     )
 
     with _multi_clients_patch(client_a, client_b):

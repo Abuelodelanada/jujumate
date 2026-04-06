@@ -19,6 +19,7 @@ from jujumate.models.entities import (
     OfferInfo,
     RelationInfo,
     SAASInfo,
+    StorageInfo,
     UnitInfo,
 )
 from jujumate.widgets.resource_table import Column, ResourceTable
@@ -54,13 +55,14 @@ def _unit_name_text(u: UnitInfo, tree_prefix: str, filter_text: str) -> Text:
 
 def _colored_relation(endpoint: str) -> Text:
     """Color the :rel_name part of an APP:REL endpoint."""
-    if ":" in endpoint:
-        app, rel = endpoint.split(":", 1)
-        text = Text(app)
-        text.append(":", style=palette.LINK)
-        text.append(rel, style=palette.LINK)
-        return text
-    return Text(endpoint)
+    if ":" not in endpoint:
+        return Text(endpoint)
+
+    app, rel = endpoint.split(":", 1)
+    text = Text(app)
+    text.append(":", style=palette.LINK)
+    text.append(rel, style=palette.LINK)
+    return text
 
 
 _SAAS_COLUMNS = [
@@ -120,6 +122,16 @@ _REL_COLUMNS = [
     Column("Type", "s-rel-type", width=10),
 ]
 
+_STORAGE_COLUMNS = [
+    Column("Unit", "s-stor-unit", width=18),
+    Column("Storage ID", "s-stor-id"),
+    Column("Type", "s-stor-type", width=12),
+    Column("Pool", "s-stor-pool", width=14),
+    Column("Size", "s-stor-size", width=10),
+    Column("Status", "s-stor-status", width=12),
+    Column("Message", "s-stor-msg"),
+]
+
 _MACHINE_COLUMNS = [
     Column("Machine", "s-mach-id"),
     Column("State", "s-mach-state", width=12),
@@ -131,6 +143,15 @@ _MACHINE_COLUMNS = [
 ]
 
 _MSG_TRUNC_WIDTH = 60
+
+
+def _format_size_mib(mib: int) -> str:
+    """Return a human-readable size string from a MiB integer (0 → empty string)."""
+    if mib <= 0:
+        return ""
+    if mib >= 1024:
+        return f"{mib / 1024:.0f} GiB"
+    return f"{mib} MiB"
 
 
 def _highlight(text: str, needle: str) -> Text:
@@ -244,6 +265,7 @@ class StatusView(Widget):
         Binding("y", "copy_to_clipboard", "Copy status", show=False),
         Binding("p", "toggle_peer_relations", "Toggle peer relations", show=False),
         Binding("u", "toggle_units_in_machines", "Toggle units in machines", show=False),
+        Binding("d", "toggle_detached_storage", "Toggle detached storage", show=False),
     ]
 
     class RelationSelected(Message):
@@ -274,12 +296,20 @@ class StatusView(Widget):
             super().__init__()
             self.machine = machine
 
+    class StorageSelected(Message):
+        """Posted when the user presses Enter on a storage row."""
+
+        def __init__(self, storage: StorageInfo) -> None:
+            super().__init__()
+            self.storage = storage
+
     DEFAULT_CSS = (Path(__file__).parent / "status_view.tcss").read_text()
 
     _show_more: reactive[bool] = reactive(False)
     _filter: reactive[str] = reactive("", init=False)
     _show_peer_relations: reactive[bool] = reactive(False)
     _show_units_in_machines: reactive[bool] = reactive(False)
+    _show_detached_storage: reactive[bool] = reactive(False)
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
@@ -293,10 +323,12 @@ class StatusView(Widget):
         self._all_machines: list[MachineInfo] = []
         self._all_offers: list[OfferInfo] = []
         self._all_relations: list[RelationInfo] = []
+        self._all_storage: list[StorageInfo] = []
         self._displayed_apps: list[AppInfo] = []
         self._displayed_relations: list[RelationInfo] = []
         self._displayed_offers: list[OfferInfo] = []
         self._displayed_machines: list[MachineInfo | None] = []
+        self._displayed_storage: list[StorageInfo] = []
         self._is_kubernetes: bool = False
         self._ctx_cloud: str = ""
         self._ctx_controller: str = ""
@@ -322,6 +354,9 @@ class StatusView(Widget):
             yield t
             t = ResourceTable(columns=_REL_COLUMNS, id="status-rels-table")
             yield t
+            t = ResourceTable(columns=_STORAGE_COLUMNS, id="status-storage-table")
+            t.border_title = "Storage"
+            yield t
         with Horizontal(id="filter-bar"):
             yield Label("Filter: ")
             yield Input(placeholder="type to filter…", id="filter-input")
@@ -333,8 +368,10 @@ class StatusView(Widget):
         self.query_one("#status-offers-table").display = False
         self.query_one("#status-machines-table").display = False
         self.query_one("#status-rels-table").display = False
+        self.query_one("#status-storage-table").display = False
         self._update_rels_border_title()
         self._update_machines_border_title()
+        self._update_storage_border_title()
         self._update_scroll_indicator()
 
     def update_context(self, cloud: str, controller: str, model: str, juju_version: str) -> None:
@@ -663,6 +700,58 @@ class StatusView(Widget):
         table.update_rows(rows)
         self._restore_cursor("status-rels-table", len(rows))
 
+    def update_storage(self, storage: list[StorageInfo]) -> None:
+        self._all_storage = storage
+        self._render_storage()
+
+    def _update_storage_border_title(self) -> None:
+        table = self.query_one("#status-storage-table", ResourceTable)
+        if self._show_detached_storage:
+            table.border_title = f"Storage  [{palette.SUCCESS}]detached: On[/]"
+        else:
+            table.border_title = f"Storage  [{palette.ERROR}]detached: Off[/]"
+
+    def _render_storage(self) -> None:
+        filtered = [
+            s
+            for s in self._all_storage
+            if (self._show_detached_storage or s.status != "detached")
+            and _matches_filter(
+                self._filter,
+                s.storage_id,
+                s.unit,
+                s.kind,
+                s.pool,
+                s.location,
+                s.status,
+                s.message,
+            )
+        ]
+        self._displayed_storage = filtered
+        rows = []
+        full_msgs = []
+        for s in filtered:
+            rows.append(
+                (
+                    _highlight(s.unit, self._filter),
+                    _highlight(s.storage_id, self._filter),
+                    _highlight(s.kind, self._filter),
+                    _highlight(s.pool, self._filter),
+                    Text(
+                        _format_size_mib(s.size_mib),
+                        style=palette.MUTED if not s.size_mib else "",
+                    ),
+                    _colored_status(s.status),
+                    _highlight(_trunc_msg(s.message), self._filter),
+                )
+            )
+            full_msgs.append(s.message)
+        self._row_messages["status-storage-table"] = full_msgs
+        table = self.query_one("#status-storage-table", ResourceTable)
+        table.display = bool(rows)
+        table.update_rows(rows)
+        self._restore_cursor("status-storage-table", len(rows))
+
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Post RelationSelected or AppSelected when user presses Enter on a row."""
         try:
@@ -683,6 +772,9 @@ class StatusView(Widget):
                     machine = self._displayed_machines[idx]
                     if machine is not None:
                         self.post_message(StatusView.MachineSelected(machine))
+            elif table_id == "status-storage-table":
+                if 0 <= idx < len(self._displayed_storage):
+                    self.post_message(StatusView.StorageSelected(self._displayed_storage[idx]))
         except AttributeError:
             pass
 
@@ -710,6 +802,10 @@ class StatusView(Widget):
             pass
         try:
             self._render_relations()
+        except NoMatches:
+            pass
+        try:
+            self._render_storage()
         except NoMatches:
             pass
 
@@ -768,6 +864,11 @@ class StatusView(Widget):
         self._show_units_in_machines = not self._show_units_in_machines
         self._update_machines_border_title()
         self._render_machines()
+
+    def action_toggle_detached_storage(self) -> None:
+        self._show_detached_storage = not self._show_detached_storage
+        self._update_storage_border_title()
+        self._render_storage()
 
     @on(Input.Changed, "#filter-input")
     def _on_filter_changed(self, event: Input.Changed) -> None:
@@ -910,6 +1011,24 @@ class StatusView(Widget):
                 "Integrations",
                 ["Provider", "Requirer", "Interface", "Type"],
                 [[r.provider, r.requirer, r.interface, r.type] for r in self._displayed_relations],
+            )
+
+        if self._displayed_storage:
+            section(
+                "Storage",
+                ["Unit", "Storage ID", "Type", "Pool", "Size", "Status", "Message"],
+                [
+                    [
+                        s.unit,
+                        s.storage_id,
+                        s.kind,
+                        s.pool,
+                        _format_size_mib(s.size_mib),
+                        s.status,
+                        s.message,
+                    ]
+                    for s in self._displayed_storage
+                ],
             )
 
         return "\n".join(lines).strip()

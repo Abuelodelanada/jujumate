@@ -22,6 +22,7 @@ from jujumate.models.entities import (
     RelationDataEntry,
     RelationInfo,
     SAASInfo,
+    StorageInfo,
     UnitInfo,
 )
 from jujumate.widgets.app_config_view import (
@@ -51,6 +52,7 @@ from jujumate.widgets.status_view import (
     _MSG_TRUNC_WIDTH,
     StatusView,
     _colored_relation,
+    _format_size_mib,
     _group_units,
     _group_units_by_machine,
     _TrackedScroll,
@@ -2283,3 +2285,367 @@ async def test_status_view_row_selected_on_unit_row_does_not_post_machine_select
 
     # THEN no message is posted (unit rows are not selectable as machines)
     assert len(posted) == 0
+
+
+# ---------------------------------------------------------------------------
+# Storage panel tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_status_view_update_storage_shows_table(pilot):
+    # GIVEN a mounted StatusView where the storage panel is initially hidden
+    view = StatusView(id="test-status-storage")
+    await _mount_view(pilot, view)
+    assert view.query_one("#status-storage-table").display is False
+
+    # WHEN storage is updated with one entry
+    view.update_storage(
+        [
+            StorageInfo(
+                storage_id="data/0",
+                unit="mysql/0",
+                kind="filesystem",
+                pool="rootfs",
+                location="/var/lib/juju/storage/data/0",
+                size_mib=1024,
+                status="attached",
+                message="",
+                persistent=True,
+                life="alive",
+                model="dev",
+                controller="ctrl",
+            )
+        ]
+    )
+    await pilot.pause()
+
+    # THEN the storage table is shown with one row
+    assert view.query_one("#status-storage-table").display is True
+    assert (
+        view.query_one("#status-storage-table", ResourceTable).query_one("DataTable").row_count == 1
+    )
+
+
+@pytest.mark.asyncio
+async def test_status_view_update_storage_hides_table_when_empty(pilot):
+    # GIVEN a StatusView that already has a storage entry displayed
+    view = StatusView(id="test-status-storage-hide")
+    await _mount_view(pilot, view)
+    view.update_storage(
+        [
+            StorageInfo(
+                storage_id="data/0",
+                unit="mysql/0",
+                kind="filesystem",
+                pool="rootfs",
+                location="/var/lib/juju/storage/data/0",
+                size_mib=1024,
+                status="attached",
+                message="",
+                persistent=True,
+                life="alive",
+                model="dev",
+                controller="ctrl",
+            )
+        ]
+    )
+    await pilot.pause()
+    assert view.query_one("#status-storage-table").display is True
+
+    # WHEN storage is cleared
+    view.update_storage([])
+    await pilot.pause()
+
+    # THEN the table is hidden again
+    assert view.query_one("#status-storage-table").display is False
+
+
+# ---------------------------------------------------------------------------
+# _format_size_mib (status_view local copy)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "mib, expected",
+    [
+        pytest.param(0, "", id="zero"),
+        pytest.param(-1, "", id="negative"),
+        pytest.param(512, "512 MiB", id="below-1-gib"),
+    ],
+)
+def test_format_size_mib(mib: int, expected: str):
+    # GIVEN a MiB integer
+    # WHEN the status_view local _format_size_mib is called
+    # THEN the result matches the expected human-readable string
+    assert _format_size_mib(mib) == expected
+
+
+# ---------------------------------------------------------------------------
+# StorageSelected message
+# ---------------------------------------------------------------------------
+
+
+def test_storage_selected_message_holds_storage():
+    # GIVEN a StorageInfo instance
+    storage = StorageInfo(
+        storage_id="data/0",
+        unit="mysql/0",
+        kind="filesystem",
+        pool="rootfs",
+        location="/mnt/data",
+        size_mib=1024,
+        status="attached",
+        message="",
+        persistent=True,
+        life="alive",
+        model="dev",
+        controller="ctrl",
+    )
+
+    # WHEN a StorageSelected message is instantiated
+    msg = StatusView.StorageSelected(storage)
+
+    # THEN the message holds the storage reference
+    assert msg.storage is storage
+
+
+# ---------------------------------------------------------------------------
+# Storage row → StorageSelected posted on Enter
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_status_view_storage_row_enter_posts_storage_selected(pilot):
+    # GIVEN a StatusView with one storage entry
+    view = StatusView(id="test-storage-selected")
+    await _mount_view(pilot, view)
+    storage = StorageInfo(
+        storage_id="data/0",
+        unit="mysql/0",
+        kind="filesystem",
+        pool="rootfs",
+        location="/mnt/data",
+        size_mib=1024,
+        status="attached",
+        message="",
+        persistent=True,
+        life="alive",
+        model="dev",
+        controller="ctrl",
+    )
+    view.update_storage([storage])
+    await pilot.pause()
+
+    # WHEN a row is selected in the storage table
+    with _capture_posted(view) as posted:
+        dt = view.query_one("#status-storage-table DataTable", DataTable)
+        view.on_data_table_row_selected(
+            DataTable.RowSelected(data_table=dt, cursor_row=0, row_key=RowKey("k"))
+        )
+
+    # THEN a StorageSelected message is posted with the correct storage
+    assert len(posted) == 1
+    assert isinstance(posted[0], StatusView.StorageSelected)
+    assert posted[0].storage is storage
+
+
+# ---------------------------------------------------------------------------
+# _rerender_all with storage present (NoMatches path covered in isolation)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_status_view_rerender_all_with_storage(pilot):
+    # GIVEN a StatusView populated with storage entries
+    view = StatusView(id="test-rerender-storage")
+    await _mount_view(pilot, view)
+    view.update_storage(
+        [
+            StorageInfo(
+                storage_id="data/0",
+                unit="mysql/0",
+                kind="filesystem",
+                pool="rootfs",
+                location="",
+                size_mib=1024,
+                status="attached",
+                message="",
+                persistent=True,
+                life="alive",
+                model="dev",
+                controller="ctrl",
+            )
+        ]
+    )
+    await pilot.pause()
+
+    # WHEN _rerender_all is called
+    view._rerender_all()
+    await pilot.pause()
+
+    # THEN the storage table is still displayed
+    assert view.query_one("#status-storage-table").display is True
+
+
+@pytest.mark.asyncio
+async def test_status_view_rerender_all_storage_no_matches(pilot):
+    # GIVEN a StatusView where the storage table is removed from the DOM after init
+    view = StatusView(id="test-rerender-storage-nomatch")
+    await _mount_view(pilot, view)
+    view.update_storage(
+        [
+            StorageInfo(
+                storage_id="data/0",
+                unit="mysql/0",
+                kind="filesystem",
+                pool="rootfs",
+                location="",
+                size_mib=1024,
+                status="attached",
+                message="",
+                persistent=True,
+                life="alive",
+                model="dev",
+                controller="ctrl",
+            )
+        ]
+    )
+    await pilot.pause()
+    storage_table = view.query_one("#status-storage-table")
+    await storage_table.remove()
+    await pilot.pause()
+
+    # WHEN _rerender_all is called while the storage widget is absent
+    # THEN no exception is raised
+    view._rerender_all()
+    await pilot.pause()
+
+
+# ---------------------------------------------------------------------------
+# Clipboard with storage data
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_status_view_format_for_clipboard_includes_storage(pilot):
+    # GIVEN a StatusView with storage entries
+    view = StatusView(id="test-clip-storage")
+    await _mount_view(pilot, view)
+    view.update_storage(
+        [
+            StorageInfo(
+                storage_id="data/0",
+                unit="mysql/0",
+                kind="filesystem",
+                pool="rootfs",
+                location="",
+                size_mib=1024,
+                status="attached",
+                message="",
+                persistent=True,
+                life="alive",
+                model="dev",
+                controller="ctrl",
+            )
+        ]
+    )
+    await pilot.pause()
+
+    # WHEN _format_for_clipboard is called
+    result = view._format_for_clipboard()
+
+    # THEN the output contains a Storage section with the storage entry
+    assert "Storage" in result
+    assert "mysql/0" in result
+
+
+# ---------------------------------------------------------------------------
+# Storage detached toggle
+# ---------------------------------------------------------------------------
+
+
+def _make_storage(storage_id: str, unit: str, status: str) -> StorageInfo:
+    return StorageInfo(
+        storage_id=storage_id,
+        unit=unit,
+        kind="filesystem",
+        pool="rootfs",
+        location="",
+        size_mib=1024,
+        status=status,
+        message="",
+        persistent=True,
+        life="alive",
+        model="dev",
+        controller="ctrl",
+    )
+
+
+@pytest.mark.asyncio
+async def test_storage_toggle_hides_detached_by_default(pilot):
+    # GIVEN a StatusView with one attached and one detached storage entry
+    view = StatusView(id="test-storage-toggle-default")
+    await _mount_view(pilot, view)
+    view.update_storage(
+        [
+            _make_storage("data/0", "mysql/0", "attached"),
+            _make_storage("data/1", "mysql/1", "detached"),
+        ]
+    )
+    await pilot.pause()
+
+    # WHEN no toggle has been pressed (default state)
+    # THEN only the attached entry is shown
+    dt = view.query_one("#status-storage-table DataTable", DataTable)
+    assert dt.row_count == 1
+    assert view.query_one("#status-storage-table", ResourceTable).border_title is not None
+    assert "Off" in str(view.query_one("#status-storage-table", ResourceTable).border_title)
+
+
+@pytest.mark.asyncio
+async def test_storage_toggle_shows_detached_when_enabled(pilot):
+    # GIVEN a StatusView with both attached and detached entries
+    view = StatusView(id="test-storage-toggle-on")
+    await _mount_view(pilot, view)
+    view.update_storage(
+        [
+            _make_storage("data/0", "mysql/0", "attached"),
+            _make_storage("data/1", "mysql/1", "detached"),
+        ]
+    )
+    await pilot.pause()
+
+    # WHEN the detached toggle is activated
+    view.action_toggle_detached_storage()
+    await pilot.pause()
+
+    # THEN both entries are shown and the title reflects the On state
+    dt = view.query_one("#status-storage-table DataTable", DataTable)
+    assert dt.row_count == 2
+    assert "On" in str(view.query_one("#status-storage-table", ResourceTable).border_title)
+
+
+@pytest.mark.asyncio
+async def test_storage_toggle_is_a_toggle(pilot):
+    # GIVEN detached is turned on
+    view = StatusView(id="test-storage-toggle-back")
+    await _mount_view(pilot, view)
+    view.update_storage(
+        [
+            _make_storage("data/0", "mysql/0", "attached"),
+            _make_storage("data/1", "mysql/1", "detached"),
+        ]
+    )
+    await pilot.pause()
+    view.action_toggle_detached_storage()
+    await pilot.pause()
+    assert view.query_one("#status-storage-table DataTable", DataTable).row_count == 2
+
+    # WHEN the toggle is pressed again
+    view.action_toggle_detached_storage()
+    await pilot.pause()
+
+    # THEN detached entries are hidden again
+    assert view.query_one("#status-storage-table DataTable", DataTable).row_count == 1
+    assert "Off" in str(view.query_one("#status-storage-table", ResourceTable).border_title)

@@ -18,6 +18,7 @@ from jujumate.models.entities import (
     RelationDataEntry,
     RelationInfo,
     SAASInfo,
+    StorageInfo,
     UnitInfo,
 )
 
@@ -91,6 +92,13 @@ class SaasUpdated(JujuDataMessage):
 
 
 @dataclass
+class StorageUpdated(JujuDataMessage):
+    model: str = ""
+    controller: str = ""
+    storage: list[StorageInfo] = field(default_factory=list)
+
+
+@dataclass
 class DataRefreshed(JujuDataMessage):
     """Posted after a full refresh cycle completes."""
 
@@ -148,6 +156,7 @@ class PollSnapshot:
     relations: dict[tuple[str, str], list[RelationInfo]] = field(default_factory=dict)
     offers: dict[tuple[str, str], list[OfferInfo]] = field(default_factory=dict)
     saas: dict[tuple[str, str], list[SAASInfo]] = field(default_factory=dict)
+    storage: dict[tuple[str, str], list[StorageInfo]] = field(default_factory=dict)
     failed: int = 0
 
 
@@ -168,6 +177,7 @@ async def _poll_controller(name: str, snapshot: PollSnapshot) -> None:
                 relations,
                 offers,
                 saas,
+                storage,
             ) = await client.get_model_snapshot(model_name)
             key = (model_info.controller, model_info.name)
             snapshot.models[key] = model_info
@@ -180,6 +190,7 @@ async def _poll_controller(name: str, snapshot: PollSnapshot) -> None:
             snapshot.relations[key] = relations
             snapshot.offers[key] = offers
             snapshot.saas[key] = saas
+            snapshot.storage[key] = storage
 
 
 def _post_snapshot_messages(target: Widget, snapshot: PollSnapshot) -> None:
@@ -198,6 +209,8 @@ def _post_snapshot_messages(target: Widget, snapshot: PollSnapshot) -> None:
         target.post_message(OffersUpdated(model=model, controller=controller, offers=offers))
     for (controller, model), saas in snapshot.saas.items():
         target.post_message(SaasUpdated(model=model, controller=controller, saas=saas))
+    for (controller, model), storage in snapshot.storage.items():
+        target.post_message(StorageUpdated(model=model, controller=controller, storage=storage))
     target.post_message(DataRefreshed())
 
 
@@ -258,6 +271,7 @@ class JujuPoller:
                     relations,
                     offers,
                     saas,
+                    storage,
                 ) = await client.get_model_snapshot(model_name)
         except Exception:
             logger.exception(
@@ -290,6 +304,9 @@ class JujuPoller:
         )
         self._target.post_message(
             SaasUpdated(model=model_name, controller=controller_name, saas=saas)
+        )
+        self._target.post_message(
+            StorageUpdated(model=model_name, controller=controller_name, storage=storage)
         )
         self._target.post_message(DataRefreshed())
         logger.debug(

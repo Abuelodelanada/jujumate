@@ -183,6 +183,27 @@ class MachineInfo:
 
 
 @dataclass
+class StorageInfo:
+    """Logical storage instance (one row of `juju storage` output)."""
+
+    storage_id: str  # e.g. "data/0"
+    unit: str  # e.g. "mysql/0"  (owner)
+    kind: str  # "block" or "filesystem"
+    pool: str  # e.g. "ebs", "rootfs"
+    location: str  # mountpoint inside the container/VM, e.g. "/var/lib/juju/storage/data/0"
+    size_mib: int  # 0 if unknown
+    status: str  # e.g. "attached", "detached", "pending"
+    message: str
+    persistent: bool = False
+    read_only: bool = False
+    life: str = ""
+    model: str = ""
+    controller: str = ""
+    device_name: str = ""  # host-level block device name, e.g. "sdb" (IaaS volumes only)
+    device_link: str = ""  # host-level device symlink, e.g. "/dev/disk/by-id/..." (IaaS only)
+
+
+@dataclass
 class SecretInfo:
     uri: str
     label: str

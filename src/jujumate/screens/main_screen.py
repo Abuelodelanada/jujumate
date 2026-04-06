@@ -26,6 +26,7 @@ from jujumate.client.watcher import (
     OffersUpdated,
     RelationsUpdated,
     SaasUpdated,
+    StorageUpdated,
     UnitsUpdated,
 )
 from jujumate.config import JujuConfigError, load_config
@@ -40,6 +41,7 @@ from jujumate.models.entities import (
     OfferInfo,
     RelationInfo,
     SAASInfo,
+    StorageInfo,
     UnitInfo,
 )
 from jujumate.screens.app_config_screen import AppConfigScreen
@@ -50,6 +52,7 @@ from jujumate.screens.offers_screen import OfferDetailScreen, OffersScreen
 from jujumate.screens.relation_data_screen import RelationDataScreen
 from jujumate.screens.secrets_screen import SecretsScreen
 from jujumate.screens.settings_screen import SettingsScreen
+from jujumate.screens.storage_detail_screen import StorageDetailScreen
 from jujumate.settings import AppSettings, load_settings, save_settings
 from jujumate.widgets.clouds_view import CloudsView
 from jujumate.widgets.controllers_view import ControllersView
@@ -103,6 +106,7 @@ class MainScreen(Screen):
         self._all_offers: list[OfferInfo] = []
         self._all_saas: list[SAASInfo] = []
         self._all_machines: list[MachineInfo] = []
+        self._all_storage: list[StorageInfo] = []
         # Connection state
         self._is_connected: bool = False
         self._last_refresh_ts: str = ""
@@ -342,6 +346,7 @@ class MainScreen(Screen):
         relations = self._filter_by_model(self._all_relations)
         offers = self._filter_by_model(self._all_offers)
         saas = self._filter_by_model(self._all_saas)
+        storage = self._filter_by_model(self._all_storage)
         is_kubernetes = self._is_kubernetes_model()
 
         status_view = self.query_one("#status-view", StatusView)
@@ -364,6 +369,7 @@ class MainScreen(Screen):
         status_view.update_saas(saas)
         status_view.update_offers(offers)
         status_view.update_relations(relations)
+        status_view.update_storage(storage)
 
     def _refresh_health_view(self) -> None:
         self.query_one("#health-view", HealthView).update(
@@ -567,6 +573,16 @@ class MainScreen(Screen):
             self._refresh_status_view()
         logger.debug("SAAS updated for model '%s': %d", message.model, len(message.saas))
 
+    def on_storage_updated(self, message: StorageUpdated) -> None:
+        self._all_storage = [
+            s
+            for s in self._all_storage
+            if not (s.model == message.model and s.controller == message.controller)
+        ] + message.storage
+        if self._active_tab() == "tab-status":
+            self._refresh_status_view()
+        logger.debug("Storage updated for model '%s': %d", message.model, len(message.storage))
+
     def on_data_refreshed(self, message: DataRefreshed) -> None:
         self._is_connected = True
         self._last_refresh_ts = message.timestamp.strftime("%H:%M:%S")
@@ -691,6 +707,9 @@ class MainScreen(Screen):
 
     def on_status_view_machine_selected(self, message: StatusView.MachineSelected) -> None:
         self.app.push_screen(MachineDetailScreen(message.machine))
+
+    def on_status_view_storage_selected(self, message: StatusView.StorageSelected) -> None:
+        self.app.push_screen(StorageDetailScreen(message.storage))
 
     @work
     async def _open_offer_detail(
