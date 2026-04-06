@@ -16,12 +16,13 @@
 
 - 🔄 **Auto-refresh** — status updates automatically every few seconds; logs stream live via WebSocket
 - ☁️ **Full resource tree** — clouds, controllers, models, applications, units, machines
-- 📊 **Status view** — apps, units, offers, integrations, SAAS and machines in one screen
+- 📊 **Status view** — apps, units, offers, integrations, SAAS, machines and storage in one screen
 - 🏥 **Health view** — shows only unhealthy models by default; toggle to see all with `f`
 - 🔍 **Drill-down navigation** — select a controller → filter models; select a model → see its full status
 - 🔎 **Inline filtering** — press `/` in Status or Logs to search with live highlight
 - 🔗 **Peer relation toggle** — press `p` to show/hide peer relations in the Integrations panel
 - 🖥️ **Units-per-machine toggle** — press `u` to show units (and their subordinates) nested under each machine
+- 💾 **Storage view** — storage instances per model with pool, size and attachment status; press `d` to toggle detached entries; press `Enter` to open a full detail modal (mountpoint, read-only, device info, lifecycle)
 - 🗂️ **Collapsible panels** — press `x` to collapse/expand any Status panel individually; focused panel highlighted in theme colour
 - 👑 **Leader indicators** — unit leaders marked with `*` (green) following `juju status` convention
 - 🔗 **Relation lifecycle** — Integrations panel shows live relation status; relations being torn down display as `removing`
@@ -96,12 +97,14 @@ On first launch JujuMate connects to your current Juju controller and auto-selec
 | `Esc` | Clear filter |
 | `p` | Toggle peer relations in the Integrations panel |
 | `u` | Toggle units (and subordinates) nested under each machine |
+| `d` | Toggle detached entries in the Storage panel |
 | `x` | Collapse/expand the current panel |
 | `y` | Copy full status to clipboard (includes cloud, controller, model and Juju version) |
 | `Enter` on app | Open App Config viewer |
 | `Enter` on offer | Open Offer detail |
 | `Enter` on relation | Open Relation Data inspector |
 | `Enter` on machine | Open Machine detail modal (hardware, status, network) |
+| `Enter` on storage | Open Storage detail modal (mountpoint, device, lifecycle) |
 
 ### Health tab
 
@@ -138,6 +141,7 @@ Press `Enter` on a machine to see:
 - **SAAS** — consumed remote offers and their status
 - **Offers** — cross-model offers with active/total connection counts
 - **Integrations** — regular and cross-model relations with live status column (peer relations hidden by default; press `p` to toggle); relations being removed show as `removing`
+- **Storage** — storage instances with pool, size and attachment status; `attached` entries shown in green, `detached` in orange; press `d` to toggle detached entries; press `Enter` to open a full detail modal
 
 Each panel can be collapsed individually with `x` while it has focus, and expanded again with `x`. The focused panel is highlighted with a distinct border colour (violet in Monokai and Ubuntu themes).
 
@@ -170,6 +174,14 @@ Press `Enter` on any machine row in the Machines panel to open a modal showing:
 - **Network interfaces** — name, IP address, MAC address and Juju space for each NIC
 
 Section titles adapt to the active theme's accent colour. Press `Esc` to close.
+
+### Storage detail modal
+Press `Enter` on any storage row in the Storage panel to open a modal showing:
+- Unit, Storage ID, Type, Pool, Size and Status
+- **Attachment** — Mountpoint inside the container or VM; Read Only flag; Device name and Device Link for IaaS block storage (e.g. `/dev/sdb`, `/dev/disk/by-id/...`)
+- **Lifecycle** — Persistent flag and Life value (`alive` in green, `dying` in orange, `dead` in red)
+
+Press `Esc` to close.
 
 ---
 

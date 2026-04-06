@@ -633,7 +633,7 @@ class StatusView(Widget):
             if table_id != self._last_active_table:
                 return
             msgs = self._row_messages.get(table_id, [])
-            msg = msgs[event.cursor_row] if event.cursor_row < len(msgs) else ""
+            msg = msgs[event.cursor_row] if 0 <= event.cursor_row < len(msgs) else ""
         except AttributeError:
             msg = ""
         try:

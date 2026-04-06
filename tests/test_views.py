@@ -760,6 +760,22 @@ async def test_status_view_msg_bar_handles_bad_parent(pilot):
 
 
 @pytest.mark.asyncio
+async def test_status_view_msg_bar_handles_negative_cursor_row_on_empty_table(pilot):
+    """Regression test for IndexError when navigating an empty table (cursor_row=-1)."""
+    # GIVEN a StatusView with no apps loaded (empty table)
+    view = pilot.app.screen.query_one("#status-view", StatusView)
+    view._row_messages["status-apps-table"] = []
+    view._last_active_table = "status-apps-table"
+    dt = view.query_one("#status-apps-table DataTable", DataTable)
+
+    # WHEN a highlight event fires with cursor_row=-1 (Textual emits this on empty tables)
+    # THEN no IndexError is raised
+    view.on_data_table_row_highlighted(
+        DataTable.RowHighlighted(data_table=dt, cursor_row=-1, row_key=None)  # type: ignore
+    )
+
+
+@pytest.mark.asyncio
 async def test_status_view_msg_bar_handles_missing_label():
     """Cover except branch when #msg-bar is not yet mounted."""
     # GIVEN a detached StatusView (no #msg-bar widget)
