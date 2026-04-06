@@ -31,6 +31,7 @@ from jujumate.models.entities import (
     RelationInfo,
     SAASInfo,
     SecretInfo,
+    StorageInfo,
     UnitInfo,
 )
 
@@ -373,6 +374,229 @@ def _parse_unit_relation_data(ep_data: Any, other_side: str) -> list[RelationDat
     return entries
 
 
+def _parse_tag(tag: str) -> str:
+    """Convert a Juju entity tag to a human-readable name.
+
+    Examples: 'unit-mysql-0' → 'mysql/0', 'application-mysql' → 'mysql'.
+    """
+    if tag.startswith("unit-"):
+        rest = tag[len("unit-") :]
+        parts = rest.rsplit("-", 1)
+        if len(parts) == 2 and parts[1].isdigit():
+            return f"{parts[0]}/{parts[1]}"
+    if tag.startswith("application-"):
+        return tag[len("application-") :]
+    return tag
+
+
+def _parse_storage_tag(tag: str) -> str:
+    """Convert 'storage-data-0' → 'data/0'."""
+    if not tag.startswith("storage-"):
+        return tag
+
+    rest = tag[len("storage-") :]
+    parts = rest.rsplit("-", 1)
+    if len(parts) == 2 and parts[1].isdigit():
+        return f"{parts[0]}/{parts[1]}"
+    return tag
+
+
+def _format_size_mib(mib: int) -> str:
+    """Return a human-readable size string from a MiB integer."""
+    if mib <= 0:
+        return ""
+    if mib >= 1024:
+        return f"{mib / 1024:.0f} GiB"
+    return f"{mib} MiB"
+
+
+def _entity_status_str(status_obj: Any) -> tuple[str, str]:
+    """Extract (current, message) from a serialized EntityStatus object.
+
+    python-libjuju maps 'status'/'info' in its schema, but the Juju API sends
+    'current'/'message', which end up in unknown_fields.  We try both.
+    """
+    if status_obj is None:
+        return "", ""
+    current = (
+        getattr(status_obj, "status", None)
+        or (status_obj.unknown_fields or {}).get("current", "")
+        or ""
+    )
+    message = (
+        getattr(status_obj, "info", None)
+        or (status_obj.unknown_fields or {}).get("message", "")
+        or ""
+    )
+    return str(current), str(message)
+
+
+def _parse_storage_details_dict(
+    d: dict[str, Any],
+    pool: str,
+    size_mib: int,
+    location: str,
+    read_only: bool,
+    model_name: str,
+    controller_name: str,
+    device_name: str = "",
+    device_link: str = "",
+) -> StorageInfo:
+    """Build a StorageInfo from a serialized StorageDetails dict plus pool/size/location.
+
+    serialize() uses JSON key names (dashes: 'storage-tag', 'owner-tag') and
+    nested objects are python-libjuju Type instances, not plain dicts.
+
+    Juju StorageKind: 0=unknown, 1=block, 2=filesystem.
+    """
+    tag = d.get("storage-tag") or ""
+    status_obj = d.get("status")
+    current, message = _entity_status_str(status_obj)
+    kind_int = d.get("kind") or 0
+    kind = {1: "block", 2: "filesystem"}.get(kind_int, "unknown")
+    return StorageInfo(
+        storage_id=_parse_storage_tag(tag),
+        unit=_parse_tag(d.get("owner-tag") or ""),
+        kind=kind,
+        pool=pool,
+        location=location,
+        size_mib=size_mib,
+        status=current,
+        message=message,
+        persistent=bool(d.get("persistent")),
+        read_only=read_only,
+        life=d.get("life") or "",
+        model=model_name,
+        controller=controller_name,
+        device_name=device_name,
+        device_link=device_link,
+    )
+
+
+_PoolSizeLookup = dict[str, tuple[str, int, str, bool, str, str]]
+
+
+def _build_pool_size_lookup(fs_list: Any, vol_list: Any) -> _PoolSizeLookup:
+    """Build a storage_tag → (pool, size_mib, mountpoint, read_only, device_name, device_link) map.
+
+    Extracts attachment details from FilesystemDetails (fs_list) and VolumeDetails
+    (vol_list). Filesystem entries take precedence; volumes only fill gaps.
+
+    Mountpoint lives in FilesystemDetails.unit_attachments[unit].mount_point.
+    Device name/link live in VolumeDetails.machine_attachments[machine].device_name/device_link.
+    """
+    pool_size: _PoolSizeLookup = {}
+
+    if isinstance(fs_list, list):
+        for entry in fs_list:
+            if not isinstance(entry, dict):
+                continue
+            info_obj = entry.get("info")
+            storage_obj = entry.get("storage")
+            stag = getattr(storage_obj, "storage_tag", None) or ""
+            if not stag or info_obj is None:
+                continue
+            unit_atts = entry.get("unit-attachments") or {}
+            machine_atts = entry.get("machine-attachments") or {}
+            atts = unit_atts or machine_atts  # unit (K8s) takes precedence over machine (IaaS)
+            mountpoint = ""
+            read_only = False
+            if atts:
+                first_att = next(iter(atts.values()), None)
+                mountpoint = getattr(first_att, "mount_point", None) or ""
+                read_only = bool(getattr(first_att, "read_only", False))
+            pool_size[stag] = (
+                getattr(info_obj, "pool", None) or "",
+                int(getattr(info_obj, "size", None) or 0),
+                mountpoint,
+                read_only,
+                "",
+                "",
+            )
+
+    if isinstance(vol_list, list):
+        for entry in vol_list:
+            if not isinstance(entry, dict):
+                continue
+            info_obj = entry.get("info")
+            storage_obj = entry.get("storage")
+            stag = getattr(storage_obj, "storage_tag", None) or ""
+            if stag and stag not in pool_size and info_obj is not None:
+                machine_atts = entry.get("machine-attachments") or {}
+                device_name = ""
+                device_link = ""
+                if machine_atts:
+                    first_att = next(iter(machine_atts.values()), None)
+                    device_name = getattr(first_att, "device_name", None) or ""
+                    device_link = getattr(first_att, "device_link", None) or ""
+                pool_size[stag] = (
+                    getattr(info_obj, "pool", None) or "",
+                    int(getattr(info_obj, "size", None) or 0),
+                    "",
+                    False,
+                    device_name,
+                    device_link,
+                )
+
+    return pool_size
+
+
+def _build_storage_list(
+    base_list: Any,
+    pool_size: _PoolSizeLookup,
+    model_name: str,
+    controller_name: str,
+) -> list[StorageInfo]:
+    """Map raw StorageDetails dicts to StorageInfo, enriching each entry from pool_size."""
+    if not isinstance(base_list, list):
+        return []
+    result: list[StorageInfo] = []
+    for entry in base_list:
+        if not isinstance(entry, dict):
+            continue
+        tag = entry.get("storage-tag") or ""
+        pool, size_mib, location, read_only, device_name, device_link = pool_size.get(
+            tag, ("", 0, "", False, "", "")
+        )
+        result.append(
+            _parse_storage_details_dict(
+                entry,
+                pool,
+                size_mib,
+                location,
+                read_only,
+                model_name,
+                controller_name,
+                device_name,
+                device_link,
+            )
+        )
+    return result
+
+
+async def _fetch_model_storage(
+    model: Any, model_name: str, controller_name: str
+) -> list[StorageInfo]:
+    """Fetch storage info for a model using three parallel StorageFacade calls.
+
+    Juju StorageKind: 0=unknown, 1=block, 2=filesystem.
+    FullStatus never populates storage; dedicated list_storage() calls are required.
+    """
+    try:
+        base_list, fs_list, vol_list = await asyncio.gather(
+            model.list_storage(),
+            model.list_storage(filesystem=True),
+            model.list_storage(volume=True),
+            return_exceptions=True,
+        )
+    except (JujuError, OSError, asyncio.TimeoutError):
+        logger.exception("Failed to fetch storage for model '%s'", model_name)
+        return []
+
+    pool_size = _build_pool_size_lookup(fs_list, vol_list)
+    return _build_storage_list(base_list, pool_size, model_name, controller_name)
+
+
 def _offer_status_counts(status: Any) -> dict[str, tuple[int, int]]:
     """Extract {offer_name: (active_connected, total_connected)} from a model status object."""
     counts: dict[str, tuple[int, int]] = {}
@@ -585,17 +809,22 @@ class JujuClient:
         list[RelationInfo],
         list[OfferInfo],
         list[SAASInfo],
+        list[StorageInfo],
     ]:
-        """Fetch all model data in a single model.get_status() call.
+        """Fetch all model data using model.get_status() plus StorageFacade calls.
 
-        Returns ModelInfo, apps, units, machines, relations, offers and SAAS.
-        Using one FullStatus response avoids a second round-trip to the controller.
+        get_status() covers apps/units/machines/relations/offers/SAAS.
+        Storage requires separate StorageFacade calls (FullStatus never populates it).
+        Both groups run in parallel to minimise wall-clock time.
         """
         controller_name = self._controller.controller_name or ""
         try:
             model = await self._controller.get_model(model_name)
             try:
-                full_status = await model.get_status()
+                full_status, storage = await asyncio.gather(
+                    model.get_status(),
+                    _fetch_model_storage(model, model_name, controller_name),
+                )
                 app_statuses = full_status.applications or {}
                 model_info = _parse_model_info(model, full_status, model_name, controller_name)
                 apps = []
@@ -672,9 +901,10 @@ class JujuClient:
             relations = []
             offers = []
             saas = []
+            storage = []
         logger.debug(
             "Snapshot for model '%s': %d apps, %d units, %d machines, "
-            "%d relations, %d offers, %d saas",
+            "%d relations, %d offers, %d saas, %d storage",
             model_name,
             len(apps),
             len(units),
@@ -682,8 +912,9 @@ class JujuClient:
             len(relations),
             len(offers),
             len(saas),
+            len(storage),
         )
-        return model_info, apps, units, machines, relations, offers, saas
+        return model_info, apps, units, machines, relations, offers, saas, storage
 
     async def get_models(self) -> list[ModelInfo]:
         model_names = await self._controller.list_models()
@@ -713,7 +944,7 @@ class JujuClient:
 
         Delegates to get_model_snapshot() so only one model.get_status() call is made.
         """
-        _, _, _, _, relations, offers, saas = await self.get_model_snapshot(model_name)
+        _, _, _, _, relations, offers, saas, _ = await self.get_model_snapshot(model_name)
         logger.debug(
             "Status details for model '%s': %d relations, %d offers, %d saas",
             model_name,

@@ -13,8 +13,13 @@ from jujumate.client.juju_client import (
     JujuClient,
     JujuClientError,
     _build_log_stream_url,
+    _build_pool_size_lookup,
     _build_ssl_context,
+    _build_storage_list,
     _decode_secret_value,
+    _entity_status_str,
+    _fetch_model_storage,
+    _format_size_mib,
     _log_stream_connection_params,
     _offer_status_counts,
     _parse_app_relation_data,
@@ -22,6 +27,9 @@ from jujumate.client.juju_client import (
     _parse_log_entry,
     _parse_machine_info,
     _parse_relation,
+    _parse_storage_details_dict,
+    _parse_storage_tag,
+    _parse_tag,
     _parse_unit_relation_data,
     _resolve_model_uuid,
     _s,
@@ -86,6 +94,7 @@ def _make_model_mock(
     model.info = info
     model.applications = {app_name: live_app}
     model.get_status = AsyncMock(return_value=full_status)
+    model.list_storage = AsyncMock(return_value=[])
     return model, app_st, unit_st
 
 
@@ -230,9 +239,16 @@ async def test_get_model_snapshot(mock_controller):
     mock_controller.get_model.return_value = model
     # WHEN get_model_snapshot is called
     client = JujuClient(controller=mock_controller)
-    model_info, apps, units, machines, relations, offers, saas = await client.get_model_snapshot(
-        "dev"
-    )
+    (
+        model_info,
+        apps,
+        units,
+        machines,
+        relations,
+        offers,
+        saas,
+        storage,
+    ) = await client.get_model_snapshot("dev")
     # THEN all parsed fields are correct and only one get_model call was made
     assert model_info.name == "dev"
     assert model_info.cloud == "aws"
@@ -2010,3 +2026,368 @@ def test_since_to_iso_falls_back_to_str_when_no_isoformat():
 
     # THEN the string representation is returned as fallback
     assert result == "2024-01-15T10:30:00"
+
+
+# ---------------------------------------------------------------------------
+# Storage helpers
+# ---------------------------------------------------------------------------
+
+
+def test_parse_tag_converts_unit_tag():
+    # GIVEN a Juju unit tag
+    # WHEN _parse_tag is called
+    result = _parse_tag("unit-mysql-0")
+    # THEN it returns the human-readable unit name
+    assert result == "mysql/0"
+
+
+def test_parse_tag_converts_application_tag():
+    # GIVEN a Juju application tag
+    # WHEN _parse_tag is called
+    result = _parse_tag("application-mysql")
+    # THEN it returns the bare application name
+    assert result == "mysql"
+
+
+def test_parse_tag_returns_unknown_tags_unchanged():
+    # GIVEN a tag that doesn't match known prefixes
+    # WHEN _parse_tag is called
+    result = _parse_tag("unknown-tag")
+    # THEN the tag is returned unchanged
+    assert result == "unknown-tag"
+
+
+@pytest.mark.parametrize(
+    "tag, expected",
+    [
+        pytest.param("storage-data-0", "data/0", id="valid-storage-tag"),
+        pytest.param("data-0", "data-0", id="no-storage-prefix"),
+        pytest.param("storage-nodigit", "storage-nodigit", id="storage-prefix-no-numeric-suffix"),
+    ],
+)
+def test_parse_storage_tag(tag: str, expected: str):
+    # GIVEN a raw Juju storage tag string
+    # WHEN _parse_storage_tag is called
+    result = _parse_storage_tag(tag)
+    # THEN the result matches the expected human-readable form
+    assert result == expected
+
+
+@pytest.mark.parametrize(
+    "mib, expected",
+    [
+        pytest.param(0, "", id="zero"),
+        pytest.param(512, "512 MiB", id="below-1-gib"),
+        pytest.param(1024, "1 GiB", id="exactly-1-gib"),
+        pytest.param(2048, "2 GiB", id="multi-gib"),
+    ],
+)
+def test_format_size_mib(mib: int, expected: str):
+    # GIVEN a MiB integer
+    # WHEN _format_size_mib is called
+    # THEN the result matches the expected human-readable string
+    assert _format_size_mib(mib) == expected
+
+
+def test_entity_status_str_reads_status_and_info_attrs():
+    # GIVEN an EntityStatus object with .status and .info attributes set
+    status_obj = MagicMock()
+    status_obj.status = "active"
+    status_obj.info = "ready"
+    status_obj.unknown_fields = {}
+
+    # WHEN _entity_status_str is called
+    current, message = _entity_status_str(status_obj)
+
+    # THEN it returns the attribute values
+    assert current == "active"
+    assert message == "ready"
+
+
+def test_entity_status_str_falls_back_to_unknown_fields():
+    # GIVEN an EntityStatus-like object where status/info are None but
+    # 'current'/'message' are in unknown_fields (older Juju API format)
+    status_obj = MagicMock()
+    status_obj.status = None
+    status_obj.info = None
+    status_obj.unknown_fields = {"current": "attached", "message": "ok"}
+
+    # WHEN _entity_status_str is called
+    current, message = _entity_status_str(status_obj)
+
+    # THEN it returns values from unknown_fields
+    assert current == "attached"
+    assert message == "ok"
+
+
+def test_entity_status_str_returns_empty_for_none():
+    # GIVEN a None status object
+    # WHEN _entity_status_str is called
+    current, message = _entity_status_str(None)
+    # THEN both values are empty strings
+    assert current == ""
+    assert message == ""
+
+
+def test_parse_storage_details_dict_parses_filesystem_storage():
+    # GIVEN a serialized StorageDetails dict (dash keys, EntityStatus object for status)
+    # as returned by StorageDetails.serialize() from python-libjuju.
+    # Juju StorageKind: 2 = filesystem.
+    status_obj = MagicMock()
+    status_obj.status = "attached"
+    status_obj.info = ""
+    status_obj.unknown_fields = {}
+    d = {
+        "storage-tag": "storage-data-0",
+        "owner-tag": "unit-mysql-0",
+        "kind": 2,
+        "persistent": True,
+        "life": "alive",
+        "status": status_obj,
+    }
+
+    # WHEN _parse_storage_details_dict is called with pool, size, mountpoint and read_only
+    result = _parse_storage_details_dict(
+        d, "rootfs", 1024, "/var/lib/juju/storage/data/0", False, "mymodel", "myctrl"
+    )
+
+    # THEN a StorageInfo with the correct fields is returned
+    assert result.storage_id == "data/0"
+    assert result.unit == "mysql/0"
+    assert result.kind == "filesystem"
+    assert result.pool == "rootfs"
+    assert result.location == "/var/lib/juju/storage/data/0"
+    assert result.size_mib == 1024
+    assert result.status == "attached"
+    assert result.persistent is True
+    assert result.model == "mymodel"
+    assert result.controller == "myctrl"
+
+
+def test_parse_storage_details_dict_parses_block_storage():
+    # GIVEN a serialized StorageDetails dict for block storage.
+    # Juju StorageKind: 1 = block.
+    status_obj = MagicMock()
+    status_obj.status = "attached"
+    status_obj.info = ""
+    status_obj.unknown_fields = {}
+    d = {
+        "storage-tag": "storage-disk-0",
+        "owner-tag": "unit-ceph-0",
+        "kind": 1,
+        "persistent": False,
+        "life": "alive",
+        "status": status_obj,
+    }
+
+    # WHEN _parse_storage_details_dict is called
+    result = _parse_storage_details_dict(d, "ebs", 2048, "", False, "mymodel", "myctrl")
+
+    # THEN kind is 'block' and volume pool/size are used
+    assert result.storage_id == "disk/0"
+    assert result.unit == "ceph/0"
+    assert result.kind == "block"
+    assert result.pool == "ebs"
+    assert result.size_mib == 2048
+
+
+@pytest.mark.asyncio
+async def test_fetch_model_storage_returns_storage_list():
+    # GIVEN a model mock whose list_storage returns dicts that match the real
+    # serialized format: dash keys in base entries, object values for nested fields.
+    # kind=2 = filesystem (Juju StorageKind).
+    status_obj = MagicMock()
+    status_obj.status = "attached"
+    status_obj.info = ""
+    status_obj.unknown_fields = {}
+    base_entry = {
+        "storage-tag": "storage-data-0",
+        "owner-tag": "unit-alertmanager-0",
+        "kind": 2,
+        "persistent": True,
+        "life": "alive",
+        "status": status_obj,
+    }
+
+    # FilesystemDetails: 'info' is a FilesystemInfo obj, 'storage' is a StorageDetails obj,
+    # 'unit-attachments' maps unit_tag → FilesystemAttachmentDetails with mount_point.
+    info_obj = MagicMock()
+    info_obj.pool = "kubernetes"
+    info_obj.size = 1024
+    storage_ref = MagicMock()
+    storage_ref.storage_tag = "storage-data-0"
+    att_obj = MagicMock()
+    att_obj.mount_point = "/var/lib/juju/storage/data/0"
+    fs_entry = {
+        "filesystem-tag": "filesystem-0",
+        "info": info_obj,
+        "storage": storage_ref,
+        "unit-attachments": {"unit-alertmanager-0": att_obj},
+    }
+
+    model = MagicMock()
+    model.list_storage = AsyncMock(
+        side_effect=lambda filesystem=False, volume=False: (
+            [fs_entry] if filesystem else ([] if volume else [base_entry])
+        )
+    )
+
+    # WHEN _fetch_model_storage is called
+    result = await _fetch_model_storage(model, "cos-lite", "ck8s")
+
+    # THEN storage is parsed with pool, size and mountpoint from filesystem details
+    assert len(result) == 1
+    s = result[0]
+    assert s.storage_id == "data/0"
+    assert s.unit == "alertmanager/0"
+    assert s.kind == "filesystem"
+    assert s.pool == "kubernetes"
+    assert s.location == "/var/lib/juju/storage/data/0"
+    assert s.size_mib == 1024
+    assert s.model == "cos-lite"
+    assert s.controller == "ck8s"
+
+
+@pytest.mark.asyncio
+async def test_fetch_model_storage_returns_empty_on_error():
+    # GIVEN a model whose list_storage raises an exception
+    model = MagicMock()
+    model.list_storage = AsyncMock(side_effect=Exception("storage unavailable"))
+
+    # WHEN _fetch_model_storage is called
+    result = await _fetch_model_storage(model, "mymodel", "myctrl")
+
+    # THEN an empty list is returned (graceful degradation)
+    assert result == []
+
+
+@pytest.mark.asyncio
+async def test_fetch_model_storage_handles_asyncio_gather_exception():
+    # GIVEN asyncio.gather itself raises a JujuError (not a per-coroutine error)
+    model = MagicMock()
+
+    with patch(
+        "jujumate.client.juju_client.asyncio.gather",
+        side_effect=JujuError("storage facade unavailable"),
+    ):
+        # WHEN _fetch_model_storage is called
+        result = await _fetch_model_storage(model, "mymodel", "myctrl")
+
+    # THEN an empty list is returned gracefully
+    assert result == []
+
+
+@pytest.mark.parametrize(
+    "fs_list, vol_list",
+    [
+        pytest.param(["not-a-dict"], [], id="non-dict-fs-entry"),
+        pytest.param([], ["not-a-dict"], id="non-dict-vol-entry"),
+    ],
+)
+def test_build_pool_size_lookup_skips_non_dict_entries(fs_list: list, vol_list: list):
+    # GIVEN a list containing a non-dict entry
+    # WHEN _build_pool_size_lookup is called
+    result = _build_pool_size_lookup(fs_list, vol_list)
+    # THEN the non-dict entry is silently skipped and the lookup is empty
+    assert result == {}
+
+
+def test_build_pool_size_lookup_skips_fs_entry_with_empty_stag():
+    # GIVEN a fs_list entry whose storage_tag is empty
+    storage_ref = MagicMock()
+    storage_ref.storage_tag = ""
+    fs_entry = {"info": MagicMock(), "storage": storage_ref, "unit-attachments": {}}
+
+    # WHEN _build_pool_size_lookup is called
+    result = _build_pool_size_lookup([fs_entry], [])
+
+    # THEN the entry is skipped and the lookup remains empty
+    assert result == {}
+
+
+def test_build_pool_size_lookup_uses_machine_attachments_for_iaas_filesystem():
+    # GIVEN a fs_list entry with no unit_attachments (IaaS/VM) but machine_attachments
+    info_obj = MagicMock()
+    info_obj.pool = "rootfs"
+    info_obj.size = 117964
+    storage_ref = MagicMock()
+    storage_ref.storage_tag = "storage-data-1"
+    att = MagicMock()
+    att.mount_point = "/var/lib/juju/storage/data/1"
+    att.read_only = False
+    fs_entry = {
+        "info": info_obj,
+        "storage": storage_ref,
+        "unit-attachments": {},
+        "machine-attachments": {"machine-0": att},
+    }
+
+    # WHEN _build_pool_size_lookup is called
+    result = _build_pool_size_lookup([fs_entry], [])
+
+    # THEN the mountpoint is taken from machine_attachments
+    pool, size_mib, mountpoint, read_only, _, _ = result["storage-data-1"]
+    assert pool == "rootfs"
+    assert mountpoint == "/var/lib/juju/storage/data/1"
+    assert not read_only
+
+
+def test_build_pool_size_lookup_uses_vol_list_for_pool_info():
+    # GIVEN an empty fs_list and a vol_list entry with pool and size
+    info_obj = MagicMock()
+    info_obj.pool = "lvm"
+    info_obj.size = 2048
+    storage_ref = MagicMock()
+    storage_ref.storage_tag = "storage-pgdata-0"
+    vol_entry = {"info": info_obj, "storage": storage_ref}
+
+    # WHEN _build_pool_size_lookup is called
+    result = _build_pool_size_lookup([], [vol_entry])
+
+    # THEN pool and size are extracted from the volume entry, with empty device fields
+    assert result["storage-pgdata-0"] == ("lvm", 2048, "", False, "", "")
+
+
+def test_build_pool_size_lookup_extracts_device_info_from_machine_attachments():
+    # GIVEN a vol_list entry with machine_attachments containing device_name and device_link
+    info_obj = MagicMock()
+    info_obj.pool = "ebs"
+    info_obj.size = 1024
+    storage_ref = MagicMock()
+    storage_ref.storage_tag = "storage-data-0"
+    att = MagicMock()
+    att.device_name = "sdb"
+    att.device_link = "/dev/disk/by-id/virtio-vol-abc123"
+    vol_entry = {
+        "info": info_obj,
+        "storage": storage_ref,
+        "machine-attachments": {"machine-0": att},
+    }
+
+    # WHEN _build_pool_size_lookup is called
+    result = _build_pool_size_lookup([], [vol_entry])
+
+    # THEN device_name and device_link are captured from the first machine attachment
+    assert result["storage-data-0"] == (
+        "ebs",
+        1024,
+        "",
+        False,
+        "sdb",
+        "/dev/disk/by-id/virtio-vol-abc123",
+    )
+
+
+@pytest.mark.parametrize(
+    "base_list",
+    [
+        pytest.param(["not-a-dict"], id="non-dict-entry"),
+        pytest.param(Exception("failed"), id="non-list-base"),
+    ],
+)
+def test_build_storage_list_returns_empty_for_invalid_base(base_list: object):
+    # GIVEN a base_list that is non-list or contains non-dict entries
+    # WHEN _build_storage_list is called
+    result = _build_storage_list(base_list, {}, "mymodel", "myctrl")
+    # THEN an empty list is returned
+    assert result == []

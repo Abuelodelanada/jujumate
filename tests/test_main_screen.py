@@ -22,6 +22,7 @@ from jujumate.client.watcher import (
     OffersUpdated,
     RelationsUpdated,
     SaasUpdated,
+    StorageUpdated,
     UnitsUpdated,
 )
 from jujumate.config import JujuConfig, JujuConfigError
@@ -39,6 +40,7 @@ from jujumate.models.entities import (
     RelationInfo,
     SAASInfo,
     SecretInfo,
+    StorageInfo,
     UnitInfo,
 )
 from jujumate.screens.app_config_screen import AppConfigScreen
@@ -49,6 +51,7 @@ from jujumate.screens.offers_screen import OfferDetailScreen, OffersScreen, _Con
 from jujumate.screens.relation_data_screen import RelationDataScreen
 from jujumate.screens.secrets_screen import SecretDetailScreen, SecretsScreen
 from jujumate.screens.settings_screen import SettingsScreen
+from jujumate.screens.storage_detail_screen import StorageDetailScreen
 from jujumate.screens.theme_screen import ThemeScreen
 from jujumate.settings import AppSettings
 from jujumate.widgets.app_config_view import AppConfigView
@@ -2933,3 +2936,114 @@ async def test_status_view_machine_selected_pushes_machine_detail_screen(pilot):
 
     # THEN MachineDetailScreen is pushed
     assert isinstance(pilot.app.screen, MachineDetailScreen)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# on_storage_updated
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_on_storage_updated_updates_all_storage(pilot):
+    # GIVEN a MainScreen with the status tab active and a StorageInfo for a specific model
+    screen = pilot.app.screen
+    screen.action_switch_tab("tab-status")
+    await pilot.pause()
+    storage = StorageInfo(
+        storage_id="data/0",
+        unit="mysql/0",
+        kind="filesystem",
+        pool="rootfs",
+        location="/mnt/data",
+        size_mib=1024,
+        status="attached",
+        message="",
+        persistent=True,
+        life="alive",
+        model="dev",
+        controller="ctrl",
+    )
+
+    # WHEN a StorageUpdated message is posted for that model
+    screen.on_storage_updated(StorageUpdated(controller="ctrl", model="dev", storage=[storage]))
+    await pilot.pause()
+
+    # THEN _all_storage contains the new entry
+    assert any(s.storage_id == "data/0" for s in screen._all_storage)
+
+
+@pytest.mark.asyncio
+async def test_on_storage_updated_replaces_entries_for_same_model(pilot):
+    # GIVEN a MainScreen that already holds a storage entry for model "dev"
+    screen = pilot.app.screen
+    old_storage = StorageInfo(
+        storage_id="data/0",
+        unit="mysql/0",
+        kind="filesystem",
+        pool="rootfs",
+        location="",
+        size_mib=1024,
+        status="attached",
+        message="",
+        persistent=True,
+        life="alive",
+        model="dev",
+        controller="ctrl",
+    )
+    screen.on_storage_updated(StorageUpdated(controller="ctrl", model="dev", storage=[old_storage]))
+    await pilot.pause()
+
+    new_storage = StorageInfo(
+        storage_id="logs/0",
+        unit="mysql/0",
+        kind="filesystem",
+        pool="rootfs",
+        location="",
+        size_mib=512,
+        status="attached",
+        message="",
+        persistent=False,
+        life="alive",
+        model="dev",
+        controller="ctrl",
+    )
+
+    # WHEN a new StorageUpdated message arrives for the same model
+    screen.on_storage_updated(StorageUpdated(controller="ctrl", model="dev", storage=[new_storage]))
+    await pilot.pause()
+
+    # THEN the old entry is replaced by the new one
+    assert all(s.storage_id != "data/0" for s in screen._all_storage)
+    assert any(s.storage_id == "logs/0" for s in screen._all_storage)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# on_status_view_storage_selected
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_status_view_storage_selected_pushes_storage_detail_screen(pilot):
+    # GIVEN a StorageInfo instance
+    screen = pilot.app.screen
+    storage = StorageInfo(
+        storage_id="data/0",
+        unit="mysql/0",
+        kind="filesystem",
+        pool="rootfs",
+        location="/mnt/data",
+        size_mib=1024,
+        status="attached",
+        message="",
+        persistent=True,
+        life="alive",
+        model="dev",
+        controller="ctrl",
+    )
+
+    # WHEN on_status_view_storage_selected is called
+    screen.on_status_view_storage_selected(StatusView.StorageSelected(storage=storage))
+    await pilot.pause()
+
+    # THEN StorageDetailScreen is pushed onto the screen stack
+    assert isinstance(pilot.app.screen, StorageDetailScreen)
