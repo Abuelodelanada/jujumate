@@ -5,7 +5,6 @@ import pytest
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
-from textual import events
 from textual.css.query import NoMatches
 from textual.widgets import DataTable, Input, Label, TabbedContent
 from textual.widgets._data_table import RowKey
@@ -121,12 +120,12 @@ async def test_view_update_row_count(pilot, view_id, view_class, entities, expec
 
 
 @pytest.mark.asyncio
-async def test_clouds_view_empty_regions_and_credentials(pilot):
+async def test_clouds_view_empty_regions(pilot):
     # GIVEN a mounted CloudsView
     view = CloudsView(id="test-clouds")
     await _mount_view(pilot, view)
 
-    # WHEN a cloud with no regions or credentials is added
+    # WHEN a cloud with no regions is added
     view.update([CloudInfo("lxd", "lxd")])
 
     # THEN exactly one row is present
@@ -134,12 +133,12 @@ async def test_clouds_view_empty_regions_and_credentials(pilot):
 
 
 @pytest.mark.asyncio
-async def test_models_view_without_region(pilot):
+async def test_models_view_update_adds_row(pilot):
     # GIVEN a mounted ModelsView
     view = ModelsView(id="test-models")
     await _mount_view(pilot, view)
 
-    # WHEN a model with an empty region string is added
+    # WHEN a model is added
     view.update([ModelInfo("dev", "prod", "lxd", "", "available")])
 
     # THEN exactly one row is present
@@ -1049,9 +1048,9 @@ async def test_navigable_table_enter_posts_row_selected(pilot):
     nt.update_rows([("row0",), ("row1",)], keys=["key0", "key1"])
     nt._cursor = 1
 
-    # WHEN the Enter key is pressed
+    # WHEN the select_row action fires (bound to Enter)
     with _capture_posted(nt) as posted:
-        nt.on_key(events.Key(key="enter", character="\r"))
+        nt.action_select_row()
 
     # THEN a RowSelected message is posted with the key for row 1
     assert len(posted) == 1
@@ -1065,9 +1064,9 @@ async def test_navigable_table_enter_no_rows_does_nothing(pilot):
     nt = NavigableTable(columns=[Column("Name", "name")], id="test-nt-norow")
     await pilot.app.screen.mount(nt)
 
-    # WHEN the Enter key is pressed
+    # WHEN the select_row action fires (bound to Enter)
     with _capture_posted(nt) as posted:
-        nt.on_key(events.Key(key="enter", character="\r"))
+        nt.action_select_row()
 
     # THEN no message is posted
     assert posted == []

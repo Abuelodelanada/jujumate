@@ -55,11 +55,8 @@ from jujumate.screens.storage_detail_screen import StorageDetailScreen
 from jujumate.screens.theme_screen import ThemeScreen
 from jujumate.settings import AppSettings
 from jujumate.widgets.app_config_view import AppConfigView
-from jujumate.widgets.clouds_view import CloudsView
-from jujumate.widgets.controllers_view import ControllersView
 from jujumate.widgets.health_view import HealthView
-from jujumate.widgets.models_view import ModelsView
-from jujumate.widgets.navigable_table import NavigableTable
+from jujumate.widgets.navigator_view import NavigatorView
 from jujumate.widgets.relation_data_view import RelationDataView
 from jujumate.widgets.status_view import StatusView
 
@@ -114,14 +111,14 @@ async def test_initial_app_state(pilot):
     # WHEN we inspect the current screen and active tab
     # THEN the screen is MainScreen and the default tab is clouds
     assert pilot.app.screen.__class__.__name__ == "MainScreen"
-    assert pilot.app.screen.query_one(TabbedContent).active == "tab-clouds"
+    assert pilot.app.screen.query_one(TabbedContent).active == "tab-navigator"
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "key,expected_tab_id",
     [
-        pytest.param("m", "tab-models", id="m-to-models"),
+        pytest.param("n", "tab-navigator", id="n-to-navigator"),
         pytest.param("s", "tab-status", id="s-to-status"),
     ],
 )
@@ -305,36 +302,37 @@ async def test_action_refresh_data_with_poller_and_model(pilot):
 
 @pytest.mark.asyncio
 async def test_cloud_selected_switches_to_controllers_and_filters(pilot):
-    # GIVEN two controllers on different clouds
+    # GIVEN two controllers on different clouds, loaded into the navigator
     screen = pilot.app.screen
-    screen._all_controllers = [
+    nav = screen.query_one("#navigator-view", NavigatorView)
+    controllers = [
         ControllerInfo("prod", "aws", "", "3.4.0", 1),
         ControllerInfo("dev", "lxd", "", "3.4.0", 1),
     ]
-    # WHEN a cloud is selected
-    screen.on_clouds_view_cloud_selected(CloudsView.CloudSelected(name="aws"))
+    nav.update_controllers(controllers)
+    # WHEN a cloud is selected via the NavigatorView message
+    screen.on_navigator_view_cloud_selected(NavigatorView.CloudSelected(name="aws"))
     await pilot.pause()
-    # THEN the tab switches to controllers and only the matching controller is shown
-    assert pilot.app.screen.query_one(TabbedContent).active == "tab-controllers"
-    ctrl_view = screen.query_one("#controllers-view", ControllersView)
-    assert len(ctrl_view.query_one(NavigableTable)._rows) == 1
+    # THEN main_screen records the selected cloud
+    assert screen._selected_cloud == "aws"
+    assert screen._selected_controller is None
+    assert screen._selected_model is None
 
 
 @pytest.mark.asyncio
-async def test_controller_selected_switches_to_models_and_filters(pilot):
+async def test_controller_selected_updates_state_and_header(pilot):
     # GIVEN two models on different controllers
     screen = pilot.app.screen
     screen._all_models = [
         ModelInfo("dev", "prod", "aws", "", "available"),
         ModelInfo("staging", "other-ctrl", "aws", "", "available"),
     ]
-    # WHEN a controller is selected
-    screen.on_controllers_view_controller_selected(ControllersView.ControllerSelected(name="prod"))
+    # WHEN a controller is selected via the NavigatorView message
+    screen.on_navigator_view_controller_selected(NavigatorView.ControllerSelected(name="prod"))
     await pilot.pause()
-    # THEN the tab switches to models and only the matching model is shown
-    assert pilot.app.screen.query_one(TabbedContent).active == "tab-models"
-    models_view = screen.query_one("#models-view", ModelsView)
-    assert len(models_view.query_one(NavigableTable)._rows) == 1
+    # THEN main_screen records the selected controller and clears the model
+    assert screen._selected_controller == "prod"
+    assert screen._selected_model is None
 
 
 @pytest.mark.asyncio
@@ -351,8 +349,8 @@ async def test_model_selected_switches_to_status_and_filters(pilot):
         patch("jujumate.screens.main_screen.save_settings"),
     ):
         screen._selected_controller = "ctrl"
-        # WHEN a model with a controller prefix is selected
-        screen.on_models_view_model_selected(ModelsView.ModelSelected(name="ctrl/dev"))
+        # WHEN a model with a controller prefix is selected via NavigatorView message
+        screen.on_navigator_view_model_selected(NavigatorView.ModelSelected(name="ctrl/dev"))
         await pilot.pause()
         await pilot.pause()
     # THEN the tab switches to status and only the matching app is shown
@@ -366,8 +364,8 @@ async def test_model_selected_without_slash_sets_model_only(pilot):
     # GIVEN no controller is preselected and the model name has no slash
     screen = pilot.app.screen
     screen._selected_controller = None
-    # WHEN on_models_view_model_selected is called with a plain model name
-    screen.on_models_view_model_selected(ModelsView.ModelSelected(name="mymodel"))
+    # WHEN on_navigator_view_model_selected is called with a plain model name
+    screen.on_navigator_view_model_selected(NavigatorView.ModelSelected(name="mymodel"))
     await pilot.pause()
     # THEN _selected_model is set to the plain name
     assert screen._selected_model == "mymodel"
@@ -383,8 +381,8 @@ async def test_model_selected_saves_default_controller_to_settings(pilot):
         patch("jujumate.screens.main_screen.JujuClient", return_value=mock_client),
         patch("jujumate.screens.main_screen.save_settings") as mock_save,
     ):
-        # WHEN on_models_view_model_selected is called with a controller/model name
-        screen.on_models_view_model_selected(ModelsView.ModelSelected(name="ck8s/monitoring"))
+        # WHEN on_navigator_view_model_selected is called with a controller/model name
+        screen.on_navigator_view_model_selected(NavigatorView.ModelSelected(name="ck8s/monitoring"))
         await pilot.pause()
         await pilot.pause()
     # THEN the selected controller is persisted as default_controller
@@ -417,21 +415,21 @@ async def test_health_drill_down_saves_default_controller_to_settings(pilot):
 async def test_clear_filter_resets_cloud_and_controller(pilot):
     # GIVEN a cloud and controller filter are active and no model is selected
     screen = pilot.app.screen
-    screen._selected_cloud = "aws"
-    screen._selected_controller = "prod"
-    screen._selected_model = None
-    screen._all_controllers = [
+    nav = screen.query_one("#navigator-view", NavigatorView)
+    controllers = [
         ControllerInfo("prod", "aws", "", "3.4.0", 1),
         ControllerInfo("dev", "lxd", "", "3.4.0", 1),
     ]
+    nav.update_controllers(controllers)
+    screen._selected_cloud = "aws"
+    screen._selected_controller = "prod"
+    screen._selected_model = None
     # WHEN action_clear_filter is called
     screen.action_clear_filter()
     await pilot.pause()
-    # THEN cloud and controller filters are cleared and all controllers are shown
+    # THEN cloud and controller filters are cleared on main_screen
     assert screen._selected_cloud is None
     assert screen._selected_controller is None
-    ctrl_view = screen.query_one("#controllers-view", ControllersView)
-    assert len(ctrl_view.query_one(NavigableTable)._rows) == 2
 
 
 @pytest.mark.asyncio
@@ -714,7 +712,7 @@ async def test_periodic_poll_non_status_tab_does_not_call_poll_once(pilot):
     # GIVEN a poller is set and the active tab is NOT "tab-status"
     screen = pilot.app.screen
     screen._poller = AsyncMock(spec=JujuPoller)
-    screen.query_one(TabbedContent).active = "tab-clouds"
+    screen.query_one(TabbedContent).active = "tab-navigator"
     # WHEN _periodic_poll is called
     await screen._periodic_poll()
     # THEN poll_once is NOT called
@@ -762,7 +760,7 @@ async def test_tab_activated_with_mapped_tab_calls_focus(pilot):
     screen = pilot.app.screen
     # WHEN on_tabbed_content_tab_activated is called with a tab id in _TAB_FOCUS_MAP
     tab = MagicMock()
-    tab.id = "tab-clouds"
+    tab.id = "tab-navigator"
     event = MagicMock()
     event.tab = tab
     with patch.object(screen, "call_after_refresh") as mock_car:
@@ -1519,7 +1517,7 @@ async def test_models_updated_deselects_deleted_model(pilot):
     # THEN the selection is cleared and we switch to the models tab
     assert screen._selected_model is None
     assert screen._all_relations == []
-    assert pilot.app.screen.query_one(TabbedContent).active == "tab-models"
+    assert pilot.app.screen.query_one(TabbedContent).active == "tab-navigator"
 
 
 @pytest.mark.asyncio

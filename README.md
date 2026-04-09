@@ -15,10 +15,11 @@
 ## Features
 
 - 🔄 **Auto-refresh** — status updates automatically every few seconds; logs stream live via WebSocket
-- ☁️ **Full resource tree** — clouds, controllers, models, applications, units, machines
+- 🧭 **Navigator** — unified Cloud → Controller → Model navigation in a single tab with cascade filtering and a detail strip showing key fields of the current selection
 - 📊 **Status view** — apps, units, offers, integrations, SAAS, machines and storage in one screen
 - 🏥 **Health view** — shows only unhealthy models by default; toggle to see all with `f`
-- 🔍 **Drill-down navigation** — select a controller → filter models; select a model → see its full status
+- 💾 **Storage panel** — storage volumes, pools and sizes; toggle detached storage with `d`; press `Enter` to see device info and mountpoints
+- 🔍 **Drill-down navigation** — select a cloud → filter controllers → filter models → see full status. Enter auto-advances to the next selector
 - 🔎 **Inline filtering** — press `/` in Status or Logs to search with live highlight
 - 🔗 **Peer relation toggle** — press `p` to show/hide peer relations in the Integrations panel
 - 🖥️ **Units-per-machine toggle** — press `u` to show units (and their subordinates) nested under each machine
@@ -73,21 +74,21 @@ On first launch JujuMate connects to your current Juju controller and auto-selec
 
 | Key | Action |
 |-----|--------|
-| `c` | Go to Clouds tab |
-| `m` | Go to Models tab |
+| `n` | Go to Navigator tab (Clouds → Controllers → Models) |
 | `s` | Go to Status tab |
 | `h` | Go to Health tab |
 | `r` | Force refresh |
-| `Esc` | Clear cloud/controller drill-down filter |
+| `Esc` | Clear drill-down filter |
 | `?` | Toggle help overlay |
 | `q` | Quit |
 
-### Navigation
+### Navigator tab
 
 | Key | Action |
 |-----|--------|
-| `↑` / `↓` | Move cursor up/down |
-| `Enter` | Drill-down / open detail |
+| `↑` / `↓` | Move cursor within the active selector |
+| `Enter` | Select the highlighted item and advance focus to the next selector |
+| `Tab` / `Shift+Tab` | Move focus between Cloud, Controller and Model selectors |
 
 ### Status tab
 
@@ -95,6 +96,7 @@ On first launch JujuMate connects to your current Juju controller and auto-selec
 |-----|--------|
 | `/` | Filter by app name, charm, channel or message (with live highlight) |
 | `Esc` | Clear filter |
+| `d` | Toggle detached storage visibility in the Storage panel |
 | `p` | Toggle peer relations in the Integrations panel |
 | `u` | Toggle units (and subordinates) nested under each machine |
 | `d` | Toggle detached entries in the Storage panel |
@@ -128,11 +130,19 @@ On first launch JujuMate connects to your current Juju controller and auto-selec
 
 ## Views
 
+### Navigator
+The entry point for navigating your Juju estate. A single tab replaces the old Clouds / Controllers / Models tabs with a three-column cascade layout:
+
+- **Selector strip** — three compact tables side-by-side: Clouds (Name, Type), Controllers (Controller, Models) and Models (Model, Machines, Apps). Use `↑`/`↓` to move the cursor, `Enter` to select and auto-advance, and `Tab`/`Shift+Tab` to switch focus between selectors.
+- **Detail strip** — a horizontal panel above the selectors that shows the key fields of the currently selected cloud, controller and model. Updates as you navigate.
+- **Cascade filtering** — selecting a cloud filters controllers to that cloud; selecting a controller filters models to that controller. Changing a cloud resets the controllers and models below it.
+
 ### Status
 The main view. Displays a full `juju status`-style breakdown of the selected model:
 - **Applications** — name, charm, channel, revision, units, status and workload message
 - **Units** — workload/agent status, machine or pod, address, ports; subordinates shown nested under their principal; leader units are marked with `*`
 - **Machines** — id, state, address, instance, base, AZ *(IaaS models only)*; press `u` to expand units and their subordinates inline; press `Enter` on a machine to open its detail modal
+- **Storage** — storage instances with pool, size and mountpoint; toggle detached storage with `d`; press `Enter` on a storage entry to see device details
 
 Press `Enter` on a machine to see:
 - **Hardware** — architecture, CPU cores, memory, root disk size, virtualisation type

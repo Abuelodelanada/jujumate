@@ -1,4 +1,3 @@
-from pathlib import Path
 from typing import Any
 
 from textual.app import ComposeResult
@@ -12,14 +11,10 @@ from jujumate.widgets.resource_table import Column
 _COLUMNS = [
     Column("Name", "name"),
     Column("Type", "type", width=12),
-    Column("Regions", "regions", width=20),
-    Column("Credentials", "credentials", width=20),
 ]
 
 
 class CloudsView(Widget):
-    DEFAULT_CSS = (Path(__file__).parent / "clouds_view.tcss").read_text()
-
     class CloudSelected(Message):
         def __init__(self, name: str) -> None:
             super().__init__()
@@ -32,15 +27,7 @@ class CloudsView(Widget):
         yield NavigableTable(columns=_COLUMNS, id="clouds-table")
 
     def update(self, clouds: list[CloudInfo]) -> None:
-        rows = [
-            (
-                c.name,
-                c.type,
-                ", ".join(c.regions) if c.regions else "—",
-                ", ".join(c.credentials) if c.credentials else "—",
-            )
-            for c in clouds
-        ]
+        rows = [(c.name, c.type) for c in clouds]
         keys = [c.name for c in clouds]
         self.query_one(NavigableTable).update_rows(rows, keys=keys)
 
