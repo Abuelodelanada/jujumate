@@ -27,7 +27,7 @@
 
   <section class="hero">
     <div class="hero-inner">
-      <div class="badge">v0.3.2 — Now on PyPI</div>
+      <div class="badge">v0.4.0 — Now on PyPI</div>
       <h1><img src="icon.svg" class="site-icon hero-icon" alt="JujuMate icon"> JujuMate</h1>
       <p class="hero-subtitle"><em>A mate for Juju</em></p>
       <p class="tagline">
@@ -75,18 +75,13 @@
         </div>
         <div class="feature-card">
           <div class="feature-icon">☁️</div>
-          <h3>Full resource tree</h3>
-          <p>Clouds, controllers, models, applications, units and machines — all in one place.</p>
+          <h3>Navigator</h3>
+          <p>Unified Cloud → Controller → Model navigation in a single tab. Cascade filtering, a detail strip showing key fields, and keyboard-driven selectors replace the old separate tabs.</p>
         </div>
         <div class="feature-card">
           <div class="feature-icon">📊</div>
           <h3>Status view</h3>
-          <p>Full <code>juju status</code>-style breakdown including apps, units, offers, integrations, SAAS, machines and storage. Toggle peer relations with <kbd>p</kbd>, expand units per machine with <kbd>u</kbd>, and filter detached storage with <kbd>d</kbd>. Press <kbd>Enter</kbd> on any row to open a detail modal.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">💾</div>
-          <h3>Storage panel</h3>
-          <p>Storage instances per model with pool, size and colour-coded status. Press <kbd>d</kbd> to toggle detached entries. Press <kbd>Enter</kbd> on any row to inspect mountpoint, device info (IaaS block storage) and lifecycle details.</p>
+          <p>Full <code>juju status</code>-style breakdown including offers, integrations, machines, storage and SAAS. Toggle peer relations with <kbd>p</kbd>; expand units per machine with <kbd>u</kbd>; toggle detached storage with <kbd>d</kbd>. Press <kbd>Enter</kbd> on a machine to open a detail modal with hardware specs, status timestamps and network interfaces.</p>
         </div>
         <div class="feature-card">
           <div class="feature-icon">🏥</div>
@@ -96,7 +91,7 @@
         <div class="feature-card">
           <div class="feature-icon">🔍</div>
           <h3>Drill-down navigation</h3>
-          <p>Select a controller to filter models; select a model to filter the Status tab. Navigate your full resource tree with the keyboard.</p>
+          <p>Select a cloud to filter controllers; select a controller to filter models; select a model to see its full status. <kbd>Enter</kbd> auto-advances to the next selector. Navigate your full resource tree with the keyboard.</p>
         </div>
         <div class="feature-card">
           <div class="feature-icon">📜</div>
@@ -112,6 +107,11 @@
           <div class="feature-icon">🔐</div>
           <h3>Secrets browser</h3>
           <p>List and inspect Juju secrets per model with full metadata and revision history.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">💾</div>
+          <h3>Storage panel</h3>
+          <p>View storage volumes, pools and sizes. Toggle detached storage with <kbd>d</kbd>. Press <kbd>Enter</kbd> for device info and mountpoints.</p>
         </div>
         <div class="feature-card">
           <div class="feature-icon">🎨</div>
