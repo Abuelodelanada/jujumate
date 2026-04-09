@@ -54,11 +54,9 @@ from jujumate.screens.secrets_screen import SecretsScreen
 from jujumate.screens.settings_screen import SettingsScreen
 from jujumate.screens.storage_detail_screen import StorageDetailScreen
 from jujumate.settings import AppSettings, load_settings, save_settings
-from jujumate.widgets.clouds_view import CloudsView
-from jujumate.widgets.controllers_view import ControllersView
 from jujumate.widgets.health_view import HealthView
 from jujumate.widgets.jujumate_header import HeaderContext, JujuMateHeader
-from jujumate.widgets.models_view import ModelsView
+from jujumate.widgets.navigator_view import NavigatorView
 from jujumate.widgets.status_view import StatusView
 
 logger = logging.getLogger(__name__)
@@ -68,8 +66,7 @@ _T = TypeVar("_T")
 
 class MainScreen(Screen):
     BINDINGS = [
-        Binding("c", "switch_tab('tab-clouds')", "Clouds"),
-        Binding("m", "switch_tab('tab-models')", "Models"),
+        Binding("n", "switch_tab('tab-navigator')", "Navigator"),
         Binding("s", "switch_tab('tab-status')", "Status"),
         Binding("h", "switch_tab('tab-health')", "Health"),
         Binding("f", "toggle_health_filter", "Toggle health filter", show=False),
@@ -84,9 +81,7 @@ class MainScreen(Screen):
     ]
 
     _TAB_FOCUS_MAP = {
-        "tab-clouds": "#clouds-table",
-        "tab-controllers": "#controllers-table",
-        "tab-models": "#models-table",
+        "tab-navigator": "#clouds-table",
         "tab-status": "#status-apps-table DataTable",
         "tab-health": "#health-models-table",
     }
@@ -125,13 +120,9 @@ class MainScreen(Screen):
 
     def compose(self) -> ComposeResult:
         yield JujuMateHeader(id="main-header")
-        with TabbedContent(initial="tab-clouds"):
-            with TabPane("Clouds", id="tab-clouds"):
-                yield CloudsView(id="clouds-view")
-            with TabPane("Controllers", id="tab-controllers"):
-                yield ControllersView(id="controllers-view")
-            with TabPane("Models", id="tab-models"):
-                yield ModelsView(id="models-view")
+        with TabbedContent(initial="tab-navigator"):
+            with TabPane("Navigator", id="tab-navigator"):
+                yield NavigatorView(id="navigator-view")
             with TabPane("Status", id="tab-status"):
                 yield StatusView(id="status-view")
             with TabPane("Health", id="tab-health"):
@@ -221,8 +212,7 @@ class MainScreen(Screen):
             return
         self._selected_cloud = None
         self._selected_controller = None
-        self._refresh_controllers_view()
-        self._refresh_models_view()
+        self.query_one("#navigator-view", NavigatorView).reset_selection()
         self._refresh_header()
         self.notify("Filter cleared")
 
@@ -294,24 +284,12 @@ class MainScreen(Screen):
 
     # ── Filter helpers ────────────────────────────────────────────────────────
 
-    def _refresh_controllers_view(self) -> None:
-        filtered = [
-            c
-            for c in self._all_controllers
-            if self._selected_cloud is None or c.cloud == self._selected_cloud
-        ]
-        self.query_one("#controllers-view", ControllersView).update(filtered)
-
-    def _refresh_models_view(self) -> None:
-        filtered = [
-            m
-            for m in self._all_models
-            if self._selected_controller is None or m.controller == self._selected_controller
-        ]
-        models_view = self.query_one("#models-view", ModelsView)
-        models_view.update(filtered)
+    def _refresh_navigator_view(self) -> None:
+        nav = self.query_one("#navigator-view", NavigatorView)
+        nav.update_controllers(self._all_controllers)
+        nav.update_models(self._all_models)
         if self._selected_model and self._selected_controller:
-            models_view.select_model(self._selected_controller, self._selected_model)
+            nav.select_model(self._selected_controller, self._selected_model)
 
     def _filter_by_model(self, items: list[_T]) -> list[_T]:
         """Return items whose .model matches the selected model (and .controller if set)."""
@@ -444,12 +422,12 @@ class MainScreen(Screen):
 
     def on_clouds_updated(self, message: CloudsUpdated) -> None:
         self._all_clouds = message.clouds
-        self.query_one("#clouds-view", CloudsView).update(message.clouds)
+        self.query_one("#navigator-view", NavigatorView).update_clouds(message.clouds)
         self._refresh_header()
 
     def on_controllers_updated(self, message: ControllersUpdated) -> None:
         self._all_controllers = message.controllers
-        self._refresh_controllers_view()
+        self._refresh_navigator_view()
         self._refresh_header()
 
     def on_models_updated(self, message: ModelsUpdated) -> None:
@@ -473,7 +451,7 @@ class MainScreen(Screen):
                     severity="warning",
                 )
                 self._selected_model = None
-                self.action_switch_tab("tab-models")
+                self.action_switch_tab("tab-navigator")
 
             # Prune stale relations / offers / SAAS for models that no longer exist.
             self._all_relations = [
@@ -483,7 +461,7 @@ class MainScreen(Screen):
             self._all_saas = [s for s in self._all_saas if (s.controller, s.model) in existing]
             self._all_models = message.models
 
-        self._refresh_models_view()
+        self._refresh_navigator_view()
         active = self._active_tab()
         if active == "tab-status":
             self._refresh_status_view()
@@ -599,7 +577,7 @@ class MainScreen(Screen):
             return
         self._selected_controller = model_info.controller
         self._selected_model = model_name
-        self._refresh_models_view()
+        self._refresh_navigator_view()
         self._refresh_status_view()
         self._refresh_header()
         self.action_switch_tab("tab-status")
@@ -615,37 +593,27 @@ class MainScreen(Screen):
 
     # ── Drill-down selection handlers ─────────────────────────────────────────
 
-    def on_clouds_view_cloud_selected(self, message: CloudsView.CloudSelected) -> None:
+    def on_navigator_view_cloud_selected(self, message: NavigatorView.CloudSelected) -> None:
         self._selected_cloud = message.name
         self._selected_controller = None
         self._selected_model = None
-        self._refresh_controllers_view()
-        self._refresh_models_view()
         self._refresh_status_view()
-        self.action_switch_tab("tab-controllers")
 
-    def on_controllers_view_controller_selected(
-        self, message: ControllersView.ControllerSelected
+    def on_navigator_view_controller_selected(
+        self, message: NavigatorView.ControllerSelected
     ) -> None:
         self._selected_controller = message.name
         self._selected_model = None
-        self._refresh_models_view()
         self._refresh_status_view()
-        filtered_count = sum(
-            1 for m in self._all_models if m.controller == self._selected_controller
-        )
         logger.debug(
-            "Controller selected: '%s' → %d models (total stored: %d, controllers in models: %s)",
+            "Controller selected: '%s' → %d models (total stored: %d)",
             self._selected_controller,
-            filtered_count,
+            sum(1 for m in self._all_models if m.controller == self._selected_controller),
             len(self._all_models),
-            list({m.controller for m in self._all_models}),
         )
         self._refresh_header()
-        self.action_switch_tab("tab-models")
 
-    def on_models_view_model_selected(self, message: ModelsView.ModelSelected) -> None:
-        # message.name is "controller/modelname"
+    def on_navigator_view_model_selected(self, message: NavigatorView.ModelSelected) -> None:
         parts = message.name.split("/", 1)
         if len(parts) == 2:
             self._selected_controller = parts[0]

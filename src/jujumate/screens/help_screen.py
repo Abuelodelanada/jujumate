@@ -10,13 +10,12 @@ from textual.widgets import Static
 HELP_TEXT = """\
 
 [bold cyan]Navigation[/bold cyan]
-  [bold]c[/bold]             Clouds
+  [bold]n[/bold]             Navigator (Clouds → Controllers → Models)
   [bold]h[/bold]             Health
-  [bold]m[/bold]             Models
   [bold]s[/bold]             Status
-  [bold]s[/bold]             Status
-  [bold]TAB[/bold]           Switch panels forward (Status)
-  [bold]Shift + TAB[/bold]   Switch panels backguards (Status)
+  [bold]TAB[/bold]           Move focus to next selector (Navigator) / Switch panels (Status)
+  [bold]Shift + TAB[/bold]   Move focus to prev selector (Navigator) / Switch panels (Status)
+  [bold]Enter[/bold]         Select item and advance to next selector (Navigator)
 
 [bold cyan]Actions[/bold cyan]
   [bold]/[/bold]             Filter (Status tab) — Esc to clear

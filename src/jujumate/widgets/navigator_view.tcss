@@ -1,0 +1,40 @@
+NavigatorView {
+    height: 1fr;
+}
+
+#nav-container {
+    height: 1fr;
+}
+
+#nav-detail-strip {
+    height: auto;
+    min-height: 8;
+}
+
+#nav-cloud-detail,
+#nav-controller-detail,
+#nav-model-detail {
+    width: 1fr;
+    border: round $panel;
+    padding: 0 1;
+    height: auto;
+    min-height: 7;
+}
+
+#nav-selector-strip {
+    height: 1fr;
+}
+
+CloudsView,
+ControllersView,
+ModelsView {
+    width: 1fr;
+    height: 1fr;
+    border: round $panel;
+}
+
+CloudsView:focus-within,
+ControllersView:focus-within,
+ModelsView:focus-within {
+    border: round $accent;
+}

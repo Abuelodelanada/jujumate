@@ -4,7 +4,6 @@ from typing import Any
 from rich import box as rich_box
 from rich.table import Table
 from rich.text import Text
-from textual import events
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import VerticalScroll
@@ -27,6 +26,7 @@ class NavigableTable(Widget, can_focus=True):
     BINDINGS = [
         Binding("up", "cursor_up", show=False),
         Binding("down", "cursor_down", show=False),
+        Binding("enter", "select_row", show=False),
     ]
 
     DEFAULT_CSS = (Path(__file__).parent / "navigable_table.tcss").read_text()
@@ -85,8 +85,10 @@ class NavigableTable(Widget, can_focus=True):
         for col in self._columns:
             t.add_column(col.label, width=col.width)
         for i, row in enumerate(self._rows):
-            arrow = Text("❯", style=f"bold {palette.PRIMARY}") if i == self._cursor else Text("")
-            t.add_row(arrow, *row)
+            is_cursor = i == self._cursor
+            arrow = Text("❯", style=f"bold {palette.PRIMARY}") if is_cursor else Text(" ")
+            row_style = f"bold {palette.ACCENT}" if is_cursor else ""
+            t.add_row(arrow, *row, style=row_style)
 
         self.query_one("#nt-content", Static).update(t)
 
@@ -106,9 +108,8 @@ class NavigableTable(Widget, can_focus=True):
             self._cursor += 1
             self._refresh_content()
 
-    def on_key(self, event: events.Key) -> None:
-        if event.key == "enter" and self._rows:
+    def action_select_row(self) -> None:
+        if self._rows:
             key = self._keys[self._cursor] if self._keys else None
             if key:
-                event.stop()
                 self.post_message(NavigableTable.RowSelected(key))

@@ -1,4 +1,3 @@
-from pathlib import Path
 from typing import Any
 
 from textual.app import ComposeResult
@@ -10,18 +9,13 @@ from jujumate.widgets.navigable_table import NavigableTable
 from jujumate.widgets.resource_table import Column
 
 _COLUMNS = [
-    Column("Name", "name"),
-    Column("Controller", "controller", width=16),
-    Column("Cloud/Region", "cloud_region", width=18),
-    Column("Status", "status", width=12),
+    Column("Model", "name"),
     Column("Machines", "machines", width=10),
     Column("Apps", "apps", width=6),
 ]
 
 
 class ModelsView(Widget):
-    DEFAULT_CSS = (Path(__file__).parent / "models_view.tcss").read_text()
-
     class ModelSelected(Message):
         def __init__(self, name: str) -> None:
             super().__init__()
@@ -37,9 +31,6 @@ class ModelsView(Widget):
         rows = [
             (
                 m.name,
-                m.controller,
-                f"{m.cloud}/{m.region}" if m.region else m.cloud,
-                m.status,
                 str(m.machine_count),
                 str(m.app_count),
             )
