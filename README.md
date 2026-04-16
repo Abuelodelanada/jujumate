@@ -99,7 +99,6 @@ On first launch JujuMate connects to your current Juju controller and auto-selec
 | `d` | Toggle detached storage visibility in the Storage panel |
 | `p` | Toggle peer relations in the Integrations panel |
 | `u` | Toggle units (and subordinates) nested under each machine |
-| `d` | Toggle detached entries in the Storage panel |
 | `x` | Collapse/expand the current panel |
 | `y` | Copy full status to clipboard (includes cloud, controller, model and Juju version) |
 | `Enter` on app | Open App Config viewer |
@@ -113,6 +112,19 @@ On first launch JujuMate connects to your current Juju controller and auto-selec
 | Key | Action |
 |-----|--------|
 | `f` | Toggle between unhealthy-only (default) and all models |
+
+### Log viewer (`Shift+L`)
+
+| Key | Action |
+|-----|--------|
+| `/` | Filter log entries by entity or message text (with live highlight) |
+| `Esc` | Clear filter / close viewer |
+| `l` | Cycle log level (TRACE → DEBUG → INFO → WARNING → ERROR) |
+| `Space` | Pause / resume live stream (freezes the display) |
+| `v` | Open current buffer in `$PAGER` (default: `less`) — suspends JujuMate so you can select and copy text freely with the mouse |
+| `y` | Copy all visible log lines to clipboard |
+| `End` | Jump to bottom / re-enable auto-scroll |
+| `Enter` | Insert a visual separator line |
 
 ### Modals
 
@@ -169,6 +181,11 @@ Lists all secrets visible in the current model. Select a secret to see its metad
 
 ### Log viewer (`Shift+L`)
 Streams live log entries from the current model. Use `/` to filter by text.
+
+- **`Space`** — pause/resume the stream: the display freezes so you can read without the view jumping
+- **`v`** — open the current buffer in `$PAGER` (default: `less`): JujuMate suspends entirely so the terminal returns to normal mode, letting you select and copy text freely with the mouse; `q` to return
+- **`l`** — cycle through log levels (TRACE / DEBUG / INFO / WARNING / ERROR)
+- **`y`** — copy all visible lines to clipboard
 
 ### Relation Data inspector
 Press `Enter` on any relation in the Status tab to open a databag viewer showing the application-level and unit-level relation data for both sides of the relation. Press `y` to copy the full content to clipboard.

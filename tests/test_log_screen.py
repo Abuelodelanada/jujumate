@@ -1,10 +1,12 @@
 """Tests for screens/log_screen.py — LogScreen modal and helper functions."""
 
 import asyncio
+import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from rich.text import Text
+from textual.app import SuspendNotSupported
 from textual.widgets import Input, Label, RichLog
 
 from jujumate import palette as _palette
@@ -503,8 +505,8 @@ def test_log_screen_blink_live_indicator_unmounted() -> None:
     # WHEN _blink_live_indicator is called
     screen._blink_live_indicator()
 
-    # THEN it returns without error and toggles _blink_state
-    assert screen._blink_state is True
+    # THEN it returns without error and _blink_state is not toggled (no widget to update)
+    assert screen._blink_state is False
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -608,3 +610,209 @@ async def test_log_screen_start_stream_cancelled(log_screen, pilot) -> None:
 
     # THEN no CancelledError propagated — screen is still functional
     assert log_screen.query_one("#log-richlog", RichLog) is not None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# action_toggle_pause
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_log_screen_toggle_pause_freezes_indicator(log_screen, pilot) -> None:
+    # GIVEN a mounted LogScreen with focus on the RichLog (not the filter)
+    richlog = log_screen.query_one("#log-richlog", RichLog)
+    log_screen.set_focus(richlog)
+    await pilot.pause()
+    assert log_screen._paused is False
+
+    # WHEN action_toggle_pause is called
+    log_screen.action_toggle_pause()
+    await pilot.pause()
+
+    # THEN the screen is paused and the indicator shows PAUSED
+    assert log_screen._paused is True
+    indicator = log_screen.query_one("#log-live-indicator", Label)
+    assert "PAUSED" in str(indicator.render())
+
+
+@pytest.mark.asyncio
+async def test_log_screen_toggle_pause_resumes_and_rerenders(log_screen, pilot) -> None:
+    # GIVEN a paused LogScreen with one entry in the buffer
+    richlog = log_screen.query_one("#log-richlog", RichLog)
+    log_screen.set_focus(richlog)
+    await pilot.pause()
+    log_screen._paused = True
+    log_screen._buffer.append(_make_entry(message="buffered while paused"))
+
+    # WHEN action_toggle_pause is called to resume
+    log_screen.action_toggle_pause()
+    await pilot.pause()
+
+    # THEN the screen is no longer paused and the buffer entry is rendered
+    assert log_screen._paused is False
+    assert any("buffered while paused" in line.text for line in richlog.lines)
+
+
+@pytest.mark.asyncio
+async def test_log_screen_blink_skipped_while_paused(log_screen, pilot) -> None:
+    # GIVEN a paused LogScreen
+    richlog = log_screen.query_one("#log-richlog", RichLog)
+    log_screen.set_focus(richlog)
+    await pilot.pause()
+    log_screen.action_toggle_pause()
+    await pilot.pause()
+    assert log_screen._paused is True
+    state_before = log_screen._blink_state
+
+    # WHEN _blink_live_indicator fires (as if the interval ticked)
+    log_screen._blink_live_indicator()
+
+    # THEN _blink_state is not toggled
+    assert log_screen._blink_state == state_before
+
+
+@pytest.mark.asyncio
+async def test_log_screen_toggle_pause_ignored_when_filter_focused(log_screen, pilot) -> None:
+    # GIVEN the filter input is focused
+    filter_input = log_screen.query_one("#log-filter", Input)
+    log_screen.set_focus(filter_input)
+    await pilot.pause()
+
+    # WHEN action_toggle_pause is called
+    log_screen.action_toggle_pause()
+
+    # THEN the screen is NOT paused (space is a text character in filter mode)
+    assert log_screen._paused is False
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# action_view_in_pager
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_log_screen_view_in_pager_calls_suspend_and_pager(log_screen, pilot) -> None:
+    # GIVEN a LogScreen with entries in the buffer and focus on the RichLog
+    richlog = log_screen.query_one("#log-richlog", RichLog)
+    log_screen.set_focus(richlog)
+    await pilot.pause()
+    log_screen._buffer.append(_make_entry(message="hello from buffer"))
+
+    suspend_calls: list[str] = []
+
+    class _FakeSuspend:
+        def __enter__(self) -> "_FakeSuspend":
+            suspend_calls.append("enter")
+            return self
+
+        def __exit__(self, *_: object) -> None:
+            suspend_calls.append("exit")
+
+    # WHEN action_view_in_pager is called with pager and suspend mocked
+    with (
+        patch("jujumate.screens.log_screen.subprocess.run") as run_mock,
+        patch.object(log_screen.app, "suspend", return_value=_FakeSuspend()),
+    ):
+        log_screen.action_view_in_pager()
+
+    # THEN app.suspend() was entered/exited and the pager was launched
+    assert suspend_calls == ["enter", "exit"]
+    run_mock.assert_called_once()
+    pager_args = run_mock.call_args[0][0]
+    assert isinstance(pager_args, list)
+    assert pager_args[0] in ("less", os.environ.get("PAGER", "less"))
+
+
+@pytest.mark.asyncio
+async def test_log_screen_view_in_pager_empty_buffer_shows_warning(log_screen, pilot) -> None:
+    # GIVEN a LogScreen with an empty buffer and focus on the RichLog
+    richlog = log_screen.query_one("#log-richlog", RichLog)
+    log_screen.set_focus(richlog)
+    await pilot.pause()
+    log_screen._buffer.clear()
+
+    notify_calls: list[str] = []
+
+    # WHEN action_view_in_pager is called
+    with patch.object(log_screen, "notify", side_effect=lambda msg, **kw: notify_calls.append(msg)):
+        log_screen.action_view_in_pager()
+
+    # THEN a warning notification is shown and no pager is launched
+    assert any("No log lines" in msg for msg in notify_calls)
+
+
+@pytest.mark.asyncio
+async def test_log_screen_view_in_pager_ignored_when_filter_focused(log_screen, pilot) -> None:
+    # GIVEN the filter input is focused
+    filter_input = log_screen.query_one("#log-filter", Input)
+    log_screen.set_focus(filter_input)
+    await pilot.pause()
+    log_screen._buffer.append(_make_entry(message="some log"))
+
+    # WHEN action_view_in_pager is called
+    with patch("jujumate.screens.log_screen.subprocess.run") as run_mock:
+        log_screen.action_view_in_pager()
+
+    # THEN the pager is not launched
+    run_mock.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_log_screen_view_in_pager_suspend_not_supported(log_screen, pilot) -> None:
+    # GIVEN a LogScreen with entries and RichLog focused
+    richlog = log_screen.query_one("#log-richlog", RichLog)
+    log_screen.set_focus(richlog)
+    await pilot.pause()
+    log_screen._buffer.append(_make_entry(message="some log"))
+
+    notify_calls: list[dict] = []
+
+    def _capture_notify(msg: str, **kw: object) -> None:
+        notify_calls.append({"msg": msg, **kw})
+
+    # WHEN action_view_in_pager is called and suspend raises SuspendNotSupported
+    with (
+        patch.object(log_screen.app, "suspend", side_effect=SuspendNotSupported("no support")),
+        patch.object(log_screen, "notify", side_effect=_capture_notify),
+    ):
+        log_screen.action_view_in_pager()
+
+    # THEN a specific error notification is shown
+    assert any("Suspend not supported" in c["msg"] for c in notify_calls)
+    assert all(c.get("severity") == "error" for c in notify_calls)
+
+
+@pytest.mark.asyncio
+async def test_log_screen_view_in_pager_pager_not_found(log_screen, pilot) -> None:
+    # GIVEN a LogScreen with entries, RichLog focused and an unavailable pager
+    richlog = log_screen.query_one("#log-richlog", RichLog)
+    log_screen.set_focus(richlog)
+    await pilot.pause()
+    log_screen._buffer.append(_make_entry(message="some log"))
+
+    notify_calls: list[dict] = []
+
+    def _capture_notify(msg: str, **kw: object) -> None:
+        notify_calls.append({"msg": msg, **kw})
+
+    class _FakeSuspend:
+        def __enter__(self) -> "_FakeSuspend":
+            return self
+
+        def __exit__(self, *_: object) -> None:
+            pass
+
+    # WHEN action_view_in_pager is called and the pager binary is missing
+    with (
+        patch.object(log_screen.app, "suspend", return_value=_FakeSuspend()),
+        patch(
+            "jujumate.screens.log_screen.subprocess.run",
+            side_effect=FileNotFoundError("no such file"),
+        ),
+        patch.object(log_screen, "notify", side_effect=_capture_notify),
+    ):
+        log_screen.action_view_in_pager()
+
+    # THEN a specific error notification about the missing pager is shown
+    assert any("Pager not found" in c["msg"] for c in notify_calls)
+    assert all(c.get("severity") == "error" for c in notify_calls)

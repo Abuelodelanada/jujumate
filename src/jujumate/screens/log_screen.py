@@ -2,12 +2,15 @@
 
 import asyncio
 import logging
+import os
+import subprocess
+import tempfile
 from collections import deque
 from pathlib import Path
 
 from rich.text import Text
 from textual import work
-from textual.app import ComposeResult
+from textual.app import ComposeResult, SuspendNotSupported
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
@@ -63,6 +66,8 @@ class LogScreen(ModalScreen):
         Binding("escape", "close_or_clear", "Close", show=False),
         Binding("l", "cycle_level", "Level ↕", show=True),
         Binding("slash", "focus_filter", "Filter", show=True, priority=True),
+        Binding("space", "toggle_pause", "Pause", show=True, priority=True),
+        Binding("v", "view_in_pager", "View", show=True, priority=True),
         Binding("y", "copy_logs", "Copy", show=True),
         Binding("end", "scroll_end", "↓ Bottom", show=True),
         Binding("enter", "insert_separator", "── separator", show=True),
@@ -78,6 +83,7 @@ class LogScreen(ModalScreen):
         self._filter_text = ""
         self._buffer: deque[LogEntry] = deque(maxlen=_MAX_BUFFER)
         self._blink_state = False
+        self._paused = False
 
     @property
     def _level(self) -> str:
@@ -111,6 +117,12 @@ class LogScreen(ModalScreen):
                 yield Label("y", classes="hint-key")
                 yield Label(": copy", classes="hint-item")
                 yield Label("  |  ", classes="hint-sep")
+                yield Label("v", classes="hint-key")
+                yield Label(": view in pager", classes="hint-item")
+                yield Label("  |  ", classes="hint-sep")
+                yield Label("Space", classes="hint-key")
+                yield Label(": pause", classes="hint-item")
+                yield Label("  |  ", classes="hint-sep")
                 yield Label("Enter", classes="hint-key")
                 yield Label(": separator", classes="hint-item")
                 yield Label("  |  ", classes="hint-sep")
@@ -127,13 +139,16 @@ class LogScreen(ModalScreen):
         richlog.write(Text("Connecting to log stream…", style=palette.MUTED))
         self.set_interval(0.8, self._blink_live_indicator)
         self._start_stream()
+        self.call_after_refresh(richlog.focus)
 
     def _blink_live_indicator(self) -> None:
-        self._blink_state = not self._blink_state
         results = self.query("#log-live-indicator")
         if not results:
             return
         indicator = results.first(Label)
+        if self._paused:
+            return
+        self._blink_state = not self._blink_state
         if self._blink_state:
             indicator.update(Text("● LIVE", style=f"bold {palette.SUCCESS}"))
         else:
@@ -153,7 +168,7 @@ class LogScreen(ModalScreen):
             async with JujuClient(self._controller) as client:
                 async for entry in client.stream_logs(self._model, level=self._level):
                     self._buffer.append(entry)
-                    if self._matches_filter(entry):
+                    if self._matches_filter(entry) and not self._paused:
                         richlog.write(self._format_entry(entry))
         except asyncio.CancelledError:
             pass
@@ -217,6 +232,45 @@ class LogScreen(ModalScreen):
     def action_cycle_level(self) -> None:
         self._level_idx = (self._level_idx + 1) % len(_LEVELS)
         self._start_stream()  # restarts the worker at the new level
+
+    def action_toggle_pause(self) -> None:
+        """Space: freeze the display so native terminal text selection stays stable."""
+        if self.focused is self.query_one("#log-filter", Input):
+            return
+        self._paused = not self._paused
+        indicator = self.query_one("#log-live-indicator", Label)
+        if self._paused:
+            indicator.update(Text("⏸ PAUSED", style=f"bold {palette.WARNING}"))
+        else:
+            indicator.update(Text("● LIVE", style=f"bold {palette.SUCCESS}"))
+            self._rerender_buffer()
+
+    def action_view_in_pager(self) -> None:
+        """Open the current log buffer in $PAGER (default: less) for free text selection."""
+        if self.focused is self.query_one("#log-filter", Input):
+            return
+        lines = [
+            f"{e.entity} {e.timestamp} {e.level} {e.module} {e.message}"
+            for e in self._buffer
+            if self._matches_filter(e)
+        ]
+        if not lines:
+            self.notify("No log lines to view", severity="warning")
+            return
+        pager = os.environ.get("PAGER", "less")
+        fd, tmpfile = tempfile.mkstemp(suffix=".log", prefix="jujumate-logs-")
+        try:
+            with os.fdopen(fd, "w") as f:
+                f.write("\n".join(lines))
+            try:
+                with self.app.suspend():
+                    subprocess.run([pager, tmpfile])
+            except SuspendNotSupported:
+                self.notify("Suspend not supported in this environment", severity="error")
+            except FileNotFoundError:
+                self.notify(f"Pager not found: {pager}", severity="error")
+        finally:
+            os.unlink(tmpfile)
 
     def action_scroll_end(self) -> None:
         richlog = self.query_one("#log-richlog", RichLog)

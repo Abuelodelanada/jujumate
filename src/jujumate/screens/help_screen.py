@@ -31,6 +31,15 @@ HELP_TEXT = """\
   [bold]y[/bold]             Copy to clipboard (relation data / status)
   [bold]Shift + c[/bold]     Settings — appearance, behaviour & diagnostics
   [bold]Shift + l[/bold]     Logs — live log stream (requires model selected)
+
+[bold cyan]Log viewer[/bold cyan]
+  [bold]/[/bold]             Filter by entity or message text
+  [bold]l[/bold]             Cycle log level (TRACE → DEBUG → INFO → WARNING → ERROR)
+  [bold]Space[/bold]         Pause / resume stream (freeze display)
+  [bold]v[/bold]             Open buffer in $PAGER — suspends JujuMate for free text selection
+  [bold]y[/bold]             Copy visible log lines to clipboard
+  [bold]End[/bold]           Jump to bottom / re-enable auto-scroll
+  [bold]Enter[/bold]         Insert visual separator line
   [bold]Shift + o[/bold]     Offers — all offers across controller
   [bold]Shift + s[/bold]     Secrets (requires model selected)
 
