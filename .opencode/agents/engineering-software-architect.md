@@ -196,9 +196,21 @@ User config lives at `~/.config/jujumate/config.yaml` (YAML). Managed by `settin
 3. **Polling cost awareness** — Every new data source adds API calls to Juju controllers. Always consider whether data can be fetched in an existing poll cycle or needs its own.
 4. **Co-location convention** — New screens and widgets must have a paired `.tcss` file. Styling goes in TCSS, not inline Python.
 5. **Dataclass contract** — New Juju entities go in `models/entities.py` as `@dataclass`. They are the API between `client/` and `screens/`+`widgets/`.
-6. **Test everything** — 100% coverage is enforced. Propose test strategies alongside architectural changes. Use Textual's `run_test()`/Pilot API for UI tests, `AsyncMock` for Juju client mocking.
+6. **Test everything** — 100% coverage is enforced. Propose test strategies alongside architectural changes. Use Textual's `run_test()`/Pilot API for UI tests, `AsyncMock` for Juju client mocking. Prefer parametrized tests to exercise multiple scenarios without code duplication. All fixtures go in `conftest.py`.
 7. **Graceful degradation** — If a controller is unreachable, the app must not crash. The existing `asyncio` exception handler pattern must be preserved.
 8. **Trade-offs, not dogma** — Always name what you're giving up, not just what you're gaining.
+9. **Specific exceptions only** — Never propose catching bare `Exception` or `BaseException`. Always identify and catch the most specific exception types. When evaluating error handling in a design, verify which exceptions a call can actually raise.
+10. **Imports at the top only** — All imports at the top of the file. No inline imports inside functions or conditionals. If an import would create a circular dependency, that signals a design problem — fix the layering instead.
+11. **Minimize indentation** — Prefer early returns, guard clauses, and `continue` to keep nesting shallow. If a proposed function has more than 3 levels of nesting, recommend extracting inner logic into helper functions.
+12. **Composition over inheritance** — Prefer dependency injection over subclassing. Inheritance is acceptable for Textual's `Screen`/`Widget`/`App` base classes (framework requirement), but for project-level abstractions propose injecting collaborators via constructor parameters.
+13. **Pure functions where possible** — Favor functions with no side effects that take inputs and return outputs. Push I/O and state mutation to the boundaries. Pure functions are easier to test, reason about, and compose.
+14. **Performance and complexity** — Analyze algorithmic complexity of proposed designs. Prefer O(1) lookups over O(n) scans. Avoid fetching or transforming data that the UI won't use. When reviewing polling or data processing, question whether all the data being requested is actually needed.
+15. **Never block the event loop** — JujuMate runs on Textual's async event loop. Any design that introduces synchronous blocking (network I/O, heavy computation) will freeze the TUI. All network-facing code must be async or run via Textual Workers / `run_in_executor()`. This is a critical constraint for Jubilant migration planning (Jubilant is sync).
+16. **No magic numbers or strings** — Proposals must use named constants for timeouts, retry counts, intervals, and other meaningful literals. When reviewing designs, flag any bare numeric or string literals that should be constants.
+17. **Logging with `%s`, not f-strings** — Enforce `logger.warning("msg %s", val)` over `logger.warning(f"msg {val}")`. The `%s` form is lazy — the string is only formatted if the log level is enabled. This matters in hot paths like polling.
+18. **Fail fast** — Validate inputs at boundaries, not deep in the call chain. Designs should catch bad data where it enters the system, not where it causes confusing failures several layers down.
+19. **Do not expose internal mutable state** — When designing APIs between layers, ensure methods return copies or immutable views of internal collections, not direct references. This prevents accidental state corruption across module boundaries.
+20. **Small, focused functions** — Each function should do one thing. If describing a function requires "and", it should be split. This applies at the design level: when proposing new methods or modules, favor many small functions with clear names over few large ones.
 
 ## Architecture Decision Record Template
 
