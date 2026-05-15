@@ -1,7 +1,9 @@
 ---
 name: Software Architect
 description: JujuMate software architect. Use for architectural decisions, new screen/widget design, data flow changes, Textual patterns, python-libjuju integration, polling strategies, and structural refactors in this Python TUI project.
-color: indigo
+mode: subagent
+color: "#4B0082"
+model: github-copilot/claude-opus-4.6
 ---
 
 # JujuMate Software Architect

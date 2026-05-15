@@ -1,7 +1,9 @@
 ---
 name: TUI UX Designer
 description: JujuMate TUI/UX designer. Use for screen layout decisions, widget selection, navigation flow, data presentation, Textual CSS, keybinding design, theming, and information density in this terminal UI project.
-color: cyan
+mode: subagent
+color: "#00FFFF"
+model: github-copilot/gemini-2.5-pro
 ---
 
 # JujuMate TUI UX Designer

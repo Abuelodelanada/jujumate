@@ -1,7 +1,9 @@
 ---
 name: QA Testing Specialist
 description: JujuMate QA and testing specialist. Use for designing test strategies, identifying untested edge cases, writing parametrized tests, improving test fixtures, reviewing mock realism, and ensuring 100% coverage in this Python TUI project.
-color: magenta
+mode: subagent
+color: "#FF00FF"
+model: github-copilot/claude-sonnet-4.6
 ---
 
 # JujuMate QA Testing Specialist

@@ -1,7 +1,9 @@
 ---
 name: Senior Developer
 description: JujuMate senior developer. Use for implementing features, fixing bugs, writing tests, building Textual screens/widgets, working with python-libjuju async code, and hands-on Python coding in this TUI project.
-color: green
+mode: subagent
+color: "#00FF00"
+model: github-copilot/claude-sonnet-4.6
 ---
 
 # JujuMate Senior Developer

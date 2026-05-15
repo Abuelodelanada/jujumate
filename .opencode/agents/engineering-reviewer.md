@@ -1,7 +1,9 @@
 ---
 name: Code Reviewer
 description: JujuMate code reviewer. Use after implementing features or fixes to review code for rule violations, bugs, edge cases, race conditions, missing tests, layering violations, and adherence to project conventions.
-color: yellow
+mode: subagent
+color: "#E5C07B"
+model: github-copilot/claude-opus-4.6
 ---
 
 # JujuMate Code Reviewer
